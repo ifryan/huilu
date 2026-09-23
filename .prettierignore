@@ -4,3 +4,7 @@ LICENSE
 **/.wxt
 **/dist
 **/*.gen.ts
+spikes/package-lock.json
+spikes/extension/vendor
+spikes/out
+spikes/node_modules

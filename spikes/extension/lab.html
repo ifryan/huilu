@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>HuiLu Spike Lab</title>
+    <style>
+      body {
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+        max-width: 980px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      section {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 16px 0;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 0 0 8px;
+      }
+      button {
+        margin: 2px 4px 2px 0;
+      }
+      label {
+        margin-right: 12px;
+      }
+      input[type='password'],
+      input[type='text'] {
+        width: 280px;
+      }
+      pre {
+        background: #f6f6f6;
+        padding: 8px;
+        max-height: 360px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      td {
+        padding: 2px 8px;
+        border-bottom: 1px solid #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>会录 v0.1 技术验证</h1>
+    <p id="ua"></p>
+
+    <section>
+      <h2>1. 数据文件夹授权（File System Access）</h2>
+      <button id="fsa-pick">选择数据文件夹</button>
+      <button id="fsa-request">重新授权</button>
+      <button id="fsa-write">本页写入测试</button>
+      <button id="fsa-offscreen">离屏文档写入测试</button>
+      <button id="fsa-clear">清除句柄</button>
+      <p>
+        每次打开本页都会记录一次
+        <code>queryPermission</code> 结果：选「始终允许」后重启浏览器再打开本页，看最新一行是否仍为
+        granted。
+      </p>
+      <table id="fsa-history"></table>
+    </section>
+
+    <section>
+      <h2>2 / 3. 长时间录制 · MP4</h2>
+      <label
+        >分辨率
+        <select id="opt-height">
+          <option>720</option>
+          <option selected>1080</option>
+        </select></label
+      >
+      <label>帧率 <input id="opt-fps" type="number" value="30" style="width: 50px" /></label>
+      <label><input id="opt-mic" type="checkbox" /> 混入麦克风</label>
+      <label
+        >视频格式
+        <select id="opt-mime"></select
+      ></label>
+      <p>
+        <button id="mic-grant">授予麦克风权限（离屏文档无法弹窗）</button>
+        <button id="rec-synthetic">开始录制（合成画面 + 哔声）</button>
+        <button id="rec-stop">停止</button>
+        标签页录制：切到目标标签页后点击工具栏的插件图标开始 / 结束（使用上面保存的选项）。
+      </p>
+      <pre id="rec-status">idle</pre>
+      <button id="rec-list">刷新录制列表</button>
+      <table id="rec-table"></table>
+    </section>
+
+    <section>
+      <h2>4. 转写调用链路</h2>
+      <p>
+        <label>百炼 API Key <input id="cfg-dashscope" type="password" /></label>
+        <label
+          >地域
+          <select id="cfg-region">
+            <option value="cn">北京</option>
+            <option value="intl">新加坡</option>
+          </select></label
+        >
+        <label
+          >模型 <input id="cfg-ds-model" type="text" value="paraformer-v2" style="width: 120px"
+        /></label>
+      </p>
+      <p>
+        <label>Groq API Key <input id="cfg-groq" type="password" /></label>
+        <label
+          >切片上限 MB <input id="cfg-maxmb" type="number" value="25" style="width: 60px"
+        /></label>
+      </p>
+      <p>
+        音频来源：<select id="tr-rec"></select>
+        或本地文件 <input id="tr-file" type="file" accept="audio/*,video/*" />
+      </p>
+      <button id="tr-paraformer">百炼（本页）</button>
+      <button id="tr-paraformer-off">百炼（离屏文档）</button>
+      <button id="tr-split">仅切片</button>
+      <button id="tr-groq">Groq（自动切片）</button>
+      <pre id="tr-out"></pre>
+    </section>
+
+    <script type="module" src="lab.js"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "HuiLu Spikes",
+  "description": "会录 v0.1 技术验证：文件夹授权、长时录制、MP4、转写调用链路",
+  "version": "0.0.1",
+  "minimum_chrome_version": "122",
+  "permissions": ["offscreen", "tabCapture", "storage", "unlimitedStorage"],
+  "host_permissions": [
+    "https://dashscope.aliyuncs.com/*",
+    "https://*.aliyuncs.com/*",
+    "https://api.groq.com/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "HuiLu Spike：开始 / 结束录制当前标签页" }
+}
