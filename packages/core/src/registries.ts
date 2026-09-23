@@ -12,5 +12,6 @@ export const registries = {
   storage: new Registry<StorageAdapter>('storage adapter'),
   pipeline: new Registry<PipelineStep>('pipeline step'),
   exporter: new Registry<Exporter>('exporter'),
-  summaryTemplate: new Registry<SummaryTemplate>('summary template'),
+  // 不同模板的输出结构不同，注册表按 unknown 存放；取出后以 outputSchema 校验得到的结果为准
+  summaryTemplate: new Registry<SummaryTemplate<unknown>>('summary template'),
 }

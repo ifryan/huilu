@@ -14,7 +14,12 @@ export function migrateMeeting(raw: unknown): Meeting {
     throw new Error('meeting.json 格式无效')
   }
   let data = raw as Record<string, unknown>
-  let version = typeof data.schemaVersion === 'number' ? data.schemaVersion : 1
+  // 只有缺少 schemaVersion（最早的数据）才按 v1 处理；字段存在但不是正整数视为损坏
+  const rawVersion = data.schemaVersion === undefined ? 1 : data.schemaVersion
+  if (typeof rawVersion !== 'number' || !Number.isInteger(rawVersion) || rawVersion < 1) {
+    throw new Error(`meeting.json 的 schemaVersion 无效：${JSON.stringify(data.schemaVersion)}`)
+  }
+  let version = rawVersion
   if (version > MEETING_SCHEMA_VERSION) {
     throw new Error(
       `meeting.json 版本 v${version} 高于当前支持的 v${MEETING_SCHEMA_VERSION}，请升级插件`,

@@ -21,6 +21,15 @@ export function detectLocale(languages: readonly string[]): Locale {
   return DEFAULT_LOCALE
 }
 
+// 翻译 key 有类型检查：写错 key 会在编译时报错。
+// 必须放在导出入口里，引用 @huilu/i18n 的使用方（如 apps/extension）才会加载这段类型增强。
+declare module 'i18next' {
+  interface CustomTypeOptions {
+    defaultNS: 'translation'
+    resources: { translation: typeof zhCN }
+  }
+}
+
 export async function initI18n(locale: Locale): Promise<I18n> {
   const instance = i18next.createInstance()
   await instance.use(initReactI18next).init({
