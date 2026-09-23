@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "会录" },
+  "extDescription": { "message": "开源本地会议记录：录音 / 录屏 → 转写 → AI 纪要，数据全在本地" },
+  "cmdToggleRecording": { "message": "开始 / 结束录制" }
+}

@@ -1,0 +1,41 @@
+{
+  "app": {
+    "name": "会录",
+    "tagline": "本地会议记录：录音 / 录屏 → 转写 → AI 纪要"
+  },
+  "nav": {
+    "history": "历史记录",
+    "settings": "设置",
+    "onboarding": "开始使用"
+  },
+  "popup": {
+    "title": "实时记录",
+    "mode": "录制模式",
+    "modeAudio": "仅音频",
+    "modeVideo": "音频 + 视频",
+    "start": "开始记录",
+    "openApp": "打开会录",
+    "notReady": "请先完成设置"
+  },
+  "sidepanel": {
+    "recording": "录制中",
+    "idle": "未在录制"
+  },
+  "history": {
+    "empty": "还没有会议记录"
+  },
+  "settings": {
+    "language": "界面语言",
+    "dataFolder": "数据文件夹",
+    "transcription": "转写服务",
+    "llm": "大模型服务"
+  },
+  "onboarding": {
+    "step1": "选择数据文件夹",
+    "step2": "配置转写服务",
+    "step3": "配置大模型服务"
+  },
+  "common": {
+    "comingSoon": "即将推出"
+  }
+}

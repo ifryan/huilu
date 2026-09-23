@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+/* 让 Tailwind 扫描共享组件中的类名 */
+@source './';
+
+@theme {
+  --color-background: oklch(0.985 0.005 280);
+  --color-foreground: oklch(0.2 0.02 280);
+  --color-muted: oklch(0.95 0.01 280);
+  --color-muted-foreground: oklch(0.5 0.02 280);
+  --color-border: oklch(0.9 0.01 280);
+  --color-primary: oklch(0.55 0.2 275);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-ring: oklch(0.55 0.2 275);
+  --color-danger: oklch(0.6 0.22 25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: oklch(0.18 0.02 280);
+    --color-foreground: oklch(0.95 0.01 280);
+    --color-muted: oklch(0.25 0.02 280);
+    --color-muted-foreground: oklch(0.7 0.02 280);
+    --color-border: oklch(0.3 0.02 280);
+  }
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+}

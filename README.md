@@ -2,7 +2,7 @@
 
 > 开源的本地会议记录 Chrome 插件：一键录制音频 / 视频 → 会后自动转写 → AI 纪要与待办。数据只存在你自己的电脑上。
 
-**状态：规划中（v0.1 MVP 开发前）**。完整需求见 [docs/PRD.md](docs/PRD.md)。
+**状态：开发中（v0.1 MVP）**。需求见 [docs/PRD.md](docs/PRD.md)，架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ## 特性（规划）
 
@@ -10,6 +10,7 @@
 - 📝 会后整体转写，区分发言人，逐字稿与视频时间轴联动
 - 🤖 AI 导读：关键词、全文概要、章节速览、发言总结、要点回顾、待办事项
 - 🔑 自带 API Key：转写支持阿里云百炼 Paraformer、任意 OpenAI 兼容接口（内置 Groq 免费、OpenAI 预设）；纪要支持任意 OpenAI 兼容大模型（通义千问、DeepSeek、Ollama 等）
+- 🌐 界面支持简体中文与英文
 - 📁 全本地：免登录、无服务端，所有记录以普通文件（mp4 / json / md）保存在你选择的本地文件夹
 
 ## 安装（计划中）
@@ -19,6 +20,17 @@
 1. 从 [Releases](https://github.com/ifryan/huilu/releases) 下载最新版本 zip 并解压到固定目录
 2. 打开 `chrome://extensions`，开启右上角「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压后的目录
+
+## 本地开发
+
+```bash
+corepack enable
+pnpm install
+pnpm dev     # 自动打开加载了插件的 Chrome
+pnpm build   # 产物在 apps/extension/.output/chrome-mv3，可直接「加载已解压的扩展程序」
+```
+
+技术栈：WXT · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui · TanStack Router / Query · Zod · Vercel AI SDK · i18next · pnpm + Turborepo · ESLint + Prettier · Vitest。贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 数据目录结构
 
