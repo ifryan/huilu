@@ -1,0 +1,41 @@
+{
+  "app": {
+    "name": "HuiLu",
+    "tagline": "Local meeting notes: record audio / screen → transcribe → AI summary"
+  },
+  "nav": {
+    "history": "History",
+    "settings": "Settings",
+    "onboarding": "Get started"
+  },
+  "popup": {
+    "title": "Record",
+    "mode": "Recording mode",
+    "modeAudio": "Audio only",
+    "modeVideo": "Audio + video",
+    "start": "Start recording",
+    "openApp": "Open HuiLu",
+    "notReady": "Finish setup first"
+  },
+  "sidepanel": {
+    "recording": "Recording",
+    "idle": "Not recording"
+  },
+  "history": {
+    "empty": "No meetings yet"
+  },
+  "settings": {
+    "language": "Language",
+    "dataFolder": "Data folder",
+    "transcription": "Transcription service",
+    "llm": "LLM service"
+  },
+  "onboarding": {
+    "step1": "Choose a data folder",
+    "step2": "Set up transcription",
+    "step3": "Set up LLM"
+  },
+  "common": {
+    "comingSoon": "Coming soon"
+  }
+}

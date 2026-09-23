@@ -1,6 +1,10 @@
 node_modules/
 dist/
+.output/
+.wxt/
+.turbo/
 .DS_Store
 *.log
 .env*
 *.pem
+coverage/

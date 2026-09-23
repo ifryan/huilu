@@ -1,0 +1,7 @@
+{
+  "extName": { "message": "HuiLu" },
+  "extDescription": {
+    "message": "Open-source local meeting notes: record, transcribe and summarize — all data stays on your device"
+  },
+  "cmdToggleRecording": { "message": "Start / stop recording" }
+}
