@@ -248,9 +248,13 @@ export class Recording {
       const t = performance.now()
       try {
         await writeFile(tr.dir, name, blob)
+        // 回读校验：写入失败时 OPFS 可能留下 0 字节文件而不抛错（见 ADR 0004）
+        const written = (await (await tr.dir.getFileHandle(name)).getFile()).size
+        if (written !== blob.size) throw new Error(`short write ${written}/${blob.size}`)
       } catch (e) {
         tr.writeErrors++
-        this.log('write-error', { track: tr.name, name, error: String(e) })
+        if (tr.writeErrors <= 20)
+          this.log('write-error', { track: tr.name, name, error: String(e) })
       }
       tr.maxWriteMs = Math.max(tr.maxWriteMs, Math.round(performance.now() - t))
       tr.pendingWrites--
@@ -270,7 +274,12 @@ export class Recording {
       tracks: Object.fromEntries(
         Object.values(this.tracks).map((tr) => [
           tr.name,
-          { chunks: tr.seq, MB: +(tr.bytes / 2 ** 20).toFixed(1), pending: tr.pendingWrites },
+          {
+            chunks: tr.seq,
+            MB: +(tr.bytes / 2 ** 20).toFixed(1),
+            pending: tr.pendingWrites,
+            writeErrors: tr.writeErrors,
+          },
         ]),
       ),
     })
@@ -291,7 +300,11 @@ export class Recording {
     this.micStream?.getTracks().forEach((tr) => tr.stop())
     await this.ctx.close()
     this.state = 'stopped'
-    await writeFile(this.dir, 'meta.json', JSON.stringify(this.meta(), null, 2))
+    try {
+      await writeFile(this.dir, 'meta.json', JSON.stringify(this.meta(), null, 2))
+    } catch (e) {
+      this.log('meta-write-error', { error: String(e) })
+    }
     return this.status()
   }
 

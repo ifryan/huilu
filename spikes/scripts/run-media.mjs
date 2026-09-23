@@ -66,13 +66,14 @@ while (Date.now() < end) {
     `${sample.elapsedS}s heap=${sample.heapUsedMB}MB rss=${sample.totalRssMB}MB cpu=${sample.totalCpuPct}%`,
     JSON.stringify(sample.tracks),
   )
+  if (status.events?.length) log('events', JSON.stringify(status.events.slice(-3)))
   prev = { at: Date.now(), procs }
 }
 
 const stopped = await off('stop')
 report.events = stopped.events
 report.stopStatus = stopped.tracks
-log('stopped', JSON.stringify(stopped.tracks))
+log('stopped', JSON.stringify(stopped))
 
 report.verify = await off('verify', { recId: id })
 log('verify', JSON.stringify(report.verify))

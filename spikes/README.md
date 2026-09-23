@@ -31,7 +31,7 @@ npm install              # 安装 playwright-core、mediabunny，并把 mediabun
 
 ```bash
 npm run test:mp4                                   # 1080p 录 3 分钟：分片校验、播放拖动、转封装、音画同步
-node scripts/run-media.mjs --minutes 120 --height 1080   # 2 小时长时录制
+npm run test:soak                                  # 1080p 连续录制 60 分钟（--minutes 120 即 2 小时）
 node scripts/run-media.mjs --minutes 1 --mic       # 混入（假）麦克风
 npm run test:split                                 # 40 分钟音频按 2MB 上限强制切片
 DASHSCOPE_API_KEY=sk-... node scripts/transcribe.mjs --provider paraformer --file 会议.webm

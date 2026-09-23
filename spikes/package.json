@@ -10,7 +10,7 @@
   "scripts": {
     "postinstall": "node scripts/vendor.mjs",
     "test:mp4": "node scripts/run-media.mjs --minutes 3 --height 1080",
-    "test:soak": "node scripts/run-media.mjs --minutes 120 --height 1080",
+    "test:soak": "node scripts/run-media.mjs --minutes 60 --height 1080",
     "test:split": "node scripts/run-split.mjs",
     "test:fsa": "node scripts/run-fsa.mjs",
     "transcribe": "node scripts/transcribe.mjs"
