@@ -48,7 +48,7 @@ interface ProtocolMap {
   discardRecording(id: string): void
   openApp(route: string): void
 
-  // 后台 → 离屏文档
+  // 后台 → 离屏文档（标签页录制）
   'offscreen:start'(options: Omit<RecordingOptions, 'id'>): RecorderStatus
   'offscreen:pause'(): RecorderStatus
   'offscreen:resume'(): RecorderStatus
@@ -58,8 +58,20 @@ interface ProtocolMap {
   'offscreen:recover'(id: string): Meeting | null
   'offscreen:discard'(id: string): void
 
+  // 后台 → 录制窗口（窗口 / 屏幕录制）：选择框和录制都在这个可见页面里进行
+  'window:start'(options: WindowRecordingOptions): RecorderStatus
+  'window:pause'(): RecorderStatus
+  'window:resume'(): RecorderStatus
+  'window:stop'(): RecorderStatus
+  'window:status'(): RecorderStatus
+  // 录制窗口 → 后台：页面已加载、消息处理已注册
+  recorderWindowReady(): void
+
   // 离屏文档 → 后台：录制结束（用户结束 / 来源结束 / 写入失败）
   recordingFinished(result: Omit<FinishedRecording, 'meeting'> & { saved: boolean }): void
 }
+
+/** 录制窗口自己弹选择框取得 streamId，后台只传录制设置 */
+export type WindowRecordingOptions = Omit<RecordingOptions, 'id' | 'streamId' | 'sourceAudio'>
 
 export const { sendMessage, onMessage } = defineExtensionMessaging<ProtocolMap>()

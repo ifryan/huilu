@@ -197,7 +197,10 @@
       "noAudio": "没有可录制的声音：来源没有声音，麦克风也未开启或不可用",
       "storage": "存储空间不足，无法开始录制",
       "cancelled": "已取消选择录制来源",
-      "permission": "无法采集该页面：权限被拒绝，或该页面不允许录制（例如 chrome:// 页面）"
+      "permission": "无法采集该页面：权限被拒绝，或该页面不允许录制（例如 chrome:// 页面）",
+      "captureFailed": "无法打开录制来源选择框：{{detail}}",
+      "systemPermission": "系统没有允许 Chrome 录制屏幕。请在「系统设置 → 隐私与安全性 → 屏幕与系统录音」中允许 Google Chrome，然后重启 Chrome 再试",
+      "windowClosed": "录制窗口被关闭，录制已中断。已录的内容可在「未完成的录制」中恢复"
     }
   },
   "unfinished": {
@@ -274,5 +277,9 @@
       "badResponse": "返回的内容无法识别：请检查 Base URL 是否指向正确的接口",
       "notImplemented": "功能尚未实现"
     }
+  },
+  "recorderWindow": {
+    "choosing": "请在弹出的选择框中选择要录制的窗口或屏幕…",
+    "keepOpen": "窗口 / 屏幕录制在这个小窗口里进行：可以最小化，但请不要关闭它，关闭会中断录制。"
   }
 }

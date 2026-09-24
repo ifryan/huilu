@@ -197,7 +197,10 @@
       "noAudio": "Nothing to record: the source has no audio and the microphone is off or unavailable",
       "storage": "Not enough storage to start recording",
       "cancelled": "Source selection was cancelled",
-      "permission": "Cannot capture this page: permission denied, or the page cannot be recorded (e.g. chrome:// pages)"
+      "permission": "Cannot capture this page: permission denied, or the page cannot be recorded (e.g. chrome:// pages)",
+      "captureFailed": "Could not open the source picker: {{detail}}",
+      "systemPermission": "The system does not allow Chrome to record the screen. Allow Google Chrome in System Settings → Privacy & Security → Screen & System Audio Recording, restart Chrome and try again",
+      "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\""
     }
   },
   "unfinished": {
@@ -274,5 +277,9 @@
       "badResponse": "Unrecognized response: check that the Base URL points to the right API",
       "notImplemented": "Not implemented yet"
     }
+  },
+  "recorderWindow": {
+    "choosing": "Choose the window or screen to record in the picker…",
+    "keepOpen": "Window / screen recording runs in this small window. You can minimize it, but closing it stops the recording."
   }
 }

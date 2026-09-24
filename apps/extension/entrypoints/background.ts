@@ -1,4 +1,5 @@
 import { browser, defineBackground, storage, type Browser } from '#imports'
+import type { RecordingMode } from '@huilu/core'
 import { RecorderBusyError } from '@huilu/recorder'
 import {
   onMessage,
@@ -6,10 +7,11 @@ import {
   type LastRecording,
   type RecorderStatus,
   type StartRecordingRequest,
+  type WindowRecordingOptions,
 } from '@/lib/messaging'
 import { onboardedSetting, recordingModeSetting, recordingPrefsSetting } from '@/lib/settings'
 import { openAppPage } from '@/platform'
-import { requestCapture } from '@/platform/capture'
+import { CaptureCancelledError, requestTabCapture } from '@/platform/capture'
 import {
   closeOffscreenDocument,
   ensureOffscreenDocument,
@@ -40,12 +42,98 @@ function exclusive<T>(task: () => Promise<T>): Promise<T> {
 /** 后台层面的开始录制互斥：覆盖「窗口 / 屏幕选择框还开着」这段离屏文档还不知道的时间 */
 let startPending = false
 
+/**
+ * 窗口 / 屏幕录制在一个可见的录制窗口里进行（见 entrypoints/recorder）。
+ * Service Worker 随时可能被回收，所以记在 session 存储里；为空表示录制在离屏文档（标签页）。
+ */
+interface WindowHost {
+  windowId: number
+  title: string
+  mode: RecordingMode
+  /** 选择框结束、录制已开始；之前关闭窗口算取消选择，之后关闭算录制中断 */
+  started: boolean
+}
+const windowHost = storage.defineItem<WindowHost | null>('session:recorderWindow', {
+  fallback: null,
+})
+
+/** 录制窗口还开着时返回它；窗口已不存在则清掉记录 */
+async function activeWindowHost(): Promise<WindowHost | undefined> {
+  const host = await windowHost.getValue()
+  if (!host) return undefined
+  try {
+    await browser.windows.get(host.windowId)
+    return host
+  } catch {
+    await windowHost.setValue(null)
+    return undefined
+  }
+}
+
+type Control = 'pause' | 'resume' | 'stop' | 'status'
+/** 把暂停 / 继续 / 结束 / 状态转给正在录制的地方；两边都没有时返回 undefined */
+async function control(action: Control): Promise<RecorderStatus | undefined> {
+  if (await activeWindowHost()) return sendMessage(`window:${action}`)
+  if (await hasOffscreenDocument()) return sendMessage(`offscreen:${action}`)
+  return undefined
+}
+
 async function recorderStatus(): Promise<RecorderStatus & { startError?: string }> {
   const last = (await lastRecording.getValue()) ?? undefined
   const startError = (await lastStartError.getValue()) ?? undefined
-  if (!(await hasOffscreenDocument())) return { state: 'idle', lastResult: last, startError }
-  const status = await sendMessage('offscreen:status')
+  const status = await control('status')
+  if (!status) return { state: 'idle', lastResult: last, startError }
   return { ...status, lastResult: status.lastResult ?? last, startError }
+}
+
+let resolveWindowReady: (() => void) | undefined
+
+/** 打开录制窗口并等它注册好消息处理 */
+async function openRecorderWindow(): Promise<number> {
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveWindowReady = resolve
+    setTimeout(() => reject(new Error('The recording window did not load')), 15_000)
+  })
+  const win = await browser.windows.create({
+    url: browser.runtime.getURL('/recorder.html'),
+    type: 'popup',
+    width: 420,
+    height: 340,
+    focused: true,
+  })
+  const windowId = win?.id
+  if (windowId === undefined) throw new Error('Could not open the recording window')
+  try {
+    await ready
+  } catch (e) {
+    await browser.windows.remove(windowId).catch(() => {})
+    throw e
+  }
+  return windowId
+}
+
+async function startInWindow(options: WindowRecordingOptions): Promise<RecorderStatus> {
+  const windowId = await openRecorderWindow()
+  const host = { windowId, title: options.title, mode: options.mode, started: false }
+  await windowHost.setValue(host)
+  try {
+    const status = await sendMessage('window:start', options)
+    await windowHost.setValue({ ...host, started: true })
+    return status
+  } catch (e) {
+    // 取消选择 / 选择框报错 / 开始失败：关掉窗口，错误交给调用方
+    // 窗口关闭时消息通道先断开，窗口稍后才从列表里消失，稍等再判断
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const closedByUser = !(await browser.windows.get(windowId).then(
+      () => true,
+      () => false,
+    ))
+    await windowHost.setValue(null)
+    await browser.windows.remove(windowId).catch(() => {})
+    // 选择框开着时用户直接关掉了录制窗口：等同于取消选择
+    if (closedByUser) throw new CaptureCancelledError()
+    throw e
+  }
 }
 
 async function startRecording({
@@ -63,20 +151,24 @@ async function startRecording({
       mode: await recordingModeSetting.getValue(),
       prefs: await recordingPrefsSetting.getValue(),
     }
-    const grant = await requestCapture(prefs.videoSource, tabId)
-    const status = await exclusive(async () => {
-      await ensureOffscreenDocument()
-      return sendMessage('offscreen:start', {
-        title,
-        mode,
-        source: prefs.videoSource,
-        streamId: grant.streamId,
-        sourceAudio: grant.sourceAudio,
-        quality: prefs.quality,
-        microphone: { enabled: prefs.microphone, deviceId: prefs.microphoneDeviceId },
-        language: prefs.language,
+    const options: WindowRecordingOptions = {
+      title,
+      mode,
+      source: prefs.videoSource,
+      quality: prefs.quality,
+      microphone: { enabled: prefs.microphone, deviceId: prefs.microphoneDeviceId },
+      language: prefs.language,
+    }
+    let status: RecorderStatus
+    if (prefs.videoSource === 'tab') {
+      const grant = await requestTabCapture(tabId)
+      status = await exclusive(async () => {
+        await ensureOffscreenDocument()
+        return sendMessage('offscreen:start', { ...options, ...grant })
       })
-    })
+    } else {
+      status = await startInWindow(options)
+    }
     await lastRecording.setValue(null)
     await lastStartError.setValue(null)
     await updateBadge(status)
@@ -140,24 +232,22 @@ export default defineBackground(() => {
 
   onMessage('getRecorderStatus', () => recorderStatus())
   onMessage('startRecording', ({ data }) => startRecording(data))
-  onMessage('pauseRecording', async () => {
-    const status = await sendMessage('offscreen:pause')
-    await updateBadge(status)
-    return status
-  })
-  onMessage('resumeRecording', async () => {
-    const status = await sendMessage('offscreen:resume')
-    await updateBadge(status)
-    return status
-  })
-  onMessage('stopRecording', async () => {
-    if (!(await hasOffscreenDocument())) return recorderStatus()
-    const status = await sendMessage('offscreen:stop')
-    await updateBadge(status)
-    return status
-  })
-  onMessage('listUnfinishedRecordings', () =>
-    withOffscreen(() => sendMessage('offscreen:listUnfinished')),
+  for (const [message, action] of [
+    ['pauseRecording', 'pause'],
+    ['resumeRecording', 'resume'],
+    ['stopRecording', 'stop'],
+  ] as const) {
+    onMessage(message, async () => {
+      const status = await control(action)
+      if (!status) return recorderStatus()
+      await updateBadge(status)
+      return status
+    })
+  }
+  onMessage('recorderWindowReady', () => resolveWindowReady?.())
+  // 录制窗口里的录制还没收尾：它在 OPFS 中看起来和「未完成的录制」一样，不能拿去恢复 / 丢弃
+  onMessage('listUnfinishedRecordings', async () =>
+    (await activeWindowHost()) ? [] : withOffscreen(() => sendMessage('offscreen:listUnfinished')),
   )
   onMessage('recoverRecording', ({ data: id }) =>
     withOffscreen(async () => ({ saved: (await sendMessage('offscreen:recover', id)) !== null })),
@@ -167,10 +257,37 @@ export default defineBackground(() => {
   )
   onMessage('openApp', ({ data }) => openAppPage(data))
 
-  onMessage('recordingFinished', async ({ data }) => {
+  onMessage('recordingFinished', async ({ data, sender }) => {
     await lastRecording.setValue(data)
     await updateBadge({ state: 'idle' })
+    const host = await windowHost.getValue()
+    if (host && sender.tab?.windowId === host.windowId) {
+      // 录制窗口的使命完成：先清记录再关窗口，onRemoved 就不会当成「中途被关闭」
+      await windowHost.setValue(null)
+      setTimeout(() => void browser.windows.remove(host.windowId).catch(() => {}), 1500)
+      return
+    }
     await closeOffscreenIfIdle()
+  })
+
+  // 录制中用户直接关掉了录制窗口：录制中断，数据留在 OPFS，可在「未完成的录制」里恢复
+  browser.windows.onRemoved.addListener((windowId) => {
+    void windowHost.getValue().then(async (host) => {
+      // 还没开始录制（选择框阶段）由 startInWindow 自己处理
+      if (host?.windowId !== windowId || !host.started) return
+      await windowHost.setValue(null)
+      await lastRecording.setValue({
+        id: '',
+        title: host.title,
+        mode: host.mode,
+        endReason: 'error',
+        durationMs: 0,
+        bytes: 0,
+        error: 'RecorderWindowClosed',
+        saved: false,
+      })
+      await updateBadge({ state: 'idle' })
+    })
   })
 
   // 快捷键 Alt+Shift+R：没在录就按上次的设置录当前标签页，在录就结束

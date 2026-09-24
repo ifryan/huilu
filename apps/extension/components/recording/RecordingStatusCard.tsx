@@ -122,7 +122,7 @@ export function LastRecordingNotice({ result }: { result: LastRecording }) {
         </>
       ) : (
         <p className="text-danger text-xs">
-          {t('sidepanel.notSaved', { error: result.error ?? '' })}
+          {t('sidepanel.notSaved', { error: result.error ? startErrorText(t, result.error) : '' })}
         </p>
       )}
     </section>

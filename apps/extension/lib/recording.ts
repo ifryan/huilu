@@ -50,6 +50,14 @@ export function startErrorText(t: T, error: unknown): string {
   if (text.includes('NoAudioSourceError')) return t('recorder.error.noAudio')
   if (text.includes('InsufficientStorageError')) return t('recorder.error.storage')
   if (text.includes('CaptureCancelledError')) return t('recorder.error.cancelled')
+  // macOS 没有给 Chrome「屏幕与系统录音」权限时，取流报 NotAllowedError: Permission denied by system
+  if (text.includes('Permission denied by system')) return t('recorder.error.systemPermission')
+  if (text.includes('CaptureFailedError')) {
+    return t('recorder.error.captureFailed', {
+      detail: text.replace(/^.*CaptureFailedError:\s*/, ''),
+    })
+  }
+  if (text.includes('RecorderWindowClosed')) return t('recorder.error.windowClosed')
   if (
     text.includes('NotAllowedError') ||
     text.includes('cannot be captured') ||
