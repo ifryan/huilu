@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import { HistoryPage } from './routes/HistoryPage'
 import { Layout } from './routes/Layout'
+import { MicrophonePermissionPage } from './routes/MicrophonePermissionPage'
 import { OnboardingPage } from './routes/OnboardingPage'
 import { SettingsPage } from './routes/SettingsPage'
 
@@ -16,6 +17,11 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: '/', component: HistoryPage }),
   createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: '/onboarding', component: OnboardingPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/permissions/microphone',
+    component: MicrophonePermissionPage,
+  }),
 ])
 
 export const router = createRouter({ routeTree, history: createHashHistory() })
