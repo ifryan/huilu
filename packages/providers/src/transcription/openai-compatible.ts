@@ -1,22 +1,25 @@
 import type { TranscriptionProvider } from '@huilu/core'
 import { z } from 'zod'
-import { httpUrl } from '../config-fields'
+import { httpUrl, requireKeyForPresets } from '../config-fields'
 import { ProviderError } from '../errors'
 import { testOpenAiCompatible } from '../openai-compatible'
 import type { WithPresets } from '../presets'
 
-export const OpenAiCompatibleTranscriptionConfig = z.object({
-  preset: z
-    .enum(['groq', 'openai', 'custom'])
-    .default('groq')
-    .meta({ titleKey: 'providers.field.preset', optionKeyPrefix: 'providers.preset' }),
-  baseUrl: httpUrl().meta({
-    titleKey: 'providers.field.baseUrl',
-    placeholder: 'https://api.groq.com/openai/v1',
-  }),
-  apiKey: z.string().trim().optional().meta({ titleKey: 'providers.field.apiKey', secret: true }),
-  model: z.string().trim().min(1).meta({ titleKey: 'providers.field.model' }),
-})
+export const OpenAiCompatibleTranscriptionConfig = z
+  .object({
+    preset: z
+      .enum(['groq', 'openai', 'custom'])
+      .default('groq')
+      .meta({ titleKey: 'providers.field.preset', optionKeyPrefix: 'providers.preset' }),
+    baseUrl: httpUrl().meta({
+      titleKey: 'providers.field.baseUrl',
+      placeholder: 'https://api.groq.com/openai/v1',
+    }),
+    // 自定义地址可以不填；Groq / OpenAI 必须填
+    apiKey: z.string().trim().optional().meta({ titleKey: 'providers.field.apiKey', secret: true }),
+    model: z.string().trim().min(1).meta({ titleKey: 'providers.field.model' }),
+  })
+  .superRefine(requireKeyForPresets(['groq', 'openai']))
 export type OpenAiCompatibleTranscriptionConfig = z.infer<
   typeof OpenAiCompatibleTranscriptionConfig
 >

@@ -53,5 +53,17 @@ export function describeConfigFields(schema: z.ZodType): ConfigField[] {
   }))
 }
 
+/**
+ * 需要鉴权的内置预设必须填 Key；Ollama、自定义地址可以不填（本地或确实免鉴权的服务）。
+ * 用在 configSchema 的 superRefine 里，错误挂在 apiKey 上，表单会标红该字段。
+ */
+export function requireKeyForPresets(authenticated: readonly string[]) {
+  return (value: { preset?: string; apiKey?: string }, ctx: z.RefinementCtx) => {
+    if (value.preset && authenticated.includes(value.preset) && !value.apiKey) {
+      ctx.addIssue({ code: 'custom', path: ['apiKey'], message: 'API key is required' })
+    }
+  }
+}
+
 /** 用户输入的 http(s) 地址；z.url() 默认也接受 javascript: 等协议，这里收窄 */
 export const httpUrl = () => z.url({ protocol: /^https?$/ })

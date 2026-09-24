@@ -14,11 +14,12 @@ import {
   listProviders,
   parseForm,
   type FormValues,
+  type ProviderConfig,
   type ProviderKind,
   type ProviderSettings,
   updateField,
 } from '@/lib/providers'
-import { readinessKey } from '@/lib/readiness'
+import { isReady, readinessKey } from '@/lib/readiness'
 import { llmSetting, transcriptionSetting } from '@/lib/settings'
 import { requestHostPermission } from '@/platform'
 import { Section, StatusPill, inputClass } from './Section'
@@ -88,6 +89,7 @@ function ProviderForm({
   const [saved, setSaved] = useState(false)
   const [test, setTest] = useState<TestState>({ state: 'idle' })
   const [keyCleared, setKeyCleared] = useState(false)
+  const [saveError, setSaveError] = useState<string>()
   const abortRef = useRef<AbortController>(undefined)
 
   const reset = () => {
@@ -131,13 +133,28 @@ function ProviderForm({
         .join(t('common.listSeparator')),
     })
 
-  const save = async () => {
+  const save = () => {
     const result = validate()
     if (!result.ok) return
+    setSaveError(undefined)
+    const url = connectionUrl(provider.id, result.config)
+    // 自定义地址要先拿到域名权限：必须在点击后的第一个异步调用里申请（离屏文档之后无法再弹窗）。
+    // 拒绝授权就不保存，避免显示「已配置」而实际请求必然失败
+    const permitted = url ? requestHostPermission(url).catch(() => false) : Promise.resolve(true)
+    void permitted.then(async (ok) => {
+      if (!ok) {
+        setSaveError(t('settings.hostPermissionDenied', { origin: new URL(url!).origin }))
+        return
+      }
+      await persist(result.config)
+    })
+  }
+
+  const persist = async (config: ProviderConfig) => {
     const current = await settingItem[kind].getValue()
     const next = {
       providerId: provider.id,
-      configs: { ...current.configs, [provider.id]: result.config },
+      configs: { ...current.configs, [provider.id]: config },
     }
     await settingItem[kind].setValue(next)
     setSettings(next)
@@ -184,7 +201,13 @@ function ProviderForm({
   const providers = listProviders(kind)
   const preset = getPresets(provider).find((p) => p.id === values.preset)
   const capabilities = kind === 'transcription' && (provider as TranscriptionProvider).capabilities
-  const configured = !dirty && isConfigured(kind, { ...settings, providerId })
+  const current = { ...settings, providerId }
+  const { data: reachable } = useQuery({
+    queryKey: ['providerReady', kind, current],
+    queryFn: () => isReady(kind, current),
+    enabled: !dirty,
+  })
+  const configured = !dirty && isConfigured(kind, current) && reachable === true
 
   return (
     <Section
@@ -204,7 +227,7 @@ function ProviderForm({
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault()
-          void save()
+          save()
         }}
       >
         {providers.length > 1 && (
@@ -257,6 +280,7 @@ function ProviderForm({
         )}
 
         {invalidMessage && <p className="text-danger text-sm">{invalidMessage}</p>}
+        {saveError && <p className="text-danger text-sm">{saveError}</p>}
 
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit">{t('settings.save')}</Button>

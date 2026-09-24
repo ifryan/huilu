@@ -1,8 +1,9 @@
 import type { FolderStatus } from '@huilu/storage'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
+import { hasHostPermission } from '@/platform'
 import { dataFolder } from '@/platform/storage'
-import { isConfigured } from './providers'
+import { connectionUrl, isConfigured, type ProviderKind, type ProviderSettings } from './providers'
 import {
   dataFolderAuthorizedSetting,
   llmSetting,
@@ -28,10 +29,20 @@ async function loadReadiness(): Promise<Readiness> {
   ])
   return {
     folder,
-    transcription: isConfigured('transcription', transcription),
-    llm: isConfigured('llm', llm),
+    transcription: await isReady('transcription', transcription),
+    llm: await isReady('llm', llm),
     onboarded,
   }
+}
+
+/**
+ * 配置齐全，并且插件能访问该服务地址。自定义 Base URL 的权限可能从未授予或已被撤销：
+ * 离屏文档无法弹窗申请，此时请求必然失败，不能显示为就绪。
+ */
+export async function isReady(kind: ProviderKind, settings: ProviderSettings): Promise<boolean> {
+  if (!isConfigured(kind, settings)) return false
+  const url = connectionUrl(settings.providerId, settings.configs[settings.providerId] ?? {})
+  return url ? hasHostPermission(url).catch(() => false) : true
 }
 
 /**

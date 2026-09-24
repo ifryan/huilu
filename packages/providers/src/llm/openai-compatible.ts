@@ -1,23 +1,25 @@
 import type { LlmProvider } from '@huilu/core'
 import { z } from 'zod'
-import { httpUrl } from '../config-fields'
+import { httpUrl, requireKeyForPresets } from '../config-fields'
 import { ProviderError } from '../errors'
 import { testOpenAiCompatible } from '../openai-compatible'
 import type { WithPresets } from '../presets'
 
-export const OpenAiCompatibleLlmConfig = z.object({
-  preset: z
-    .enum(['qwen', 'deepseek', 'openai', 'ollama', 'custom'])
-    .default('qwen')
-    .meta({ titleKey: 'providers.field.preset', optionKeyPrefix: 'providers.preset' }),
-  baseUrl: httpUrl().meta({
-    titleKey: 'providers.field.baseUrl',
-    placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  }),
-  // Ollama 等本地服务不需要 Key
-  apiKey: z.string().trim().optional().meta({ titleKey: 'providers.field.apiKey', secret: true }),
-  model: z.string().trim().min(1).meta({ titleKey: 'providers.field.model' }),
-})
+export const OpenAiCompatibleLlmConfig = z
+  .object({
+    preset: z
+      .enum(['qwen', 'deepseek', 'openai', 'ollama', 'custom'])
+      .default('qwen')
+      .meta({ titleKey: 'providers.field.preset', optionKeyPrefix: 'providers.preset' }),
+    baseUrl: httpUrl().meta({
+      titleKey: 'providers.field.baseUrl',
+      placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    }),
+    // Ollama、自定义地址可以不填；通义千问 / DeepSeek / OpenAI 必须填
+    apiKey: z.string().trim().optional().meta({ titleKey: 'providers.field.apiKey', secret: true }),
+    model: z.string().trim().min(1).meta({ titleKey: 'providers.field.model' }),
+  })
+  .superRefine(requireKeyForPresets(['qwen', 'deepseek', 'openai']))
 export type OpenAiCompatibleLlmConfig = z.infer<typeof OpenAiCompatibleLlmConfig>
 
 /** 任意 OpenAI 兼容的大模型接口：通义千问、DeepSeek、OpenAI、Ollama …… */

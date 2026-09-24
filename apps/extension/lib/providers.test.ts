@@ -68,6 +68,38 @@ describe('provider forms', () => {
     expect(updateField(paraformer, cn, 'model', 'paraformer-v1').apiKey).toBe('sk-cn')
   })
 
+  it('requires a key for authenticated presets only', () => {
+    const blank = (preset: string) =>
+      parseForm(llm, { ...applyPreset(llm, initialFormValues(llm), preset), apiKey: '' })
+    for (const preset of ['qwen', 'deepseek', 'openai']) {
+      expect(blank(preset)).toEqual({ ok: false, invalidKeys: ['apiKey'] })
+    }
+    expect(blank('ollama').ok).toBe(true)
+    expect(
+      parseForm(llm, {
+        preset: 'custom',
+        baseUrl: 'http://10.0.0.2:8000/v1',
+        apiKey: '',
+        model: 'm',
+      }).ok,
+    ).toBe(true)
+    const transcription = getProvider('transcription', 'openai-compatible')
+    const groq = { ...initialFormValues(transcription), apiKey: '' }
+    expect(parseForm(transcription, groq)).toEqual({ ok: false, invalidKeys: ['apiKey'] })
+    // 已保存的旧配置（空 Key 的内置预设）也不再算已配置
+    const settings = {
+      providerId: 'openai-compatible',
+      configs: {
+        'openai-compatible': {
+          preset: 'deepseek',
+          baseUrl: 'https://api.deepseek.com/v1',
+          model: 'deepseek-chat',
+        },
+      },
+    }
+    expect(isConfigured('llm', settings)).toBe(false)
+  })
+
   it('reports invalid fields and treats blanks as missing', () => {
     expect(parseForm(paraformer, { region: 'cn', apiKey: '  ', model: '' })).toEqual({
       ok: false,

@@ -27,7 +27,10 @@ export function getProvider(kind: ProviderKind, id: string) {
   return registry.has(id) ? registry.get(id) : listProviders(kind)[0]!
 }
 
-/** 当前选择的服务商已保存且配置有效 */
+/**
+ * 当前选择的服务商已保存且配置有效（含必填 Key）。只是「配置齐全」，不代表连得上；
+ * 就绪还要求能访问该地址（见 lib/readiness 的域名权限检查）。
+ */
 export function isConfigured(kind: ProviderKind, settings: ProviderSettings): boolean {
   const saved = settings.configs[settings.providerId]
   return (
