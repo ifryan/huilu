@@ -37,5 +37,8 @@
   },
   "common": {
     "comingSoon": "Coming soon"
+  },
+  "summaryTemplate": {
+    "general": "General"
   }
 }
