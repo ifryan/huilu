@@ -25,7 +25,7 @@ export interface CapturedMedia {
   videoTrack?: MediaStreamTrack
   /** 来源声音 + 麦克风混音后的音轨 */
   audioTrack: MediaStreamTrack
-  /** 转写音频轨（混音的独立副本，给第二个 MediaRecorder 用） */
+  /** 转写音频轨：同一路混音下混成单声道，给第二个 MediaRecorder 用 */
   transcriptAudioTrack: MediaStreamTrack
   videoSettings?: { width?: number; height?: number; fps?: number }
   warnings: RecorderWarning[]
