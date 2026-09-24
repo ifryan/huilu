@@ -23,7 +23,9 @@ export default defineConfig({
       'offscreen',
       'tabCapture',
       'desktopCapture',
-      'sidePanel',
+      // 页面内悬浮录制面板：只在用户点击弹窗 / 按快捷键的当前标签页注入，不申请「所有网站」权限
+      'activeTab',
+      'scripting',
     ],
     // 内置服务商预设的域名；插件源下请求这些域名不受 CORS 限制（ADR 0004 第 4 节）
     host_permissions: [

@@ -3,7 +3,7 @@ import { useTranslation } from '@huilu/i18n'
 import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { RecordingSetup } from '@/components/recording/RecordingSetup'
-import { RecordingStatusCard } from '@/components/recording/RecordingStatusCard'
+import { RecordingBrief, RecordingStatusCard } from '@/components/recording/RecordingStatusCard'
 import { UnfinishedRecordings } from '@/components/recording/UnfinishedRecordings'
 import { sendMessage } from '@/lib/messaging'
 import { useReadiness } from '@/lib/readiness'
@@ -14,13 +14,19 @@ export function Popup() {
   const { data: status } = useRecorderStatus()
   const busy = status !== undefined && status.state !== 'idle'
 
-  // sidePanel.open 必须在点击的同步调用栈里调用，窗口 id 提前取好
-  const [windowId, setWindowId] = useState<number>()
+  const [tabId, setTabId] = useState<number>()
   useEffect(() => {
-    void browser.windows.getCurrent().then((w) => setWindowId(w.id))
+    void browser.tabs
+      .query({ active: true, currentWindow: true })
+      .then(([active]) => setTabId(active?.id))
   }, [])
-  const openSidePanel = () => {
-    if (windowId !== undefined) void browser.sidePanel.open({ windowId })
+  // 当前页面不允许显示悬浮面板（如 chrome:// 页面）时，退回在弹窗里控制
+  const [panelUnavailable, setPanelUnavailable] = useState(false)
+  const showPanel = async () => {
+    if (tabId === undefined) return setPanelUnavailable(true)
+    const shown = await sendMessage('showRecordingPanel', tabId)
+    if (shown) window.close()
+    else setPanelUnavailable(true)
   }
 
   return (
@@ -33,17 +39,23 @@ export function Popup() {
       </header>
 
       {status && busy ? (
-        <>
-          <RecordingStatusCard status={status} />
-          <Button variant="outline" onClick={openSidePanel}>
-            {t('popup.openSidePanel')}
-          </Button>
-        </>
+        panelUnavailable ? (
+          <>
+            <p className="text-muted-foreground text-xs">{t('popup.panelUnavailable')}</p>
+            <RecordingStatusCard status={status} />
+          </>
+        ) : (
+          <>
+            {/* 录制中只给简短状态：计时、暂停 / 继续、结束统一在页面内悬浮面板，关掉后从这里找回 */}
+            <RecordingBrief status={status} />
+            <Button onClick={() => void showPanel()}>{t('popup.showPanel')}</Button>
+          </>
+        )
       ) : (
         <>
           <ReadinessStatus />
           <UnfinishedRecordings />
-          <RecordingSetup />
+          <RecordingSetup onStarted={(shown) => setPanelUnavailable(!shown)} />
         </>
       )}
     </main>

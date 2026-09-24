@@ -39,10 +39,12 @@
     "meetingTitlePlaceholder": "未命名会议",
     "starting": "正在开始…",
     "recordingNow": "正在录制「{{title}}」",
-    "openSidePanel": "打开侧边栏",
     "shortcut": "快捷键 Alt+Shift+R 开始 / 结束",
     "goSetup": "去设置",
-    "reauthorize": "重新授权"
+    "reauthorize": "重新授权",
+    "controlsInSidePanel": "暂停、继续和结束请在网页上的悬浮录制面板中操作",
+    "showPanel": "显示录制面板",
+    "panelUnavailable": "这个页面不允许显示悬浮录制面板（例如 chrome:// 页面），可以在这里控制录制"
   },
   "sidepanel": {
     "recording": "录制中",
@@ -83,7 +85,7 @@
     "transcribed": "已转写",
     "notTranscribed": "未转写",
     "notTranscribedNoService": "未转写：尚未配置转写服务，可先预览或下载录音",
-    "unfinishedHint": "录制被意外中断，可在弹窗或侧边栏的「未完成的录制」中恢复；恢复前也可以预览已录内容",
+    "unfinishedHint": "录制被意外中断，可在弹窗的「未完成的录制」中恢复；恢复前也可以预览已录内容",
     "preview": "预览",
     "download": "下载",
     "noMedia": "没有可播放的内容",
@@ -297,6 +299,14 @@
   },
   "recorderWindow": {
     "choosing": "请在弹出的选择框中选择要录制的窗口或屏幕…",
-    "keepOpen": "窗口 / 屏幕录制在这个小窗口里进行：可以最小化，但请不要关闭它，关闭会中断录制。"
+    "keepOpen": "这个窗口负责采集窗口 / 屏幕画面：可以保持最小化，但请不要关闭，关闭会中断录制。录制结束后它会自动关闭。",
+    "recording": "正在录制。计时和暂停 / 结束都在网页上的悬浮录制面板中。"
+  },
+  "panel": {
+    "title": "录制面板",
+    "collapse": "收起",
+    "expand": "展开录制面板",
+    "close": "关闭面板",
+    "hint": "面板悬浮在网页上，可拖动或收起；关闭后可从插件图标重新打开。录制「音频 + 视频」的标签页时，展开的面板会被录进画面。"
   }
 }

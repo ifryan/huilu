@@ -26,12 +26,17 @@ const LANGUAGE_KEYS = {
 } as const satisfies Record<MeetingLanguage, string>
 
 /** 弹窗：录制设置 + 开始记录。设置保存在 chrome.storage，快捷键开始录制时沿用同一套设置。 */
-export function RecordingSetup() {
+export function RecordingSetup({
+  onStarted,
+}: {
+  /** 开始成功；panelShown 为 false 表示当前页面不能显示悬浮面板 */
+  onStarted?: (panelShown: boolean) => void
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<RecordingMode>('audio')
   const [prefs, setPrefs] = useState<RecordingPrefs>(DEFAULT_RECORDING_PREFS)
-  const [tab, setTab] = useState<{ id?: number; windowId?: number }>({})
+  const [tab, setTab] = useState<{ id?: number }>({})
   const [title, setTitle] = useState('')
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string>()
@@ -47,7 +52,7 @@ export function RecordingSetup() {
       },
     )
     void browser.tabs.query({ active: true, currentWindow: true }).then(([active]) => {
-      setTab({ id: active?.id, windowId: active?.windowId })
+      setTab({ id: active?.id })
       setTitle(active?.title ?? '')
     })
   }, [])
@@ -66,17 +71,21 @@ export function RecordingSetup() {
     if (tab.id === undefined || !loaded) return
     setStarting(true)
     setError(undefined)
-    // 两个调用都要在点击的同步调用栈里发出：选择窗口 / 屏幕时弹窗会失去焦点被关闭，
-    // 打开侧边栏也要求用户手势
+    // 在点击的同步调用栈里发出：选择窗口 / 屏幕时弹窗会失去焦点被关闭。
     // 带上界面当前的设置：刚改完设置立刻点开始时，storage 写入可能还没完成
     const started = sendMessage('startRecording', {
       tabId: tab.id,
       title: title.trim() || t('popup.meetingTitlePlaceholder'),
       settings: { mode, prefs },
     })
-    if (tab.windowId !== undefined) void browser.sidePanel.open({ windowId: tab.windowId })
     started
-      .then(() => queryClient.invalidateQueries({ queryKey: ['recorderStatus'] }))
+      .then(async ({ panelShown }) => {
+        await queryClient.invalidateQueries({ queryKey: ['recorderStatus'] })
+        onStarted?.(panelShown)
+        // 录制已开始：进度与控制都在页面内悬浮面板，弹窗不再重复显示；
+        // 面板显示不了（如 chrome:// 页面）就保留弹窗，在这里控制
+        if (panelShown) window.close()
+      })
       .catch((e: unknown) => setError(t('sidepanel.startFailed', { error: startErrorText(t, e) })))
       .finally(() => setStarting(false))
   }

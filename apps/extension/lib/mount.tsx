@@ -7,25 +7,35 @@ import { localeSetting } from './settings'
 
 const queryClient = new QueryClient()
 
-/** 所有 React 页面（弹窗、侧边栏、插件网页）共用的启动逻辑：i18n + 数据请求 */
+/** 所有 React 页面（弹窗、插件网页、录制窗口）共用的启动逻辑：i18n + 数据请求 */
 export async function mount(node: ReactNode) {
+  const container = document.getElementById('root')!
+  await mountInto(container, node)
+  document.documentElement.lang = container.lang
+  localeSetting.watch((next) => next && (document.documentElement.lang = next))
+}
+
+/** 挂载到任意容器（页面内悬浮面板挂在 Shadow DOM 里，不改网页的 html lang） */
+export async function mountInto(container: HTMLElement, node: ReactNode) {
   const saved = await localeSetting.getValue()
   const locale = saved ?? detectLocale(navigator.languages ?? [DEFAULT_LOCALE])
   const i18n = await initI18n(locale)
-  document.documentElement.lang = locale
+  container.lang = locale
 
   localeSetting.watch((next) => {
     if (next) {
       void i18n.changeLanguage(next)
-      document.documentElement.lang = next
+      container.lang = next
     }
   })
 
-  createRoot(document.getElementById('root')!).render(
+  const root = createRoot(container)
+  root.render(
     <StrictMode>
       <I18nextProvider i18n={i18n}>
         <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
       </I18nextProvider>
     </StrictMode>,
   )
+  return root
 }

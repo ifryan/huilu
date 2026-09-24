@@ -39,7 +39,8 @@ interface ProtocolMap {
   // 界面 → 后台
   /** startError：最近一次开始录制失败的原因（快捷键、窗口选择框等弹窗已关闭的场景由侧边栏显示） */
   getRecorderStatus(): RecorderStatus & { startError?: string }
-  startRecording(request: StartRecordingRequest): RecorderStatus
+  /** panelShown：悬浮录制面板是否已显示在该标签页；为 false 时弹窗保留，改在弹窗里控制 */
+  startRecording(request: StartRecordingRequest): RecorderStatus & { panelShown: boolean }
   pauseRecording(): RecorderStatus
   resumeRecording(): RecorderStatus
   stopRecording(): RecorderStatus
@@ -47,6 +48,8 @@ interface ProtocolMap {
   recoverRecording(id: string): { saved: boolean }
   discardRecording(id: string): void
   openApp(route: string): void
+  /** 在指定标签页显示页面内悬浮录制面板；页面不允许注入（如 chrome:// 页面）时返回 false */
+  showRecordingPanel(tabId: number): boolean
 
   // 后台 → 离屏文档（标签页录制）
   'offscreen:start'(options: Omit<RecordingOptions, 'id'>): RecorderStatus

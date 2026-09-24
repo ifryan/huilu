@@ -94,6 +94,33 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
   )
 }
 
+/** 弹窗里的简短录制状态：一行状态 + 标题，不含控制按钮（控制在侧边栏） */
+export function RecordingBrief({ status }: { status: RecorderStatus }) {
+  const { t } = useTranslation()
+  const session = status.session
+  if (!session) return null
+  const label =
+    status.state === 'paused'
+      ? t('sidepanel.paused')
+      : status.state === 'stopping'
+        ? t('sidepanel.stopping')
+        : status.state === 'starting'
+          ? t('sidepanel.starting')
+          : session.mode === 'video'
+            ? t('sidepanel.recordingVideo')
+            : t('sidepanel.recordingAudio')
+  return (
+    <section className="bg-muted flex flex-col gap-1 rounded-xl p-3 text-sm">
+      <div className="flex items-center gap-2 font-medium">
+        {status.state === 'recording' && <span className="size-2 rounded-full bg-red-600" />}
+        {label} · {formatDuration(session.elapsedMs)}
+      </div>
+      <div className="text-muted-foreground truncate text-xs">{session.title}</div>
+      <p className="text-muted-foreground text-xs">{t('popup.controlsInSidePanel')}</p>
+    </section>
+  )
+}
+
 /** 最近一次录制的结果：已保存 / 因来源结束而结束 / 出错后部分保存 / 未能保存 */
 export function LastRecordingNotice({ result }: { result: LastRecording }) {
   const { t } = useTranslation()

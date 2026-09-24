@@ -119,6 +119,8 @@ async function startInWindow(options: WindowRecordingOptions): Promise<RecorderS
   try {
     const status = await sendMessage('window:start', options)
     await windowHost.setValue({ ...host, started: true })
+    // 选好来源后录制窗口只负责承载采集：最小化，进度和控制统一在侧边栏
+    await browser.windows.update(windowId, { state: 'minimized' }).catch(() => {})
     return status
   } catch (e) {
     // 取消选择 / 选择框报错 / 开始失败：关掉窗口，错误交给调用方
@@ -140,7 +142,7 @@ async function startRecording({
   tabId,
   title,
   settings,
-}: StartRecordingRequest): Promise<RecorderStatus> {
+}: StartRecordingRequest): Promise<RecorderStatus & { panelShown: boolean }> {
   if (startPending) throw new RecorderBusyError('A recording is already starting')
   startPending = true
   try {
@@ -172,15 +174,34 @@ async function startRecording({
     await lastRecording.setValue(null)
     await lastStartError.setValue(null)
     await updateBadge(status)
-    return status
+    // 录制中的计时与控制都在页面内悬浮面板里
+    return { ...status, panelShown: await showPanel(tabId) }
   } catch (e) {
-    // 选择窗口 / 屏幕时弹窗通常已经关闭，错误只能留给侧边栏显示
+    // 选择窗口 / 屏幕时弹窗通常已经关闭，错误由页面内悬浮面板显示
     if (!(e instanceof RecorderBusyError)) {
       await lastStartError.setValue(e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+      void showPanel(tabId)
     }
     throw e
   } finally {
     startPending = false
+  }
+}
+
+/**
+ * 在标签页里显示悬浮录制面板（entrypoints/overlay.content）。靠 activeTab：
+ * 用户刚在这个标签页上点了弹窗 / 按了快捷键才有权限注入；chrome:// 等页面不允许注入。
+ */
+async function showPanel(tabId: number): Promise<boolean> {
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId },
+      files: ['/content-scripts/overlay.js'],
+    })
+    return true
+  } catch (e) {
+    console.warn('[huilu] cannot show the recording panel in this tab', e)
+    return false
   }
 }
 
@@ -212,7 +233,10 @@ async function withOffscreen<T>(task: () => Promise<T>): Promise<T> {
 async function toggleRecording(tab: Browser.tabs.Tab | undefined) {
   const status = await recorderStatus()
   if (status.state === 'recording' || status.state === 'paused') {
-    await updateBadge(await sendMessage('offscreen:stop'))
+    // 转给实际在录的地方：标签页录制在离屏文档，窗口 / 屏幕录制在录制窗口
+    const stopped = await control('stop')
+    if (stopped) await updateBadge(stopped)
+    if (tab?.id !== undefined) void showPanel(tab.id)
     return
   }
   if (tab?.id === undefined) return
@@ -256,6 +280,7 @@ export default defineBackground(() => {
     withOffscreen(() => sendMessage('offscreen:discard', id)),
   )
   onMessage('openApp', ({ data }) => openAppPage(data))
+  onMessage('showRecordingPanel', ({ data: tabId }) => showPanel(tabId))
 
   onMessage('recordingFinished', async ({ data, sender }) => {
     await lastRecording.setValue(data)
@@ -293,8 +318,6 @@ export default defineBackground(() => {
   // 快捷键 Alt+Shift+R：没在录就按上次的设置录当前标签页，在录就结束
   browser.commands.onCommand.addListener((command, tab) => {
     if (command !== 'toggle-recording') return
-    // 打开侧边栏必须在用户操作的同步调用栈里
-    if (tab?.windowId !== undefined) void browser.sidePanel.open({ windowId: tab.windowId })
     toggleRecording(tab).catch((e: unknown) => console.error('[huilu] toggle recording failed', e))
   })
 })

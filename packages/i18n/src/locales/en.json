@@ -39,10 +39,12 @@
     "meetingTitlePlaceholder": "Untitled meeting",
     "starting": "Starting…",
     "recordingNow": "Recording “{{title}}”",
-    "openSidePanel": "Open side panel",
     "shortcut": "Shortcut Alt+Shift+R to start / stop",
     "goSetup": "Set up",
-    "reauthorize": "Re-authorize"
+    "reauthorize": "Re-authorize",
+    "controlsInSidePanel": "Pause, resume and stop from the floating recording panel on the page",
+    "showPanel": "Show recording panel",
+    "panelUnavailable": "This page does not allow the floating recording panel (e.g. chrome:// pages). You can control the recording here"
   },
   "sidepanel": {
     "recording": "Recording",
@@ -83,7 +85,7 @@
     "transcribed": "Transcribed",
     "notTranscribed": "Not transcribed",
     "notTranscribedNoService": "Not transcribed: no transcription service is set up yet. You can still preview or download the recording",
-    "unfinishedHint": "This recording was interrupted. Recover it from \"Unfinished recordings\" in the popup or side panel; you can preview what was recorded first",
+    "unfinishedHint": "This recording was interrupted. Recover it from \"Unfinished recordings\" in the popup; you can preview what was recorded first",
     "preview": "Preview",
     "download": "Download",
     "noMedia": "Nothing to play",
@@ -297,6 +299,14 @@
   },
   "recorderWindow": {
     "choosing": "Choose the window or screen to record in the picker…",
-    "keepOpen": "Window / screen recording runs in this small window. You can minimize it, but closing it stops the recording."
+    "keepOpen": "This window captures the window / screen. Keep it minimized, but do not close it or the recording stops. It closes itself when the recording ends.",
+    "recording": "Recording. The timer and pause / stop controls are in the floating recording panel on the page."
+  },
+  "panel": {
+    "title": "Recording panel",
+    "collapse": "Collapse",
+    "expand": "Expand recording panel",
+    "close": "Close panel",
+    "hint": "The panel floats over the page; drag or collapse it. After closing, reopen it from the extension icon. When recording a tab with video, the expanded panel is captured in the video."
   }
 }
