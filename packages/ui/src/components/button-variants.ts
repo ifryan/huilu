@@ -8,6 +8,7 @@ export const buttonVariants = cva(
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         outline: 'border border-border bg-background hover:bg-muted',
         ghost: 'hover:bg-muted',
+        danger: 'bg-danger text-white hover:bg-danger/90',
       },
       size: {
         default: 'h-10 px-5',

@@ -1,23 +1,25 @@
-import type { RecordingMode } from '@huilu/core'
+import { browser } from '#imports'
 import { useTranslation } from '@huilu/i18n'
-import { Button, cn } from '@huilu/ui'
+import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
+import { RecordingSetup } from '@/components/recording/RecordingSetup'
+import { RecordingStatusCard } from '@/components/recording/RecordingStatusCard'
+import { UnfinishedRecordings } from '@/components/recording/UnfinishedRecordings'
 import { sendMessage } from '@/lib/messaging'
-import { recordingModeSetting } from '@/lib/settings'
-
-const MODES: RecordingMode[] = ['audio', 'video']
+import { useRecorderStatus } from '@/lib/recording'
 
 export function Popup() {
   const { t } = useTranslation()
-  const [mode, setMode] = useState<RecordingMode>('audio')
+  const { data: status } = useRecorderStatus()
+  const busy = status !== undefined && status.state !== 'idle'
 
+  // sidePanel.open 必须在点击的同步调用栈里调用，窗口 id 提前取好
+  const [windowId, setWindowId] = useState<number>()
   useEffect(() => {
-    void recordingModeSetting.getValue().then(setMode)
+    void browser.windows.getCurrent().then((w) => setWindowId(w.id))
   }, [])
-
-  const selectMode = (next: RecordingMode) => {
-    setMode(next)
-    void recordingModeSetting.setValue(next)
+  const openSidePanel = () => {
+    if (windowId !== undefined) void browser.sidePanel.open({ windowId })
   }
 
   return (
@@ -29,29 +31,19 @@ export function Popup() {
         </Button>
       </header>
 
-      <section className="flex flex-col gap-2">
-        <span className="text-muted-foreground text-sm">{t('popup.mode')}</span>
-        <div className="grid grid-cols-2 gap-2">
-          {MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => selectMode(m)}
-              className={cn(
-                'rounded-lg border px-3 py-2 text-sm',
-                mode === m ? 'border-primary bg-primary/10 text-primary' : 'border-border',
-              )}
-            >
-              {t(m === 'audio' ? 'popup.modeAudio' : 'popup.modeVideo')}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* 录制功能在「录制」子任务中实现 */}
-      <Button size="lg" disabled title={t('common.comingSoon')}>
-        {t('popup.start')}
-      </Button>
+      {status && busy ? (
+        <>
+          <RecordingStatusCard status={status} />
+          <Button variant="outline" onClick={openSidePanel}>
+            {t('popup.openSidePanel')}
+          </Button>
+        </>
+      ) : (
+        <>
+          <UnfinishedRecordings />
+          <RecordingSetup />
+        </>
+      )}
     </main>
   )
 }

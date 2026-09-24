@@ -49,7 +49,7 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
   const warnings: RecorderWarning[] = []
   const source = await navigator.mediaDevices.getUserMedia(sourceConstraints(req))
   let mic: MediaStream | undefined
-  const ctx = new AudioContext({ latencyHint: 'playback' })
+  const ctx = new AudioContext({ latencyHint: 'interactive' })
   const stopAll = () => {
     source.getTracks().forEach((t) => t.stop())
     mic?.getTracks().forEach((t) => t.stop())

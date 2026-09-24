@@ -53,6 +53,9 @@ importers:
       '@huilu/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@huilu/recorder':
+        specifier: workspace:*
+        version: link:../../packages/recorder
       '@huilu/ui':
         specifier: workspace:*
         version: link:../../packages/ui
