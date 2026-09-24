@@ -37,7 +37,10 @@ export interface StartRecordingRequest {
  */
 interface ProtocolMap {
   // 界面 → 后台
-  /** startError：最近一次开始录制失败的原因（快捷键、窗口选择框等弹窗已关闭的场景由侧边栏显示） */
+  /**
+   * lastResult / startError：最近一次录制结果、开始录制失败的原因，直到用户关掉提示或开始新的录制。
+   * 悬浮面板和弹窗（面板无法显示时）都据此提示，快捷键结束、面板重新注入后也不会丢。
+   */
   getRecorderStatus(): RecorderStatus & { startError?: string }
   /** panelShown：悬浮录制面板是否已显示在该标签页；为 false 时弹窗保留，改在弹窗里控制 */
   startRecording(request: StartRecordingRequest): RecorderStatus & { panelShown: boolean }
@@ -50,6 +53,8 @@ interface ProtocolMap {
   openApp(route: string): void
   /** 在指定标签页显示页面内悬浮录制面板；页面不允许注入（如 chrome:// 页面）时返回 false */
   showRecordingPanel(tabId: number): boolean
+  /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」、悬浮面板 ✕） */
+  dismissRecordingNotice(): void
 
   // 后台 → 离屏文档（标签页录制）
   'offscreen:start'(options: Omit<RecordingOptions, 'id'>): RecorderStatus

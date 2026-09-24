@@ -82,8 +82,16 @@ async function recorderStatus(): Promise<RecorderStatus & { startError?: string 
   const last = (await lastRecording.getValue()) ?? undefined
   const startError = (await lastStartError.getValue()) ?? undefined
   const status = await control('status')
+  // 最近一次结果只以后台保存的为准（recordingFinished 时写入），这样「知道了」之后不会被
+  // 离屏文档 / 录制窗口里残留的结果重新带回来
   if (!status) return { state: 'idle', lastResult: last, startError }
-  return { ...status, lastResult: status.lastResult ?? last, startError }
+  return { ...status, lastResult: last, startError }
+}
+
+/** 用户已看过最近一次的结果 / 开始失败提示：清掉，之后弹窗和悬浮面板不再显示 */
+async function dismissNotice() {
+  await lastRecording.setValue(null)
+  await lastStartError.setValue(null)
 }
 
 let resolveWindowReady: (() => void) | undefined
@@ -281,6 +289,7 @@ export default defineBackground(() => {
   )
   onMessage('openApp', ({ data }) => openAppPage(data))
   onMessage('showRecordingPanel', ({ data: tabId }) => showPanel(tabId))
+  onMessage('dismissRecordingNotice', () => dismissNotice())
 
   onMessage('recordingFinished', async ({ data, sender }) => {
     await lastRecording.setValue(data)

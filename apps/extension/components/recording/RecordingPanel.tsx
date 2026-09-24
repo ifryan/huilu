@@ -18,17 +18,14 @@ export function RecordingPanel() {
   const [collapsed, setCollapsed] = useState(false)
   const [pos, setPos] = useState<{ right: number; bottom: number }>({ right: 16, bottom: 16 })
   const drag = useRef<{ x: number; y: number; right: number; bottom: number }>(undefined)
-  // 录制结束的结果只在这个面板见证过录制时提示，不翻出以前的旧结果
-  const [seenBusy, setSeenBusy] = useState(false)
-
   const busy = status !== undefined && status.state !== 'idle'
-  if (busy && !seenBusy) setSeenBusy(true)
   const key = busy ? (status.session?.id ?? 'busy') : 'idle'
   const hidden = hiddenFor === key
 
   if (!status || hidden) return null
   const startError = status.startError
-  const lastResult = seenBusy ? status.lastResult : undefined
+  // 未被关掉的最近一次结果：面板重新注入（快捷键结束、弹窗重新打开）后照样显示
+  const lastResult = status.lastResult
   // 空闲、也没有需要告知的结果：什么都不显示
   if (!busy && !startError && !lastResult) return null
 
@@ -91,7 +88,11 @@ export function RecordingPanel() {
             size="sm"
             variant="ghost"
             aria-label={t('panel.close')}
-            onClick={() => setHiddenFor(key)}
+            onClick={() => {
+              setHiddenFor(key)
+              // 空闲时关掉面板 = 看过了结果，弹窗里也不再提示
+              if (!busy) void sendMessage('dismissRecordingNotice')
+            }}
           >
             ✕
           </Button>

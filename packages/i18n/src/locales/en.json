@@ -44,7 +44,8 @@
     "reauthorize": "Re-authorize",
     "controlsInSidePanel": "Pause, resume and stop from the floating recording panel on the page",
     "showPanel": "Show recording panel",
-    "panelUnavailable": "This page does not allow the floating recording panel (e.g. chrome:// pages). You can control the recording here"
+    "panelUnavailable": "This page does not allow the floating recording panel (e.g. chrome:// pages). You can control the recording here",
+    "dismissNotice": "Dismiss"
   },
   "sidepanel": {
     "recording": "Recording",

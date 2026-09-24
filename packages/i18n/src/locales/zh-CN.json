@@ -44,7 +44,8 @@
     "reauthorize": "重新授权",
     "controlsInSidePanel": "暂停、继续和结束请在网页上的悬浮录制面板中操作",
     "showPanel": "显示录制面板",
-    "panelUnavailable": "这个页面不允许显示悬浮录制面板（例如 chrome:// 页面），可以在这里控制录制"
+    "panelUnavailable": "这个页面不允许显示悬浮录制面板（例如 chrome:// 页面），可以在这里控制录制",
+    "dismissNotice": "知道了"
   },
   "sidepanel": {
     "recording": "录制中",

@@ -86,7 +86,13 @@ export function RecordingSetup({
         // 面板显示不了（如 chrome:// 页面）就保留弹窗，在这里控制
         if (panelShown) window.close()
       })
-      .catch((e: unknown) => setError(t('sidepanel.startFailed', { error: startErrorText(t, e) })))
+      .catch(async (e: unknown) => {
+        // 其他失败原因由后台记下，弹窗顶部的「最近一次」提示统一显示；「已有录制」不记，就地提示
+        await queryClient.invalidateQueries({ queryKey: ['recorderStatus'] })
+        if (String(e instanceof Error ? e.name + e.message : e).includes('RecorderBusyError')) {
+          setError(t('sidepanel.startFailed', { error: startErrorText(t, e) }))
+        }
+      })
       .finally(() => setStarting(false))
   }
 

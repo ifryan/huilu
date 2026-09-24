@@ -3,7 +3,14 @@ import { useTranslation } from '@huilu/i18n'
 import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { RecordingSetup } from '@/components/recording/RecordingSetup'
-import { RecordingBrief, RecordingStatusCard } from '@/components/recording/RecordingStatusCard'
+import {
+  LastRecordingNotice,
+  RecordingBrief,
+  RecordingStatusCard,
+  StartErrorNotice,
+} from '@/components/recording/RecordingStatusCard'
+import { useQueryClient } from '@tanstack/react-query'
+import type { RecorderStatus } from '@/lib/messaging'
 import { UnfinishedRecordings } from '@/components/recording/UnfinishedRecordings'
 import { sendMessage } from '@/lib/messaging'
 import { useReadiness } from '@/lib/readiness'
@@ -53,12 +60,43 @@ export function Popup() {
         )
       ) : (
         <>
+          {status && <RecordingNotices status={status} />}
           <ReadinessStatus />
           <UnfinishedRecordings />
           <RecordingSetup onStarted={(shown) => setPanelUnavailable(!shown)} />
         </>
       )}
     </main>
+  )
+}
+
+/**
+ * 最近一次录制的结果 / 开始失败原因：悬浮面板显示不了（如 chrome:// 页面）或已关掉时，
+ * 重新打开弹窗仍能看到；点「知道了」后清除，开始新的录制也会清除，不会一直挂着旧结果。
+ */
+function RecordingNotices({ status }: { status: RecorderStatus & { startError?: string } }) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  if (!status.startError && !status.lastResult) return null
+  const dismiss = async () => {
+    await sendMessage('dismissRecordingNotice')
+    await queryClient.invalidateQueries({ queryKey: ['recorderStatus'] })
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      {status.startError && <StartErrorNotice error={status.startError} />}
+      {status.lastResult && <LastRecordingNotice result={status.lastResult} />}
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" onClick={() => void dismiss()}>
+          {t('popup.dismissNotice')}
+        </Button>
+        {status.lastResult && (
+          <Button size="sm" variant="ghost" onClick={() => void sendMessage('openApp', '/')}>
+            {t('sidepanel.openHistory')}
+          </Button>
+        )}
+      </div>
+    </section>
   )
 }
 
