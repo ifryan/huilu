@@ -15,7 +15,9 @@
     "modeVideo": "音频 + 视频",
     "start": "开始记录",
     "openApp": "打开会录",
-    "notReady": "请先完成设置"
+    "notReady": "请先完成设置",
+    "goSetup": "去设置",
+    "reauthorize": "重新授权"
   },
   "sidepanel": {
     "recording": "录制中",
@@ -28,17 +30,169 @@
     "language": "界面语言",
     "dataFolder": "数据文件夹",
     "transcription": "转写服务",
-    "llm": "大模型服务"
+    "llm": "大模型服务",
+    "folder": {
+      "current": "当前文件夹",
+      "none": "未选择",
+      "status": {
+        "granted": "已授权",
+        "prompt": "需要重新授权",
+        "denied": "已拒绝",
+        "unset": "未选择"
+      },
+      "choose": "选择文件夹",
+      "change": "更换文件夹",
+      "reauthorize": "重新授权",
+      "usage": "占用空间",
+      "calcUsage": "计算",
+      "pathNote": "浏览器出于安全考虑只提供文件夹名称，不提供完整路径。",
+      "persistHint": "浏览器重启后第一次使用时会再询问一次授权，届时请选择「每次访问时都允许」，之后就不会再问。",
+      "reloadHint": "更新或重新加载插件后可能需要重新授权。",
+      "suggestion": "建议在「文档」里新建一个名为 HuiLu 的文件夹并选择它；每场会议会保存为其中的一个子文件夹。",
+      "pickFailed": "无法选择文件夹：{{reason}}"
+    },
+    "provider": "服务商",
+    "capabilities": "能力",
+    "diarizationYes": "支持区分发言人",
+    "diarizationNo": "不区分发言人（逐字稿显示为单一发言人，可手动标注）",
+    "maxFile": "单文件上限 {{size}}，超出时自动切片",
+    "test": "测试连接",
+    "testing": "测试中…",
+    "testOk": "连接成功",
+    "testFailed": "连接失败",
+    "save": "保存",
+    "saved": "已保存",
+    "invalid": "请检查这些字段：{{fields}}",
+    "showKey": "显示",
+    "hideKey": "隐藏",
+    "configured": "已配置",
+    "notConfigured": "未配置",
+    "unsaved": "有未保存的修改",
+    "hostPermissionDenied": "需要授予访问 {{origin}} 的权限才能连接",
+    "compare": {
+      "title": "转写服务商对比（数据截至 2026-09）",
+      "service": "服务",
+      "access": "接入方式",
+      "free": "免费额度",
+      "price": "价格",
+      "diarization": "区分发言人",
+      "domestic": "国内直连",
+      "yes": "支持",
+      "no": "不支持",
+      "byModel": "视模型",
+      "needsProxy": "需代理",
+      "paraformer": {
+        "name": "阿里云百炼 Paraformer（默认）",
+        "access": "百炼专用接口，音频经百炼临时文件上传（48 小时有效）",
+        "free": "新用户限时额度（以控制台为准）",
+        "price": "约 0.29 元/小时"
+      },
+      "groq": {
+        "name": "Groq Whisper large-v3-turbo",
+        "access": "OpenAI 兼容",
+        "free": "每天约 8 小时音频；单文件 ≤ 25MB（超出自动切片）",
+        "price": "0.04 美元/小时"
+      },
+      "openai": {
+        "name": "OpenAI（whisper-1 / gpt-4o-transcribe）",
+        "access": "OpenAI 兼容",
+        "free": "无",
+        "price": "按官方价格"
+      }
+    },
+    "transfer": {
+      "title": "导入 / 导出配置",
+      "export": "导出配置",
+      "import": "导入配置",
+      "includeKeys": "导出时包含 API Key",
+      "keysWarning": "包含 API Key 的配置文件请妥善保管，不要分享给他人。",
+      "imported": "配置已导入",
+      "importFailed": "导入失败：{{reason}}"
+    }
   },
   "onboarding": {
     "step1": "选择数据文件夹",
     "step2": "配置转写服务",
-    "step3": "配置大模型服务"
+    "step3": "配置大模型服务",
+    "title": "欢迎使用会录",
+    "intro": "三步完成设置，大约 1 分钟。之后都可以在「设置」里修改。",
+    "stepOf": "第 {{n}} / 3 步",
+    "step1Desc": "会议的音视频、逐字稿和纪要都以普通文件保存在这个文件夹里，卸载插件也不会丢失。",
+    "step2Desc": "把录音转成带时间戳的逐字稿。推荐阿里云百炼 Paraformer：国内直连、支持区分发言人。",
+    "step3Desc": "根据逐字稿生成会议纪要。任意 OpenAI 兼容接口都可以，也可以使用本地 Ollama。",
+    "next": "下一步",
+    "back": "上一步",
+    "skip": "稍后配置",
+    "finish": "完成",
+    "doneTitle": "设置完成",
+    "doneDesc": "点击工具栏上的会录图标即可开始记录会议。",
+    "openHistory": "查看历史记录"
   },
   "common": {
-    "comingSoon": "即将推出"
+    "comingSoon": "即将推出",
+    "cancel": "取消",
+    "unknownError": "未知错误"
   },
   "summaryTemplate": {
     "general": "通用"
+  },
+  "readiness": {
+    "ready": "已就绪",
+    "folderUnset": "还没有选择数据文件夹",
+    "folderPrompt": "数据文件夹需要重新授权",
+    "folderDenied": "数据文件夹访问被拒绝",
+    "folderNote": "录制不受影响：录音先保存在浏览器中，授权后再写入文件夹",
+    "apiMissing": "还没有配置转写 / 大模型服务",
+    "apiNote": "录制和回看不受影响，转写和纪要需要先配置",
+    "chooseFolder": "选择文件夹",
+    "reauthorize": "重新授权",
+    "configure": "去配置",
+    "onboarding": "完成首次设置"
+  },
+  "providers": {
+    "paraformer": {
+      "name": "阿里云百炼 Paraformer"
+    },
+    "openaiCompatibleTranscription": {
+      "name": "OpenAI 兼容（Groq / OpenAI / 自定义）"
+    },
+    "openaiCompatibleLlm": {
+      "name": "OpenAI 兼容接口"
+    },
+    "field": {
+      "preset": "预设",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "model": "模型",
+      "region": "地域"
+    },
+    "preset": {
+      "groq": "Groq",
+      "openai": "OpenAI",
+      "custom": "自定义",
+      "qwen": "通义千问（百炼）",
+      "deepseek": "DeepSeek",
+      "ollama": "Ollama（本地）",
+      "ollamaHint": "需要以 OLLAMA_ORIGINS=chrome-extension://* 启动 Ollama，否则会拒绝来自插件的请求。"
+    },
+    "region": {
+      "cn": "中国大陆（北京）",
+      "intl": "国际（新加坡）"
+    },
+    "error": {
+      "invalidConfig": "配置不完整或格式不正确",
+      "unauthorized": "API Key 无效或已过期",
+      "forbidden": "没有权限：请检查账号是否开通该服务，或 Key 的权限范围",
+      "notFound": "接口地址不存在：请检查 Base URL",
+      "modelNotFound": "服务商没有这个模型，可用的模型包括",
+      "badRequest": "请求被拒绝：请检查模型名等参数",
+      "rateLimited": "请求过于频繁或额度已用完，请稍后再试",
+      "server": "服务商暂时不可用，请稍后再试",
+      "network": "无法连接：请检查网络、代理或 Base URL",
+      "timeout": "连接超时：请检查网络或代理",
+      "aborted": "已取消",
+      "badResponse": "返回的内容无法识别：请检查 Base URL 是否指向正确的接口",
+      "notImplemented": "功能尚未实现"
+    }
   }
 }
