@@ -188,6 +188,7 @@ export function avSync(file, windows) {
     const sorted = [...offsets].sort((a, b) => a - b)
     return {
       window: `${start}s+${dur}s`,
+      offsetsMs: offsets,
       pairs: offsets.length,
       flashes: flashes.length,
       beeps: beeps.length,
@@ -196,6 +197,35 @@ export function avSync(file, windows) {
       maxMs: sorted.at(-1) ?? null,
     }
   })
+}
+
+/** PRD：音画偏移 ≤ 200ms（F1.x 录制验收）。按每一个配对点判定，不用中位数代替 */
+export const AV_SYNC_LIMIT_MS = 200
+
+/**
+ * 汇总 avSync 各窗口的全部配对点并按阈值判定：任一点 |offset| 超过 limitMs 即不通过；
+ * 某个窗口没有配对点（闪白 / 哔声检测失败）也不通过，避免把测不到当成同步。
+ * avSync 只配对 ±500ms 内的哔声，偏移更大的点会变成「未配对」：窗口边缘最多允许 1 个，否则不通过。
+ */
+export function syncVerdict(windows, limitMs = AV_SYNC_LIMIT_MS) {
+  const all = windows.flatMap((w) => w.offsetsMs)
+  const sorted = [...all].sort((a, b) => a - b)
+  const over = all.filter((o) => Math.abs(o) > limitMs)
+  return {
+    limitMs,
+    samples: all.length,
+    medianMs: sorted[Math.floor(sorted.length / 2)] ?? null,
+    minMs: sorted[0] ?? null,
+    maxMs: sorted.at(-1) ?? null,
+    maxAbsMs: all.length ? Math.max(...all.map(Math.abs)) : null,
+    over: over.length,
+    emptyWindows: windows.filter((w) => w.pairs === 0).map((w) => w.window),
+    unpaired: windows.map((w) => w.flashes - w.pairs),
+    pass:
+      all.length > 0 &&
+      over.length === 0 &&
+      windows.every((w) => w.pairs > 0 && w.flashes - w.pairs <= 1),
+  }
 }
 
 export function beepTimes(file, start, dur) {
