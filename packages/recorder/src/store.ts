@@ -8,7 +8,8 @@ export class ChunkWriteError extends Error {
 
 export type DirectoryProvider = () => Promise<FileSystemDirectoryHandle>
 
-const RECORDINGS_DIR = 'recordings'
+/** OPFS 中存放录制的目录；每个录制一个子目录，结束后含 meeting.json */
+export const RECORDINGS_DIR = 'recordings'
 const MANIFEST = 'manifest.json'
 const MEETING = 'meeting.json'
 
