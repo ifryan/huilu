@@ -77,6 +77,7 @@ class TrackWriter {
   readonly sizes: number[] = []
   #queue: Promise<void> = Promise.resolve()
   #failed = false
+  #sealed = false
 
   constructor(
     readonly name: TrackName,
@@ -87,7 +88,7 @@ class TrackWriter {
   ) {}
 
   push(data: Blob) {
-    if (data.size === 0) return
+    if (data.size === 0 || this.#sealed) return
     this.#queue = this.#queue.then(async () => {
       if (this.#failed) return
       try {
@@ -103,8 +104,10 @@ class TrackWriter {
     })
   }
 
-  drain() {
-    return this.#queue
+  /** 收尾：等已排队的分片写完，之后再到达的分片（录制器超时后才吐出的数据）一律丢弃 */
+  async seal() {
+    await this.#queue
+    this.#sealed = true
   }
 }
 
@@ -274,7 +277,7 @@ export class RecordingSession {
     this.#endedAt = this.#now()
 
     await Promise.all(this.#writers.map((w) => this.#stopRecorder(w.recorder)))
-    await Promise.all(this.#writers.map((w) => w.drain()))
+    await Promise.all(this.#writers.map((w) => w.seal()))
     this.#media?.stop()
 
     const manifest = this.#manifest()

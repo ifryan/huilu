@@ -1,14 +1,13 @@
 import type { Meeting, RecordingMode } from '@huilu/core'
 import { isUnfinished, type TrackName } from './manifest'
-import type { MediaBackend } from './media'
 import { meetingFromManifest } from './meeting'
 import {
   RecordingSession,
   type FinishedRecording,
   type RecordingOptions,
+  type SessionDeps,
   type SessionStatus,
 } from './session'
-import type { RecordingStore } from './store'
 
 export class RecorderBusyError extends Error {
   override name = 'RecorderBusyError'
@@ -32,10 +31,7 @@ export interface UnfinishedRecording {
   bytes: number
 }
 
-export interface ControllerDeps {
-  store: RecordingStore
-  media: MediaBackend
-  now?: () => number
+export interface ControllerDeps extends SessionDeps {
   /** 录制结束（用户结束、来源结束、写入失败）后回调，用于通知后台 */
   onFinished?: (result: FinishedRecording) => void
 }

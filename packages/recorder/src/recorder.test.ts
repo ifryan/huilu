@@ -251,6 +251,22 @@ describe('RecorderController', () => {
     expect(manifest.endReason).toBe('error')
   })
 
+  it('ignores chunks that arrive after a recorder timed out on stop', async () => {
+    controller = new RecorderController({ store, media, now: clock.now, stopTimeoutMs: 10 })
+    await controller.start(options({ id: 'late' }))
+    const { video, audio } = recorders()
+    audio.emit('a1')
+    await flush()
+    // 视频录制器卡住：stop() 后迟迟不派发 stop 事件，也不输出最后一片
+    video.stop = () => {}
+    await controller.stop()
+    video.emit('late')
+    await flush()
+    const manifest = (await (await store.open('late'))!.readManifest())!
+    expect(manifest.state).toBe('stopped')
+    expect(manifest.tracks.video?.chunks).toBe(0)
+  })
+
   it('discards a recording that produced no data', async () => {
     await controller.start(options({ id: 'empty' }))
     for (const r of media.recorders) r.finalChunk = undefined

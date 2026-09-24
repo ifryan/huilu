@@ -98,7 +98,7 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
 export function LastRecordingNotice({ result }: { result: LastRecording }) {
   const { t } = useTranslation()
   return (
-    <section className="flex flex-col gap-1 rounded-xl border p-4 text-sm">
+    <section className="border-border flex flex-col gap-1 rounded-xl border p-4 text-sm">
       {result.saved ? (
         <>
           <div className="font-medium">{t('sidepanel.saved')}</div>
@@ -130,7 +130,7 @@ export function LastRecordingNotice({ result }: { result: LastRecording }) {
 export function StartErrorNotice({ error }: { error: string }) {
   const { t } = useTranslation()
   return (
-    <p className="text-danger rounded-xl border p-4 text-xs">
+    <p className="border-border text-danger rounded-xl border p-4 text-xs">
       {t('sidepanel.startFailed', { error: startErrorText(t, error) })}
     </p>
   )
