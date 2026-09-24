@@ -4,18 +4,19 @@
 
 ## 内容
 
-| 路径                                 | 作用                                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `extension/`                         | 不经打包、可直接「加载已解压的扩展程序」的 MV3 插件：后台 + 离屏文档 + `lab.html` 验证页面                    |
-| `extension/lib/recorder.js`          | 录制引擎：tabCapture / 合成画面 → Web Audio 混音（+ 麦克风）→ 两路 MediaRecorder → 每 5 秒一个分片写入 OPFS   |
-| `extension/lib/media.js`             | 播放 / 拖动检查、mediabunny 解析、fMP4 → 普通 MP4 流式转封装                                                  |
-| `extension/lib/dashscope.js`         | 百炼 Paraformer：临时文件上传 → 提交任务（发言人区分）→ 轮询 → 结果转成 `core` 的 `Transcript`                |
-| `extension/lib/openai-compatible.js` | Groq / OpenAI 兼容转写，按切片偏移合并                                                                        |
-| `extension/lib/split.js`             | 超过单文件上限时按静音点切片（只解码切点附近的窗口，不整段解码）                                              |
-| `scripts/run-media.mjs`              | 验证项 2、3 自动化：无头 Chrome 中录合成画面（每秒整点闪白 + 哔声），采样内存 / CPU，结束后校验与 ffmpeg 分析 |
-| `scripts/avsync.mjs`                 | ffprobe 容器信息 + 闪白 / 哔声配对测音画偏移，可单独对任意录制文件运行                                        |
-| `scripts/run-split.mjs`              | 验证 Groq 25MB 切片：切点是否落在静音里、每片是否不超限、时长是否守恒                                         |
-| `scripts/transcribe.mjs`             | 验证项 4：在插件页面（`chrome-extension://` 源）里跑百炼 / Groq 全流程                                        |
+| 路径                                 | 作用                                                                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `extension/`                         | 不经打包、可直接「加载已解压的扩展程序」的 MV3 插件：后台 + 离屏文档 + `lab.html` 验证页面                           |
+| `extension/lib/recorder.js`          | 录制引擎：tabCapture / 合成画面 → Web Audio 混音（+ 麦克风）→ 两路 MediaRecorder → 每 5 秒一个分片写入 OPFS          |
+| `extension/lib/media.js`             | 播放 / 拖动检查、mediabunny 解析、fMP4 → 普通 MP4 流式转封装                                                         |
+| `extension/lib/dashscope.js`         | 百炼 Paraformer：临时文件上传 → 提交任务（发言人区分）→ 轮询 → 结果转成 `core` 的 `Transcript`                       |
+| `extension/lib/openai-compatible.js` | Groq / OpenAI 兼容转写，按切片偏移合并                                                                               |
+| `extension/lib/split.js`             | 超过单文件上限时按静音点切片（只解码切点附近的窗口，不整段解码）                                                     |
+| `scripts/run-media.mjs`              | 验证项 2、3 自动化：无头 Chrome 中录合成画面（每秒整点闪白 + 哔声），采样内存 / CPU，结束后校验与 ffmpeg 分析        |
+| `scripts/avsync.mjs`                 | ffprobe 容器信息 + 闪白 / 哔声配对测音画偏移，可单独对任意录制文件运行                                               |
+| `scripts/decode-check.test.mjs`      | `decodeErrors` 回归测试：只忽略 FFmpeg Opus 解析器在文件末尾的误报，中途坏包 / 截断仍计错误（`npm run test:decode`） |
+| `scripts/run-split.mjs`              | 验证 Groq 25MB 切片：切点是否落在静音里、每片是否不超限、时长是否守恒                                                |
+| `scripts/transcribe.mjs`             | 验证项 4：在插件页面（`chrome-extension://` 源）里跑百炼 / Groq 全流程                                               |
 
 ## 准备
 

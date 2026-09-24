@@ -12,6 +12,7 @@
     "test:mp4": "node scripts/run-media.mjs --minutes 3 --height 1080",
     "test:soak": "node scripts/run-media.mjs --minutes 60 --height 1080",
     "test:split": "node scripts/run-split.mjs",
-    "transcribe": "node scripts/transcribe.mjs"
+    "transcribe": "node scripts/transcribe.mjs",
+    "test:decode": "node --test scripts/decode-check.test.mjs"
   }
 }
