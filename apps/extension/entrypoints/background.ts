@@ -48,17 +48,21 @@ async function recorderStatus(): Promise<RecorderStatus & { startError?: string 
   return { ...status, lastResult: status.lastResult ?? last, startError }
 }
 
-async function startRecording({ tabId, title }: StartRecordingRequest): Promise<RecorderStatus> {
+async function startRecording({
+  tabId,
+  title,
+  settings,
+}: StartRecordingRequest): Promise<RecorderStatus> {
   if (startPending) throw new RecorderBusyError('A recording is already starting')
   startPending = true
   try {
     if ((await recorderStatus()).state !== 'idle') {
       throw new RecorderBusyError('A recording is already in progress')
     }
-    const [mode, prefs] = await Promise.all([
-      recordingModeSetting.getValue(),
-      recordingPrefsSetting.getValue(),
-    ])
+    const { mode, prefs } = settings ?? {
+      mode: await recordingModeSetting.getValue(),
+      prefs: await recordingPrefsSetting.getValue(),
+    }
     const grant = await requestCapture(prefs.videoSource, tabId)
     const status = await exclusive(async () => {
       await ensureOffscreenDocument()

@@ -35,10 +35,17 @@ export function RecordingSetup() {
   const [title, setTitle] = useState('')
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string>()
+  // 保存的设置读回来之前不能开始：否则界面显示的默认值与实际录制设置可能不一致
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    void recordingModeSetting.getValue().then(setMode)
-    void recordingPrefsSetting.getValue().then(setPrefs)
+    void Promise.all([recordingModeSetting.getValue(), recordingPrefsSetting.getValue()]).then(
+      ([savedMode, savedPrefs]) => {
+        setMode(savedMode)
+        setPrefs(savedPrefs)
+        setLoaded(true)
+      },
+    )
     void browser.tabs.query({ active: true, currentWindow: true }).then(([active]) => {
       setTab({ id: active?.id, windowId: active?.windowId })
       setTitle(active?.title ?? '')
@@ -56,14 +63,16 @@ export function RecordingSetup() {
   }
 
   const start = () => {
-    if (tab.id === undefined) return
+    if (tab.id === undefined || !loaded) return
     setStarting(true)
     setError(undefined)
     // 两个调用都要在点击的同步调用栈里发出：选择窗口 / 屏幕时弹窗会失去焦点被关闭，
     // 打开侧边栏也要求用户手势
+    // 带上界面当前的设置：刚改完设置立刻点开始时，storage 写入可能还没完成
     const started = sendMessage('startRecording', {
       tabId: tab.id,
       title: title.trim() || t('popup.meetingTitlePlaceholder'),
+      settings: { mode, prefs },
     })
     if (tab.windowId !== undefined) void browser.sidePanel.open({ windowId: tab.windowId })
     started
@@ -161,7 +170,7 @@ export function RecordingSetup() {
       </Field>
 
       {error && <p className="text-danger text-xs">{error}</p>}
-      <Button size="lg" disabled={starting || tab.id === undefined} onClick={start}>
+      <Button size="lg" disabled={starting || !loaded || tab.id === undefined} onClick={start}>
         {starting ? t('popup.starting') : t('popup.start')}
       </Button>
       <span className="text-muted-foreground -mt-2 text-center text-xs">{t('popup.shortcut')}</span>

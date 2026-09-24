@@ -1,20 +1,31 @@
 import { defineExtensionMessaging } from '@webext-core/messaging'
-import type { Meeting } from '@huilu/core'
+import type { Meeting, RecordingMode } from '@huilu/core'
 import type {
   FinishedRecording,
   RecorderStatus,
   RecordingOptions,
   UnfinishedRecording,
 } from '@huilu/recorder'
+import type { RecordingPrefs } from './settings'
 
 export type { RecorderStatus, UnfinishedRecording }
 
 export type LastRecording = NonNullable<RecorderStatus['lastResult']>
 
-/** 弹窗 / 快捷键请求开始录制：录制设置由后台从 chrome.storage 读取，两个入口行为一致 */
+/** 开始录制时使用的设置 */
+export interface RecordingSettingsSnapshot {
+  mode: RecordingMode
+  prefs: RecordingPrefs
+}
+
+/**
+ * 弹窗 / 快捷键请求开始录制。弹窗带上界面当前显示的设置快照（不依赖尚未完成的 storage 读写）；
+ * 快捷键没有界面，settings 为空，由后台读取已保存的设置。
+ */
 export interface StartRecordingRequest {
   tabId: number
   title: string
+  settings?: RecordingSettingsSnapshot
 }
 
 /**
