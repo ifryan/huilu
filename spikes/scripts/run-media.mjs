@@ -77,6 +77,9 @@ log('stopped', JSON.stringify(stopped))
 
 report.verify = await off('verify', { recId: id })
 log('verify', JSON.stringify(report.verify))
+// 分片完整性是本验证的核心：任何一路校验失败都让命令以非 0 退出（报告照常写完）
+const verifyFailed = report.verify?.error || !Object.values(report.verify ?? {}).every((t) => t.ok)
+if (verifyFailed || stopped.error || stopped.state !== 'stopped') process.exitCode = 1
 
 report.playback = await page.evaluate(async (recId) => {
   const s = window.spike
@@ -160,3 +163,5 @@ for (const file of files) {
 }
 save()
 log('report →', join(outDir, 'report.json'))
+if (process.exitCode)
+  log('FAILED: 分片校验未通过或录制未正常结束，见 report.json 中的 verify / events')

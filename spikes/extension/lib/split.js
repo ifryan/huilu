@@ -55,12 +55,20 @@ async function cut(blob, start, end, bitrate) {
   return new Blob([output.target.buffer], { type: 'audio/webm' })
 }
 
+/** 未切片时原样上传，扩展名要与真实容器一致（服务端会按文件名判断格式） */
+function extensionOf(blob) {
+  const fromName = blob.name?.match(/\.([a-z0-9]+)$/i)?.[1]
+  if (fromName) return fromName.toLowerCase()
+  const sub = blob.type?.split(';')[0].split('/')[1]
+  return { mpeg: 'mp3', 'x-wav': 'wav', 'x-m4a': 'm4a' }[sub] ?? sub ?? 'webm'
+}
+
 /**
  * 返回 [{ blob, offsetS, ext }]。不超过 maxBytes 时原样返回。
  * 按平均码率估算每片时长（留 10% 余量），切点在理想位置前 searchS 秒内找静音。
  */
 export async function splitAudio(blob, { maxBytes, searchS = 20, log } = {}) {
-  if (blob.size <= maxBytes) return [{ blob, offsetS: 0, ext: 'webm' }]
+  if (blob.size <= maxBytes) return [{ blob, offsetS: 0, ext: extensionOf(blob) }]
   const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS })
   const track = await input.getPrimaryAudioTrack()
   const duration = await input.computeDuration()

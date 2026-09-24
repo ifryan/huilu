@@ -64,3 +64,8 @@ result.allCutsInSilence = result.cutPhases.every((ph) => ph >= 5.5 && ph <= 7)
 result.allUnderLimit = result.pieces.every((p) => p.MB <= maxMB)
 writeFileSync(join(dir, 'report.json'), JSON.stringify(result, null, 2))
 console.log(JSON.stringify(result, null, 2))
+const durationOk = Math.abs(result.sumDurationS - result.sourceDurationS) < 1
+if (!result.allCutsInSilence || !result.allUnderLimit || !durationOk) {
+  console.error('FAILED: 切点未全部落在静音段、切片超限或时长不守恒')
+  process.exitCode = 1
+}

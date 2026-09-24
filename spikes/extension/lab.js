@@ -87,6 +87,17 @@ async function readOptions() {
   return options
 }
 
+// 工具栏图标录制读取的是已保存的选项，所以控件一改就保存；打开页面时恢复上次的选择
+const optionFields = ['opt-height', 'opt-fps', 'opt-mic', 'opt-mime']
+for (const f of optionFields) $(f).onchange = readOptions
+chrome.storage.local.get('spikeOptions').then(({ spikeOptions }) => {
+  if (!spikeOptions) return readOptions()
+  $('opt-height').value = String(spikeOptions.height)
+  $('opt-fps').value = String(spikeOptions.fps)
+  $('opt-mic').checked = spikeOptions.mic
+  if (spikeOptions.videoMime) $('opt-mime').value = spikeOptions.videoMime
+})
+
 $('mic-grant').onclick = async () => {
   const s = await navigator.mediaDevices.getUserMedia({ audio: true })
   s.getTracks().forEach((t) => t.stop())

@@ -255,10 +255,22 @@ export class Recording {
         tr.writeErrors++
         if (tr.writeErrors <= 20)
           this.log('write-error', { track: tr.name, name, error: String(e) })
+        this.fail(`${tr.name}/${name}: ${e}`)
       }
       tr.maxWriteMs = Math.max(tr.maxWriteMs, Math.round(performance.now() - t))
       tr.pendingWrites--
     })
+  }
+
+  /**
+   * 分片落盘失败就立即停止：继续录只会产生越来越多的坏数据，而用户看到的仍是「录制中」。
+   * 不能在写入队列里 await stop()（stop 会等待写入队列，形成死锁），所以放到下一轮事件循环。
+   */
+  fail(reason) {
+    if (this.error) return
+    this.error = reason
+    this.log('fatal', { reason })
+    if (this.state === 'recording') setTimeout(() => this.stop(), 0)
   }
 
   sample() {
@@ -330,6 +342,7 @@ export class Recording {
           },
         ]),
       ),
+      error: this.error,
       events: this.events,
     }
   }
@@ -338,6 +351,7 @@ export class Recording {
     return {
       id: this.id,
       state: this.state,
+      error: this.error,
       elapsedS: this.t0 ? Math.round((performance.now() - this.t0) / 1000) : 0,
       last: this.samples.at(-1),
       tracks: Object.fromEntries(

@@ -10,9 +10,18 @@ let current
 
 const handlers = {
   async start({ options }) {
-    if (current?.state === 'recording') throw new Error('already recording')
+    // start() 的初始化是异步的：在等待之前就占住 current，连续点击 / 并发消息不会启动第二路录制
+    if (current && ['starting', 'recording', 'stopping'].includes(current.state)) {
+      throw new Error(`already ${current.state}`)
+    }
     current = new Recording(options)
-    return current.start()
+    current.state = 'starting'
+    try {
+      return await current.start()
+    } catch (e) {
+      current.state = 'failed'
+      throw e
+    }
   },
   stop: () => current?.stop() ?? { state: 'idle' },
   status: () => current?.status() ?? { state: 'idle' },
