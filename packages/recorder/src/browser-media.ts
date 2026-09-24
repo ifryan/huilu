@@ -58,6 +58,13 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
 
   try {
     const mix = ctx.createMediaStreamDestination()
+    // 没有任何输入时（窗口 / 屏幕没分享声音且麦克风关闭）目标轨道不产生音频帧，
+    // 转写音频的 MediaRecorder 就一个分片都没有，整场录制会被当作「没有数据」丢弃。
+    // 接一路恒为 0 的信号保证音轨持续输出（静音），视频照常保留
+    const silence = ctx.createConstantSource()
+    silence.offset.value = 0
+    silence.connect(mix)
+    silence.start()
     const sourceAudio = source.getAudioTracks()
     if (sourceAudio.length > 0) {
       const node = ctx.createMediaStreamSource(new MediaStream(sourceAudio))
