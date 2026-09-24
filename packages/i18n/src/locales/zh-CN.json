@@ -131,7 +131,10 @@
   "common": {
     "comingSoon": "即将推出",
     "cancel": "取消",
-    "unknownError": "未知错误"
+    "unknownError": "未知错误",
+    "colon": "：",
+    "listSeparator": "、",
+    "clauseSeparator": "；"
   },
   "summaryTemplate": {
     "general": "通用"

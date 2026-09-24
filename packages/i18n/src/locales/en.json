@@ -131,7 +131,10 @@
   "common": {
     "comingSoon": "Coming soon",
     "cancel": "Cancel",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "colon": ": ",
+    "listSeparator": ", ",
+    "clauseSeparator": "; "
   },
   "summaryTemplate": {
     "general": "General"
