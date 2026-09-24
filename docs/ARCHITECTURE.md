@@ -83,7 +83,7 @@ huilu/
 
 - **输入**：录制结束后 OPFS 中有 `recordings/<id>/`，含 `manifest.json`（分片数 / 各片大小 / 实际 MIME）、`meeting.json`（`status: 'processing'`）、`audio/` 与 `video/` 分片。用 `RecordingStore.open(id)` → `readTrack('audio', manifest.tracks.audio.chunks, mimeType)` 得到惰性拼接的 Blob，可直接作为 `AudioInput.blob`；`opfs.listMeetingDirs()`（`apps/extension/platform/storage.ts`，根目录即 `recordings/`）列出所有已结束的录制
 - **媒体格式**：`meeting.media.audio.mimeType` 是 MediaRecorder 实际输出的类型（当前 Chrome 为 `audio/webm;codecs=opus`，约 10 MB/小时）；视频轨按平台探测，Linux 为 `video/mp4;codecs=avc1…,opus`，Windows / macOS 预期为 AAC。转写只用纯音频轨
-- **本地解码验证**：`spikes/scripts/avsync.mjs` 的 `decodeErrors` 统计每条流的包数 / 解码帧数，FFmpeg 7.1+ Opus 解析器在文件末尾的误报单独列在 `ignored`，不计为错误（`npm run test:decode` 回归）。这只证明文件能被本地解码，**服务商能否接受要用真实 Key 实测**
+- **本地解码验证**：`spikes/scripts/avsync.mjs` 的 `decodeErrors` 统计每条流的包数 / 解码帧数，本机已验证的 FFmpeg 8.0.1 Opus 解析器在 WebM 文件末尾的误报（其他版本未验证）单独列在 `ignored`，不计为错误（`npm run test:decode` 回归）。这只证明文件能被本地解码，**服务商能否接受要用真实 Key 实测**
 - **服务配置**：`transcriptionSetting` / `llmSetting`（`chrome.storage.local`，含 API Key）。离屏文档没有 `chrome.storage`，需由后台读取后随消息传入，或由后台转发 `storage.watch` 的变化；`dataFolderAuthorizedSetting` 同理
 - **数据文件夹**：`dataFolder`（句柄在 IndexedDB，离屏文档同源可读）。离屏文档只能在 `isReady()` 为 true 时写入，不能申请授权；未授权时停在「待写入」，由插件网页重新授权后（`dataFolderAuthorizedSetting` 变化）补写
 - **离屏文档生命周期**：后台在 `recordingFinished` 后调用 `closeOffscreenIfIdle`，目前只看录制状态。处理任务放进离屏文档时，必须让「空闲」同时包含「没有进行中的处理任务」，否则录制一结束文档就会被关掉；`chrome.offscreen` 的 reasons 也需补上处理任务对应的理由
