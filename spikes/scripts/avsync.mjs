@@ -28,9 +28,10 @@ export function ffprobe(file) {
 const probeStderr = (args) => spawnSync('ffprobe', args, { maxBuffer: 1 << 28, encoding: 'utf8' })
 
 /**
- * FFmpeg 7.1+ 的 Opus 解析器（parser，不是解码器）在读到文件末尾、被送入空包刷新时，
+ * FFmpeg（本机 8.0.1）的 Opus 解析器（parser，不是解码器）在 WebM 文件末尾刷新时，
  * 会打印一次「Error parsing Opus packet header.」。它与录制数据无关：ffmpeg 自己用 libopus
- * 编码出的 WebM / Ogg 也会出现；只做解封装（-count_packets，不解码）同样出现；
+ * 编码出的 WebM 也会出现；只做解封装（-count_packets，不解码）同样出现；
+ * 把同一文件无损转封装成 Ogg（不经过该解析器）后解码无报错、包数不变；
  * GStreamer（matroskademux + libopus）解码同一文件无告警。
  * 因此只有同时满足「每条 Opus 流恰好一次」「只解封装也恰好一次」「每条流解码帧数 = 包数」
  * 时才把它当作工具噪声。
