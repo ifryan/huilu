@@ -8,7 +8,15 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/.output/**', '**/.wxt/**', '**/node_modules/**', '**/*.gen.ts'],
+    ignores: [
+      '**/dist/**',
+      '**/.output/**',
+      '**/.wxt/**',
+      '**/node_modules/**',
+      '**/*.gen.ts',
+      // 一次性验证代码（纯 JS、不经打包），不纳入主工程规范检查
+      'spikes/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

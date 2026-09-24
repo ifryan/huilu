@@ -1,0 +1,17 @@
+{
+  "name": "huilu-spikes",
+  "private": true,
+  "type": "module",
+  "description": "v0.1 技术验证代码（不属于 pnpm workspace，可在后续清理）",
+  "devDependencies": {
+    "mediabunny": "^1.59.0",
+    "playwright-core": "^1.63.0"
+  },
+  "scripts": {
+    "postinstall": "node scripts/vendor.mjs",
+    "test:mp4": "node scripts/run-media.mjs --minutes 3 --height 1080",
+    "test:soak": "node scripts/run-media.mjs --minutes 60 --height 1080",
+    "test:split": "node scripts/run-split.mjs",
+    "transcribe": "node scripts/transcribe.mjs"
+  }
+}
