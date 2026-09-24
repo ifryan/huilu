@@ -61,7 +61,7 @@
     "cancel": "Cancel",
     "saved": "Recording saved",
     "partiallySaved": "Partially saved",
-    "savedDetail": "“{{title}}” · {{duration}}, waiting for transcription and summary",
+    "savedDetail": "\"{{title}}\" · {{duration}}. Find and preview it in History",
     "endedBySource": "The tab was closed or sharing stopped, so the recording ended",
     "endedByError": "The recording did not finish cleanly; the end or a track may be missing. Everything that was written is kept",
     "notSaved": "The recording could not be saved: {{error}}",
@@ -70,7 +70,23 @@
     "hint": "Click “Start recording” in the popup, or press Alt+Shift+R to record the current tab"
   },
   "history": {
-    "empty": "No meetings yet"
+    "empty": "No recordings yet",
+    "refresh": "Refresh",
+    "localNote": "Recordings are first kept in the browser's internal storage and do not need a transcription service or data folder. This page only previews and downloads; it never deletes a recording.",
+    "location": "Browser storage",
+    "state": {
+      "saved": "Saved",
+      "partial": "Partially saved",
+      "unfinished": "Unfinished",
+      "damaged": "Unreadable"
+    },
+    "transcribed": "Transcribed",
+    "notTranscribed": "Not transcribed",
+    "notTranscribedNoService": "Not transcribed: no transcription service is set up yet. You can still preview or download the recording",
+    "unfinishedHint": "This recording was interrupted. Recover it from \"Unfinished recordings\" in the popup or side panel; you can preview what was recorded first",
+    "preview": "Preview",
+    "download": "Download",
+    "noMedia": "Nothing to play"
   },
   "settings": {
     "language": "Language",

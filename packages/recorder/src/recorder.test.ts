@@ -12,6 +12,8 @@ import {
   createRecordingId,
   estimateBytesPerHour,
   extensionForMime,
+  listLocalRecordings,
+  previewTrack,
   pickMimeType,
   writeVerified,
   type RecordingOptions,
@@ -391,5 +393,56 @@ describe('RecorderController', () => {
     await expect(controller.start(options({ mode: 'audio' }))).rejects.toBeInstanceOf(
       NoAudioSourceError,
     )
+  })
+})
+
+describe('listLocalRecordings', () => {
+  it('lists saved, partial, unfinished and damaged recordings without touching them', async () => {
+    const fs = new MemoryFs()
+    const media = new FakeMedia()
+    const clock = new FakeClock()
+    const store = new RecordingStore(fs.provider)
+    const controller = new RecorderController({ store, media, now: clock.now })
+
+    await controller.start(options({ id: '20260924-100000-a', mode: 'audio' }))
+    clock.advance(30_000)
+    media.recorders.at(-1)!.emit('a1')
+    await controller.stop()
+
+    await controller.start(options({ id: '20260924-110000-b' }))
+    const [video, audio] = media.recorders.slice(-2)
+    video!.finalChunk = undefined
+    audio!.emit('a1')
+    await controller.stop()
+
+    // 意外中断：manifest 还是 recording 状态
+    await controller.start(options({ id: '20260924-120000-c' }))
+    media.recorders.at(-1)!.emit('a1')
+    await flush()
+    const crashed = new RecorderController({ store, media, now: clock.now })
+    void crashed
+
+    // 只有目录、manifest 损坏
+    await (
+      await store.create('20260924-130000-d')
+    ).handle.getFileHandle('manifest.json', {
+      create: true,
+    })
+
+    const before = JSON.stringify([...fs.root.dirs.keys()])
+    const list = await listLocalRecordings(store)
+    expect(list.map((r) => [r.id, r.state])).toEqual([
+      ['20260924-130000-d', 'damaged'],
+      ['20260924-120000-c', 'unfinished'],
+      ['20260924-110000-b', 'partial'],
+      ['20260924-100000-a', 'saved'],
+    ])
+    const saved = list.at(-1)!
+    expect(saved).toMatchObject({ title: '需求评审', mode: 'audio', processing: 'processing' })
+    expect(saved.durationMs).toBe(30_000)
+    expect(previewTrack(saved)).toBe('audio')
+    expect(previewTrack(list[2]!)).toBe('audio')
+    expect(list[2]!.error).toBe('Video track recorded no data')
+    expect(JSON.stringify([...fs.root.dirs.keys()])).toBe(before)
   })
 })

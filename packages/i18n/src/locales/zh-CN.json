@@ -61,7 +61,7 @@
     "cancel": "取消",
     "saved": "录制已保存",
     "partiallySaved": "部分保存",
-    "savedDetail": "「{{title}}」· {{duration}}，等待转写与生成纪要",
+    "savedDetail": "「{{title}}」· {{duration}}，可在历史记录中查看和预览",
     "endedBySource": "标签页已关闭或已停止共享，录制已自动结束",
     "endedByError": "录制没有正常收尾，结尾或部分轨道可能缺失。已写入的内容已保留",
     "notSaved": "录制未能保存：{{error}}",
@@ -70,7 +70,23 @@
     "hint": "在弹窗中点击「开始记录」，或按 Alt+Shift+R 录制当前标签页"
   },
   "history": {
-    "empty": "还没有会议记录"
+    "empty": "还没有录制",
+    "refresh": "刷新",
+    "localNote": "录制先保存在浏览器内部存储中，不需要配置转写服务或数据文件夹。这里只做预览和下载，不会删除任何录制。",
+    "location": "浏览器内部存储",
+    "state": {
+      "saved": "已保存",
+      "partial": "部分保存",
+      "unfinished": "未完成",
+      "damaged": "无法读取"
+    },
+    "transcribed": "已转写",
+    "notTranscribed": "未转写",
+    "notTranscribedNoService": "未转写：尚未配置转写服务，可先预览或下载录音",
+    "unfinishedHint": "录制被意外中断，可在弹窗或侧边栏的「未完成的录制」中恢复；恢复前也可以预览已录内容",
+    "preview": "预览",
+    "download": "下载",
+    "noMedia": "没有可播放的内容"
   },
   "settings": {
     "language": "界面语言",
