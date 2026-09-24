@@ -15,7 +15,9 @@
     "modeVideo": "Audio + video",
     "start": "Start recording",
     "openApp": "Open HuiLu",
-    "notReady": "Finish setup first"
+    "notReady": "Finish setup first",
+    "goSetup": "Set up",
+    "reauthorize": "Re-authorize"
   },
   "sidepanel": {
     "recording": "Recording",
@@ -28,17 +30,172 @@
     "language": "Language",
     "dataFolder": "Data folder",
     "transcription": "Transcription service",
-    "llm": "LLM service"
+    "llm": "LLM service",
+    "folder": {
+      "current": "Current folder",
+      "none": "Not selected",
+      "status": {
+        "granted": "Authorized",
+        "prompt": "Needs re-authorization",
+        "denied": "Denied",
+        "unset": "Not selected"
+      },
+      "choose": "Choose folder",
+      "change": "Change folder",
+      "reauthorize": "Re-authorize",
+      "usage": "Space used",
+      "calcUsage": "Calculate",
+      "pathNote": "For security reasons the browser only exposes the folder name, not its full path.",
+      "persistHint": "After a browser restart you will be asked once more; choose \"Allow on every visit\" and you will not be asked again.",
+      "reloadHint": "Updating or reloading the extension may require re-authorization.",
+      "suggestion": "We suggest creating a folder named HuiLu in Documents and choosing it; every meeting is saved as a subfolder.",
+      "pickFailed": "Could not choose the folder: {{reason}}"
+    },
+    "provider": "Provider",
+    "capabilities": "Capabilities",
+    "diarizationYes": "Speaker diarization supported",
+    "diarizationNo": "No speaker diarization (the transcript shows a single speaker; you can label speakers manually)",
+    "maxFile": "Up to {{size}} per file; larger files are split automatically",
+    "test": "Test connection",
+    "testing": "Testing…",
+    "testOk": "Connected",
+    "testFailed": "Connection failed",
+    "save": "Save",
+    "saved": "Saved",
+    "invalid": "Please check: {{fields}}",
+    "showKey": "Show",
+    "hideKey": "Hide",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "unsaved": "Unsaved changes",
+    "hostPermissionDenied": "Permission to access {{origin}} is required to connect",
+    "compare": {
+      "title": "Transcription providers (as of 2026-09)",
+      "service": "Service",
+      "access": "Integration",
+      "free": "Free tier",
+      "price": "Price",
+      "diarization": "Speakers",
+      "domestic": "Reachable from mainland China",
+      "yes": "Yes",
+      "no": "No",
+      "byModel": "Depends on model",
+      "needsProxy": "Needs proxy",
+      "paraformer": {
+        "name": "Alibaba Cloud Model Studio Paraformer (default)",
+        "access": "Model Studio API; audio is uploaded as a temporary file (valid for 48 hours)",
+        "free": "Time-limited quota for new users (see console)",
+        "price": "≈ ¥0.29 / hour"
+      },
+      "groq": {
+        "name": "Groq Whisper large-v3-turbo",
+        "access": "OpenAI-compatible",
+        "free": "≈ 8 hours of audio per day; ≤ 25MB per file (split automatically)",
+        "price": "$0.04 / hour"
+      },
+      "openai": {
+        "name": "OpenAI (whisper-1 / gpt-4o-transcribe)",
+        "access": "OpenAI-compatible",
+        "free": "None",
+        "price": "Official pricing"
+      }
+    },
+    "transfer": {
+      "title": "Import / export settings",
+      "export": "Export settings",
+      "import": "Import settings",
+      "includeKeys": "Include API keys in the export",
+      "keysWarning": "Keep settings files that contain API keys private; do not share them.",
+      "imported": "Settings imported",
+      "importFailed": "Import failed: {{reason}}"
+    }
   },
   "onboarding": {
     "step1": "Choose a data folder",
     "step2": "Set up transcription",
-    "step3": "Set up LLM"
+    "step3": "Set up LLM",
+    "title": "Welcome to HuiLu",
+    "intro": "Three quick steps, about a minute. You can change everything later in Settings.",
+    "stepOf": "Step {{n}} of 3",
+    "step1Desc": "Recordings, transcripts and summaries are saved as plain files in this folder and survive uninstalling the extension.",
+    "step2Desc": "Turns recordings into timestamped transcripts. Paraformer (Alibaba Cloud Model Studio) is recommended: reachable from mainland China and supports speaker diarization.",
+    "step3Desc": "Writes meeting summaries from transcripts. Any OpenAI-compatible API works, including a local Ollama.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Later",
+    "finish": "Finish",
+    "doneTitle": "All set",
+    "doneDesc": "Click the HuiLu icon in the toolbar to start recording a meeting.",
+    "openHistory": "Go to history"
   },
   "common": {
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "cancel": "Cancel",
+    "unknownError": "Unknown error",
+    "colon": ": ",
+    "listSeparator": ", ",
+    "clauseSeparator": "; "
   },
   "summaryTemplate": {
     "general": "General"
+  },
+  "readiness": {
+    "ready": "Ready",
+    "folderUnset": "No data folder selected",
+    "folderPrompt": "The data folder needs to be re-authorized",
+    "folderDenied": "Access to the data folder was denied",
+    "folderNote": "Recording still works: it is kept in the browser and written to the folder once authorized",
+    "apiMissing": "Transcription / LLM service not configured",
+    "apiNote": "You can still record and play back; transcripts and summaries need a service",
+    "chooseFolder": "Choose folder",
+    "reauthorize": "Re-authorize",
+    "configure": "Configure",
+    "onboarding": "Finish setup"
+  },
+  "providers": {
+    "paraformer": {
+      "name": "Alibaba Cloud Model Studio Paraformer"
+    },
+    "openaiCompatibleTranscription": {
+      "name": "OpenAI-compatible (Groq / OpenAI / custom)"
+    },
+    "openaiCompatibleLlm": {
+      "name": "OpenAI-compatible API"
+    },
+    "field": {
+      "preset": "Preset",
+      "baseUrl": "Base URL",
+      "apiKey": "API key",
+      "model": "Model",
+      "region": "Region"
+    },
+    "preset": {
+      "groq": "Groq",
+      "openai": "OpenAI",
+      "custom": "Custom",
+      "qwen": "Qwen (Model Studio)",
+      "deepseek": "DeepSeek",
+      "ollama": "Ollama (local)",
+      "ollamaHint": "Start Ollama with OLLAMA_ORIGINS=chrome-extension://* or it will reject requests from the extension."
+    },
+    "region": {
+      "cn": "Mainland China (Beijing)",
+      "intl": "International (Singapore)"
+    },
+    "error": {
+      "invalidConfig": "The configuration is incomplete or invalid",
+      "unauthorized": "The API key is invalid or expired",
+      "forbidden": "Access denied: check that the service is enabled for your account and the key’s scope",
+      "notFound": "Endpoint not found: check the Base URL",
+      "modelNotFound": "The provider has no such model. Available models include",
+      "badRequest": "Request rejected: check the model name and other parameters",
+      "rateLimited": "Too many requests or quota exhausted; try again later",
+      "server": "The provider is temporarily unavailable; try again later",
+      "network": "Could not connect: check your network, proxy or Base URL",
+      "timeout": "Connection timed out: check your network or proxy",
+      "aborted": "Cancelled",
+      "badResponse": "Unrecognized response: check that the Base URL points to the right API",
+      "notImplemented": "Not implemented yet"
+    }
   }
 }

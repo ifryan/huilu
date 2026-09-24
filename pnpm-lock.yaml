@@ -53,6 +53,12 @@ importers:
       '@huilu/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@huilu/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
+      '@huilu/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@huilu/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -71,6 +77,9 @@ importers:
       react-dom:
         specifier: ^19.3.0
         version: 19.3.0(react@19.3.0)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
       zustand:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
@@ -93,6 +102,9 @@ importers:
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(vite@8.3.0(jiti@2.7.0))
       wxt:
         specifier: ^0.21.4
         version: 0.21.4(eslint@10.11.0(jiti@2.7.0))(rolldown@1.2.10)(typescript@6.0.3)(vite@8.3.0(jiti@2.7.0))
@@ -125,6 +137,41 @@ importers:
       react:
         specifier: ^19.3.0
         version: 19.3.0
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(vite@8.3.0(jiti@2.7.0))
+
+  packages/providers:
+    dependencies:
+      '@huilu/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@huilu/i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(vite@8.3.0(jiti@2.7.0))
+
+  packages/storage:
+    dependencies:
+      '@huilu/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
@@ -1074,6 +1121,10 @@ packages:
 
   exsolve@1.1.1:
     resolution: {integrity: sha512-9U/jZUgjnSGyntRr6y5Muu1MJcwFl6kPu7k8qLF0IMNfLqvw0NZ4nnVDq0RVoZ0RvCyumib4Ez3KYrVfilrw+g==}
+
+  fake-indexeddb@6.2.5:
+    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
+    engines: {node: '>=18'}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -2873,6 +2924,8 @@ snapshots:
   expect-type@1.4.0: {}
 
   exsolve@1.1.1: {}
+
+  fake-indexeddb@6.2.5: {}
 
   fast-deep-equal@3.1.3: {}
 
