@@ -125,14 +125,16 @@ registry.transcription.register(openaiCompatible) // 内置 Groq / OpenAI 预设
 
 ## 8. 当前进度
 
-| 包                                                    | 状态                                                                                                                                  |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/extension`                                      | ✅ 框架已搭好：弹窗、侧边栏、插件网页（历史 / 设置 / 首次引导，hash 路由）、后台、离屏文档录制、类型安全消息、中英文切换、固定插件 ID |
-| `packages/core`                                       | ✅ 数据格式（Meeting / Transcript / Summary）、版本迁移、全部扩展点接口、注册中心                                                     |
-| `packages/i18n`                                       | ✅ 中英文文案、语言检测、key 一致性测试                                                                                               |
-| `packages/ui`                                         | ✅ Tailwind 4 主题（含深色模式）、Button 组件                                                                                         |
-| `packages/recorder`                                   | ✅ 两路录制 → OPFS 分片：写后校验、失败即停、开始互斥、崩溃恢复（见包内 README）                                                      |
-| `packages/storage` `providers` `pipeline` `exporters` | ⏳ 在对应子任务中创建                                                                                                                 |
+| 包                              | 状态                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/extension`                | ✅ 框架已搭好：弹窗、侧边栏、插件网页（历史 / 设置 / 首次引导，hash 路由）、后台、离屏文档录制、类型安全消息、中英文切换、固定插件 ID |
+| `packages/core`                 | ✅ 数据格式（Meeting / Transcript / Summary）、版本迁移、全部扩展点接口、注册中心                                                     |
+| `packages/i18n`                 | ✅ 中英文文案、语言检测、key 一致性测试                                                                                               |
+| `packages/ui`                   | ✅ Tailwind 4 主题（含深色模式）、Button 组件                                                                                         |
+| `packages/recorder`             | ✅ 两路录制 → OPFS 分片：写后校验、失败即停、开始互斥、崩溃恢复（见包内 README）                                                      |
+| `packages/storage`              | ✅ 本地文件夹（File System Access，句柄存 IndexedDB，读写前检查授权）、OPFS；每次写入回读校验大小                                     |
+| `packages/providers`            | 🚧 百炼 Paraformer、OpenAI 兼容转写 / 大模型：配置 schema、预设、测试连接已完成；实际转写与生成在「转写与纪要」子任务中实现           |
+| `packages/pipeline` `exporters` | ⏳ 在对应子任务中创建                                                                                                                 |
 
 ## 9. 已确认的决策（2026-09-24）
 

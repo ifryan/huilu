@@ -1,8 +1,10 @@
 import { useTranslation } from '@huilu/i18n'
-import { Link, Outlet } from '@tanstack/react-router'
+import { Link, Outlet, useRouterState } from '@tanstack/react-router'
+import { ReadinessBanner } from '@/components/ReadinessBanner'
 
 export function Layout() {
   const { t } = useTranslation()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
   const linkClass =
     'rounded-lg px-3 py-2 text-sm hover:bg-muted [&.active]:bg-muted [&.active]:font-medium'
 
@@ -21,6 +23,7 @@ export function Layout() {
         </Link>
       </aside>
       <main className="flex-1 p-8">
+        {pathname !== '/onboarding' && <ReadinessBanner className="mb-6 max-w-2xl" />}
         <Outlet />
       </main>
     </div>
