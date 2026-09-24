@@ -94,14 +94,16 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
   )
 }
 
-/** 最近一次录制的结果：已保存 / 因来源结束或写入失败而结束 / 未能保存 */
+/** 最近一次录制的结果：已保存 / 因来源结束而结束 / 出错后部分保存 / 未能保存 */
 export function LastRecordingNotice({ result }: { result: LastRecording }) {
   const { t } = useTranslation()
   return (
     <section className="border-border flex flex-col gap-1 rounded-xl border p-4 text-sm">
       {result.saved ? (
         <>
-          <div className="font-medium">{t('sidepanel.saved')}</div>
+          <div className="font-medium">
+            {t(result.endReason === 'error' ? 'sidepanel.partiallySaved' : 'sidepanel.saved')}
+          </div>
           <div className="text-muted-foreground text-xs">
             {t('sidepanel.savedDetail', {
               title: result.title,

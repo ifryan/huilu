@@ -96,9 +96,17 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
           : undefined,
       warnings,
       onEnded(callback) {
-        // 标签页关闭 / 停止共享时来源轨道会 ended；麦克风拔出不算来源结束
+        // 标签页关闭 / 停止共享时来源轨道会 ended；麦克风拔出不算来源结束。
+        // 注册之前就已结束的轨道不会再派发 ended，按 readyState 补一次
+        let fired = false
+        const once = () => {
+          if (fired) return
+          fired = true
+          callback()
+        }
         for (const track of source.getTracks()) {
-          track.addEventListener('ended', callback, { once: true })
+          if (track.readyState === 'ended') queueMicrotask(once)
+          else track.addEventListener('ended', once, { once: true })
         }
       },
       stop: stopAll,

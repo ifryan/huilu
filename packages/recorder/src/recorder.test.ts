@@ -259,12 +259,58 @@ describe('RecorderController', () => {
     await flush()
     // 视频录制器卡住：stop() 后迟迟不派发 stop 事件，也不输出最后一片
     video.stop = () => {}
-    await controller.stop()
+    const { lastResult } = await controller.stop()
     video.emit('late')
     await flush()
     const manifest = (await (await store.open('late'))!.readManifest())!
     expect(manifest.state).toBe('stopped')
     expect(manifest.tracks.video?.chunks).toBe(0)
+    // 超时不能当作正常结束：音频仍保留，但结果标为错误（部分保存）
+    expect(lastResult).toMatchObject({ saved: true, endReason: 'error' })
+    expect(lastResult?.error).toMatch(/RecorderStopTimeout: video/)
+    expect(manifest.endReason).toBe('error')
+  })
+
+  it('reports an error when the final chunk fails to write during a user stop', async () => {
+    await controller.start(options({ id: 'tail' }))
+    const { video, audio } = recorders()
+    video.emit('v1')
+    audio.emit('a1')
+    await flush()
+    // stop() 时输出的最后一片写入失败
+    fs.fault = (name) => (name === '000002.part' ? 'throw' : undefined)
+    const { lastResult } = await controller.stop()
+    expect(lastResult).toMatchObject({ saved: true, endReason: 'error' })
+    expect(lastResult?.error).toMatch(/000002\.part/)
+    const manifest = (await (await store.open('tail'))!.readManifest())!
+    expect(manifest.endReason).toBe('error')
+    expect(manifest.tracks.video?.chunks).toBe(1)
+  })
+
+  it('does not report success when the video track recorded nothing', async () => {
+    await controller.start(options({ id: 'novideo' }))
+    const { video, audio } = recorders()
+    video.finalChunk = undefined
+    audio.emit('a1')
+    const { lastResult } = await controller.stop()
+    expect(lastResult).toMatchObject({ saved: true, endReason: 'error' })
+    expect(lastResult?.error).toBe('Video track recorded no data')
+  })
+
+  it('finishes a recording whose source ended while it was still starting', async () => {
+    // 首次写 manifest 时（录制器尚未启动）来源结束
+    fs.fault = (name) => {
+      if (name === 'manifest.json') media.endSource()
+      return undefined
+    }
+    await controller.start(options({ id: 'early', mode: 'audio' }))
+    fs.fault = () => undefined
+    await flush()
+    await flush()
+    const status = controller.status()
+    expect(status.state).toBe('idle')
+    expect(status.lastResult?.endReason).toBe('source-ended')
+    expect(media.recorders.every((r) => r.state === 'inactive')).toBe(true)
   })
 
   it('discards a recording that produced no data', async () => {

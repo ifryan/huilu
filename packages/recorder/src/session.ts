@@ -133,6 +133,8 @@ export class RecordingSession {
   #stopping?: Promise<FinishedRecording>
   #manifestQueue: Promise<void> = Promise.resolve()
   #videoSettings?: CapturedMedia['videoSettings']
+  /** 启动过程中（manifest 落盘、录制器启动之前）来源就已结束 */
+  #sourceEndedWhileStarting = false
   readonly #now: () => number
 
   constructor(
@@ -169,6 +171,12 @@ export class RecordingSession {
       }
 
       this.#media = await media.capture(o)
+      // 取到流就立刻监听来源结束：之后的 await 期间标签页关闭 / 停止共享，ended 事件不会重放；
+      // 仅音频模式下混音轨道不会跟着结束，漏掉它会一直录静音
+      this.#media.onEnded(() => {
+        if (this.state === 'starting') this.#sourceEndedWhileStarting = true
+        else void this.stop('source-ended').catch(() => {})
+      })
       this.#warnings.push(...this.#media.warnings)
       this.#videoSettings = this.#media.videoSettings
       this.#dir = await store.create(o.id)
@@ -197,9 +205,10 @@ export class RecordingSession {
       this.#startedAt = this.#now()
       // manifest 先落盘再开始录：之后任何时刻崩溃都能在「恢复未完成的录制」里看到它
       await this.#persistManifest()
-      this.#media.onEnded(() => void this.stop('source-ended').catch(() => {}))
       for (const w of this.#writers) w.recorder.start(TIMESLICE_MS)
       this.state = 'recording'
+      // 启动期间来源已结束：按「来源结束」正常收尾（没有数据时会作为空录制丢弃），不留下一直录静音的会话
+      if (this.#sourceEndedWhileStarting) void this.stop('source-ended').catch(() => {})
       return this.status()
     } catch (e) {
       this.state = 'failed'
@@ -267,7 +276,7 @@ export class RecordingSession {
   }
 
   async #doStop(reason: EndReason): Promise<FinishedRecording> {
-    // 写入失败触发的停止，即使用户随后点了结束，也要如实记录为错误
+    // 写入失败触发的停止，即使用户随后点了结束，也要如实记录为错误；最后一片写完后还会再判定一次
     this.#endReason = this.#error !== undefined ? 'error' : reason
     if (this.#pausedAt !== undefined) {
       this.#pausedMs += this.#now() - this.#pausedAt
@@ -276,9 +285,24 @@ export class RecordingSession {
     this.state = 'stopping'
     this.#endedAt = this.#now()
 
-    await Promise.all(this.#writers.map((w) => this.#stopRecorder(w.recorder)))
+    const timedOut = (
+      await Promise.all(
+        this.#writers.map(async (w) => ((await this.#stopRecorder(w.recorder)) ? w.name : null)),
+      )
+    ).filter((name) => name !== null)
     await Promise.all(this.#writers.map((w) => w.seal()))
     this.#media?.stop()
+
+    // 录制器没按时结束：之后到达的最后一片会被丢弃，结尾缺失，只能算部分保存
+    if (timedOut.length > 0) {
+      this.#error ??= `RecorderStopTimeout: ${timedOut.join(', ')} recorder did not stop within ${this.#stopTimeoutMs()}ms; the end of the recording may be missing`
+    }
+    const video = this.#writers.find((w) => w.name === 'video')
+    const audioChunks = this.#writers.find((w) => w.name === 'audio')?.seq ?? 0
+    // 视频模式只剩转写音频：可以保留，但不能当成完整成功
+    if (video && video.seq === 0 && audioChunks > 0) this.#error ??= 'Video track recorded no data'
+    // 最后的分片可能刚刚写入失败：以收尾后的真实状态为准
+    if (this.#error !== undefined) this.#endReason = 'error'
 
     const manifest = this.#manifest()
     const audio = manifest.tracks.audio
@@ -300,6 +324,7 @@ export class RecordingSession {
       } catch (e) {
         meeting = undefined
         this.#error ??= e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+        this.#endReason = 'error'
         this.state = 'failed'
       }
     }
@@ -318,14 +343,19 @@ export class RecordingSession {
     return result
   }
 
-  #stopRecorder(recorder: RecorderLike) {
-    if (recorder.state === 'inactive') return Promise.resolve()
-    return new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, this.deps.stopTimeoutMs ?? 10_000)
+  #stopTimeoutMs() {
+    return this.deps.stopTimeoutMs ?? 10_000
+  }
+
+  /** 返回 true 表示超时：录制器没有派发 stop 事件 */
+  #stopRecorder(recorder: RecorderLike): Promise<boolean> {
+    if (recorder.state === 'inactive') return Promise.resolve(false)
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(true), this.#stopTimeoutMs())
       recorder.onstop = () => {
         clearTimeout(timer)
         // 最后一个 dataavailable 在 stop 事件之前派发，此时已经进了写入队列
-        resolve()
+        resolve(false)
       }
       recorder.stop()
     })
