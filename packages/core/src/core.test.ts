@@ -106,6 +106,11 @@ describe('SummaryTemplate', () => {
     expect(t.systemPrompt('en')).not.toBe(t.systemPrompt('zh-CN'))
   })
 
+  it('registers the built-in general template on import', () => {
+    expect(registries.summaryTemplate.get('general')).toBe(generalSummaryTemplate)
+    expect(() => registries.summaryTemplate.register(generalSummaryTemplate)).toThrow(/已注册/)
+  })
+
   it('supports templates with a different output structure', async () => {
     const decisions = defineSummaryTemplate({
       id: 'decisions',
@@ -123,7 +128,6 @@ describe('SummaryTemplate', () => {
     )
     expect(result.decisions).toEqual(['上线'])
 
-    registries.summaryTemplate.register(generalSummaryTemplate)
     registries.summaryTemplate.register(decisions)
     expect(registries.summaryTemplate.list().map((t) => t.id)).toEqual(['general', 'decisions'])
     expect(
