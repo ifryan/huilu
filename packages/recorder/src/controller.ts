@@ -1,6 +1,6 @@
 import type { Meeting, RecordingMode } from '@huilu/core'
 import { isUnfinished, type TrackName } from './manifest'
-import { meetingFromManifest } from './meeting'
+import { hasRecordedData, meetingFromManifest } from './meeting'
 import {
   RecordingSession,
   type FinishedRecording,
@@ -139,7 +139,7 @@ export class RecorderController {
 
   /**
    * 恢复未完成的录制：以磁盘上实际存在的连续分片为准（manifest 可能比分片落后一个），
-   * 生成 status = processing 的 meeting.json。没有任何可用音频时返回 undefined。
+   * 生成 meeting.json（只剩视频时 status = failed，见 meetingFromManifest）。所有轨道都没有分片时返回 undefined。
    */
   async recover(id: string): Promise<Meeting | undefined> {
     if (id === this.#activeId) throw new RecorderBusyError('This recording is still in progress')
@@ -160,10 +160,14 @@ export class RecorderController {
     }
     manifest.endReason = 'recovered'
     manifest.updatedAt = this.#now()
-    if (!manifest.tracks.audio?.chunks) {
-      // 崩溃发生在第一个分片落盘之前：没有可恢复的内容
+    if (!hasRecordedData(manifest)) {
+      // 崩溃发生在任何分片落盘之前：没有可恢复的内容
       await this.deps.store.remove(id)
       return undefined
+    }
+    if (!manifest.tracks.audio?.chunks) {
+      manifest.error ??=
+        'Transcript audio track recorded no data; this recording cannot be transcribed'
     }
     const meeting = meetingFromManifest(manifest)
     await dir.writeMeeting(meeting)

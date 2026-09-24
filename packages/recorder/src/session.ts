@@ -7,7 +7,7 @@ import {
   type RecorderLike,
   type RecorderWarning,
 } from './media'
-import { meetingFromManifest } from './meeting'
+import { hasRecordedData, meetingFromManifest } from './meeting'
 import { AUDIO_MIME_CANDIDATES, VIDEO_MIME_CANDIDATES, pickMimeType } from './mime'
 import {
   KEYFRAME_INTERVAL_MS,
@@ -298,17 +298,24 @@ export class RecordingSession {
       this.#error ??= `RecorderStopTimeout: ${timedOut.join(', ')} recorder did not stop within ${this.#stopTimeoutMs()}ms; the end of the recording may be missing`
     }
     const video = this.#writers.find((w) => w.name === 'video')
-    const audioChunks = this.#writers.find((w) => w.name === 'audio')?.seq ?? 0
-    // 视频模式只剩转写音频：可以保留，但不能当成完整成功
-    if (video && video.seq === 0 && audioChunks > 0) this.#error ??= 'Video track recorded no data'
+    const audio = this.#writers.find((w) => w.name === 'audio')
+    const problems = [
+      // 一条轨道缺失：另一条仍然保留，但不能当成完整成功
+      ...(video && video.seq === 0 && (audio?.seq ?? 0) > 0
+        ? ['Video track recorded no data']
+        : []),
+      ...(audio && audio.seq === 0 && (video?.seq ?? 0) > 0
+        ? ['Transcript audio track recorded no data; this recording cannot be transcribed']
+        : []),
+    ]
+    for (const p of problems) this.#error = this.#error ? `${this.#error}; ${p}` : p
     // 最后的分片可能刚刚写入失败：以收尾后的真实状态为准
     if (this.#error !== undefined) this.#endReason = 'error'
 
     const manifest = this.#manifest()
-    const audio = manifest.tracks.audio
     let meeting: Meeting | undefined
-    if (!audio || audio.chunks === 0) {
-      // 一个分片都没写成：没有可保留的内容
+    if (!hasRecordedData(manifest)) {
+      // 所有轨道一个分片都没写成：没有可保留的内容
       this.#error ??= 'No data was recorded'
       await this.#manifestQueue
       await this.deps.store.remove(this.options.id).catch(() => {})

@@ -315,6 +315,55 @@ describe('RecorderController', () => {
     expect(media.recorders.every((r) => r.state === 'inactive')).toBe(true)
   })
 
+  it('keeps written video when the transcript audio times out with zero chunks', async () => {
+    controller = new RecorderController({ store, media, now: clock.now, stopTimeoutMs: 10 })
+    await controller.start(options({ id: 'vonly' }))
+    const { video, audio } = recorders()
+    video.emit('v1')
+    await flush()
+    // 转写音频录制器卡住：一片都没有，stop 事件也不来
+    audio.finalChunk = undefined
+    audio.stop = () => {}
+    const { lastResult } = await controller.stop()
+    expect(lastResult).toMatchObject({ saved: true, endReason: 'error' })
+    expect(lastResult?.error).toMatch(/RecorderStopTimeout: audio/)
+    expect(lastResult?.error).toMatch(/Transcript audio track recorded no data/)
+    expect(await fs.root.read('recordings/vonly/video/000001.part')).toBe('v1')
+    const meeting = Meeting.parse(
+      JSON.parse((await fs.root.read('recordings/vonly/meeting.json'))!),
+    )
+    // 不能转写：没有 media.audio，状态不是 processing
+    expect(meeting.status).toBe('failed')
+    expect(meeting.media?.audio).toBeUndefined()
+    expect(meeting.media?.video?.mimeType).toContain('video/mp4')
+    const [item] = await listLocalRecordings(store)
+    expect(item).toMatchObject({ id: 'vonly', state: 'partial', transcribable: false })
+    expect(previewTrack(item!)).toBe('video')
+  })
+
+  it('keeps the video when the first transcript audio chunk fails to write', async () => {
+    await controller.start(options({ id: 'afail' }))
+    const { video, audio } = recorders()
+    video.emit('v1')
+    await flush()
+    fs.fault = (name) => (name === '000001.part' ? 'throw' : undefined)
+    audio.emit('a1')
+    await flush()
+    await flush()
+    await flush()
+    const status = controller.status()
+    expect(status.state).toBe('idle')
+    expect(status.lastResult).toMatchObject({ saved: true, endReason: 'error' })
+    expect(status.lastResult?.error).toMatch(/000001\.part/)
+    expect(await fs.root.read('recordings/afail/video/000001.part')).toBe('v1')
+    const manifest = (await (await store.open('afail'))!.readManifest())!
+    // 视频轨本身没出错：停止时输出的最后一片照常写入
+    expect(manifest.tracks.video?.chunks).toBe(2)
+    expect(manifest.tracks.audio?.chunks).toBe(0)
+    const meeting = (await (await store.open('afail'))!.readMeeting())!
+    expect(meeting.status).toBe('failed')
+  })
+
   it('discards a recording that produced no data', async () => {
     await controller.start(options({ id: 'empty' }))
     for (const r of media.recorders) r.finalChunk = undefined
@@ -373,6 +422,27 @@ describe('RecorderController', () => {
       const manifest = (await dir.readManifest())!
       expect(manifest.tracks.audio?.chunks).toBe(3)
       expect(manifest.tracks.video?.chunks).toBe(2)
+    })
+
+    it('recovers a crash that left only video chunks, marking it not transcribable', async () => {
+      await controller.start(options({ id: 'crashv' }))
+      recorders().video.emit('v1')
+      await flush()
+      const next = new RecorderController({ store, media, now: clock.now })
+      const meeting = await next.recover('crashv')
+      expect(meeting?.status).toBe('failed')
+      expect(meeting?.media?.audio).toBeUndefined()
+      expect(await fs.root.read('recordings/crashv/video/000001.part')).toBe('v1')
+      const manifest = (await (await store.open('crashv'))!.readManifest())!
+      expect(manifest.state).toBe('stopped')
+      expect(manifest.error).toMatch(/cannot be transcribed/)
+    })
+
+    it('removes a crashed recording only when no track has any chunk', async () => {
+      await controller.start(options({ id: 'crash0' }))
+      const next = new RecorderController({ store, media, now: clock.now })
+      expect(await next.recover('crash0')).toBeUndefined()
+      expect(await store.list()).not.toContain('crash0')
     })
 
     it('can discard an unfinished recording', async () => {

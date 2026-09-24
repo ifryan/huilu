@@ -86,7 +86,8 @@
     "unfinishedHint": "This recording was interrupted. Recover it from \"Unfinished recordings\" in the popup or side panel; you can preview what was recorded first",
     "preview": "Preview",
     "download": "Download",
-    "noMedia": "Nothing to play"
+    "noMedia": "Nothing to play",
+    "noTranscriptAudio": "No transcription audio was recorded, so this cannot be transcribed. The video was kept and can be previewed or downloaded"
   },
   "settings": {
     "language": "Language",

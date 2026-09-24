@@ -33,8 +33,11 @@ export const MeetingMedia = z.object({
       fps: z.number().positive().optional(),
     })
     .optional(),
-  /** 转写用的低码率纯音频 */
-  audio: z.object({ mimeType: z.string() }),
+  /**
+   * 转写用的低码率纯音频。缺失表示转写音轨没有录到数据（只保留了视频）：这场会议不能转写，
+   * status 为 failed。放宽为可选不影响已有的 meeting.json
+   */
+  audio: z.object({ mimeType: z.string() }).optional(),
 })
 export type MeetingMedia = z.infer<typeof MeetingMedia>
 

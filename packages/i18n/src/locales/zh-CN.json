@@ -86,7 +86,8 @@
     "unfinishedHint": "录制被意外中断，可在弹窗或侧边栏的「未完成的录制」中恢复；恢复前也可以预览已录内容",
     "preview": "预览",
     "download": "下载",
-    "noMedia": "没有可播放的内容"
+    "noMedia": "没有可播放的内容",
+    "noTranscriptAudio": "没有录到转写音频，无法转写；视频已保留，可预览或下载"
   },
   "settings": {
     "language": "界面语言",

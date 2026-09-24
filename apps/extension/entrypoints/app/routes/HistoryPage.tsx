@@ -89,9 +89,11 @@ function RecordingItem({ recording: r }: { recording: LocalRecording }) {
         <div className="text-xs">
           {transcribed
             ? t('history.transcribed')
-            : readiness && !readiness.transcription
-              ? t('history.notTranscribedNoService')
-              : t('history.notTranscribed')}
+            : !r.transcribable
+              ? t('history.noTranscriptAudio')
+              : readiness && !readiness.transcription
+                ? t('history.notTranscribedNoService')
+                : t('history.notTranscribed')}
         </div>
       )}
       {r.state === 'unfinished' && <p className="text-xs">{t('history.unfinishedHint')}</p>}

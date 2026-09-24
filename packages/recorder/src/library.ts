@@ -29,6 +29,8 @@ export interface LocalRecording {
   error?: string
   /** meeting.json 中的处理状态；没有 meeting.json 时为空 */
   processing?: ProcessingStatus
+  /** 有转写音频分片；为 false 时只能预览视频，不能转写 */
+  transcribable: boolean
   tracks: Partial<Record<TrackName, LocalRecordingTrack>>
 }
 
@@ -42,7 +44,15 @@ export async function listLocalRecordings(store: RecordingStore): Promise<LocalR
     const dir = await store.open(id)
     const manifest = await dir?.readManifest()
     if (!dir || !manifest) {
-      out.push({ id, title: id, state: 'damaged', durationMs: 0, bytes: 0, tracks: {} })
+      out.push({
+        id,
+        title: id,
+        state: 'damaged',
+        durationMs: 0,
+        bytes: 0,
+        transcribable: false,
+        tracks: {},
+      })
       continue
     }
     const meeting = await dir.readMeeting().catch(() => undefined)
@@ -65,6 +75,7 @@ export async function listLocalRecordings(store: RecordingStore): Promise<LocalR
       bytes: Object.values(tracks).reduce((sum, t) => sum + t.bytes, 0),
       error: manifest.error,
       processing: meeting?.status,
+      transcribable: (tracks.audio?.chunks ?? 0) > 0,
       tracks,
     })
   }
