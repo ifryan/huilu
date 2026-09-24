@@ -53,14 +53,56 @@ export function initialFormValues(
   return values
 }
 
-/** 切换预设：填入预设的 Base URL / 模型，保留已填的 Key */
+/** 表单当前指向的服务地址的 origin；地址不完整时为 undefined */
+export function formOrigin(providerId: string, values: FormValues): string | undefined {
+  const url = connectionUrl(providerId, values)
+  try {
+    return url ? new URL(url).origin : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 服务地址的 origin 变了就清空密钥字段：Key 属于原来的服务商，
+ * 不能随着改预设 / 改 Base URL 被发给另一家（PR #6 审查 r4090575763）。
+ */
+function clearSecretsOnOriginChange(
+  provider: TranscriptionProvider | LlmProvider,
+  prev: FormValues,
+  next: FormValues,
+): FormValues {
+  if (formOrigin(provider.id, prev) === formOrigin(provider.id, next)) return next
+  const cleared = { ...next }
+  for (const field of describeConfigFields(provider.configSchema)) {
+    if (field.kind === 'secret') cleared[field.key] = ''
+  }
+  return cleared
+}
+
+/** 切换预设：填入预设的 Base URL / 模型；地址换到别的 origin 时清空 Key */
 export function applyPreset(
   provider: TranscriptionProvider | LlmProvider,
   values: FormValues,
   presetId: string,
 ): FormValues {
   const preset = getPresets(provider).find((p) => p.id === presetId)
-  return { ...values, preset: presetId, ...preset?.values }
+  return clearSecretsOnOriginChange(provider, values, {
+    ...values,
+    preset: presetId,
+    ...preset?.values,
+  })
+}
+
+/** 修改一个表单字段；预设走 applyPreset，其他字段（Base URL、地域）改变 origin 时同样清空 Key */
+export function updateField(
+  provider: TranscriptionProvider | LlmProvider,
+  values: FormValues,
+  key: string,
+  value: string,
+): FormValues {
+  if (key === 'preset') return applyPreset(provider, values, value)
+  return clearSecretsOnOriginChange(provider, values, { ...values, [key]: value })
 }
 
 export type ParseResult =

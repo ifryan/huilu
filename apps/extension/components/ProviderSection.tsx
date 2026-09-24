@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import { useDynamicT } from '@/lib/i18n'
 import {
-  applyPreset,
   connectionUrl,
   formatBytes,
   getProvider,
@@ -17,6 +16,7 @@ import {
   type FormValues,
   type ProviderKind,
   type ProviderSettings,
+  updateField,
 } from '@/lib/providers'
 import { readinessKey } from '@/lib/readiness'
 import { llmSetting, transcriptionSetting } from '@/lib/settings'
@@ -87,6 +87,7 @@ function ProviderForm({
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
   const [test, setTest] = useState<TestState>({ state: 'idle' })
+  const [keyCleared, setKeyCleared] = useState(false)
   const abortRef = useRef<AbortController>(undefined)
 
   const reset = () => {
@@ -100,14 +101,18 @@ function ProviderForm({
     const next = getProvider(kind, id)
     setProviderId(next.id)
     setValues(initialFormValues(next, settings.configs[next.id]))
+    setKeyCleared(false)
     setDirty(next.id !== settings.providerId)
     reset()
   }
 
   const setField = (field: ConfigField, value: string) => {
-    setValues((v) =>
-      field.key === 'preset' ? applyPreset(provider, v, value) : { ...v, [field.key]: value },
+    const next = updateField(provider, values, field.key, value)
+    // 地址换了 origin，已填的 Key 被清空：提示用户为新服务商重新填写
+    setKeyCleared(
+      fields.some((f) => f.kind === 'secret' && values[f.key] !== '' && next[f.key] === ''),
     )
+    setValues(next)
     setDirty(true)
     reset()
   }
@@ -226,6 +231,9 @@ function ProviderForm({
               invalid={invalid.includes(field.key)}
               onChange={(v) => setField(field, v)}
             />
+            {field.kind === 'secret' && keyCleared && (
+              <p className="mt-1 text-xs text-amber-600">{t('settings.keyCleared')}</p>
+            )}
             {field.key === 'preset' && preset?.hintKey && (
               <p className="text-muted-foreground mt-1 text-xs">{dt(preset.hintKey)}</p>
             )}

@@ -154,7 +154,8 @@
       "keysWarning": "包含 API Key 的配置文件请妥善保管，不要分享给他人。",
       "imported": "配置已导入",
       "importFailed": "导入失败：{{reason}}"
-    }
+    },
+    "keyCleared": "服务地址已更换，原来的 Key 已清空，请填写新服务商的 Key"
   },
   "onboarding": {
     "step1": "选择数据文件夹",

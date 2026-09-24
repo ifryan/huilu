@@ -154,7 +154,8 @@
       "keysWarning": "Keep settings files that contain API keys private; do not share them.",
       "imported": "Settings imported",
       "importFailed": "Import failed: {{reason}}"
-    }
+    },
+    "keyCleared": "The service address changed, so the previous key was cleared. Enter the key for the new provider"
   },
   "onboarding": {
     "step1": "Choose a data folder",

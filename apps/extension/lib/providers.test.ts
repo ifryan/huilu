@@ -11,6 +11,7 @@ import {
   isConfigured,
   maskSecret,
   parseForm,
+  updateField,
 } from './providers'
 
 const llm = getProvider('llm', 'openai-compatible')
@@ -36,14 +37,35 @@ describe('provider forms', () => {
     expect(initialFormValues(llm, saved)).toMatchObject({ ...saved, apiKey: '' })
   })
 
-  it('applies a preset while keeping the key', () => {
-    const values = applyPreset(llm, { ...initialFormValues(llm), apiKey: 'sk-1' }, 'ollama')
+  it('applies a preset and clears the key when the host changes', () => {
+    const qwen = { ...initialFormValues(llm), apiKey: 'sk-qwen' }
+    const values = applyPreset(llm, qwen, 'ollama')
     expect(values).toMatchObject({
       preset: 'ollama',
       baseUrl: 'http://localhost:11434/v1',
-      apiKey: 'sk-1',
+      apiKey: '',
     })
-    expect(applyPreset(llm, values, 'custom').baseUrl).toBe('http://localhost:11434/v1')
+    // 「自定义」不带地址：仍指向同一个 origin，保留已填的 Key
+    const custom = applyPreset(llm, { ...values, apiKey: 'local' }, 'custom')
+    expect(custom).toMatchObject({ baseUrl: 'http://localhost:11434/v1', apiKey: 'local' })
+  })
+
+  it('never carries a key over to another provider host', () => {
+    const qwen = { ...initialFormValues(llm), apiKey: 'sk-qwen' }
+    expect(applyPreset(llm, qwen, 'deepseek').apiKey).toBe('')
+    expect(applyPreset(llm, qwen, 'openai').apiKey).toBe('')
+    const transcription = getProvider('transcription', 'openai-compatible')
+    const groq = { ...initialFormValues(transcription), apiKey: 'gsk-1' }
+    expect(applyPreset(transcription, groq, 'openai').apiKey).toBe('')
+    // 手改 Base URL 到别的域名同样清空；同一域名下改路径保留
+    expect(updateField(llm, qwen, 'baseUrl', 'https://evil.example/v1').apiKey).toBe('')
+    expect(
+      updateField(llm, qwen, 'baseUrl', 'https://dashscope.aliyuncs.com/compatible-mode/v2').apiKey,
+    ).toBe('sk-qwen')
+    // Paraformer 切地域也会换域名
+    const cn = { region: 'cn', apiKey: 'sk-cn', model: 'paraformer-v2' }
+    expect(updateField(paraformer, cn, 'region', 'intl').apiKey).toBe('')
+    expect(updateField(paraformer, cn, 'model', 'paraformer-v1').apiKey).toBe('sk-cn')
   })
 
   it('reports invalid fields and treats blanks as missing', () => {
