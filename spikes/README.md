@@ -4,18 +4,20 @@
 
 ## 内容
 
-| 路径                                 | 作用                                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `extension/`                         | 不经打包、可直接「加载已解压的扩展程序」的 MV3 插件：后台 + 离屏文档 + `lab.html` 验证页面                    |
-| `extension/lib/recorder.js`          | 录制引擎：tabCapture / 合成画面 → Web Audio 混音（+ 麦克风）→ 两路 MediaRecorder → 每 5 秒一个分片写入 OPFS   |
-| `extension/lib/media.js`             | 播放 / 拖动检查、mediabunny 解析、fMP4 → 普通 MP4 流式转封装                                                  |
-| `extension/lib/dashscope.js`         | 百炼 Paraformer：临时文件上传 → 提交任务（发言人区分）→ 轮询 → 结果转成 `core` 的 `Transcript`                |
-| `extension/lib/openai-compatible.js` | Groq / OpenAI 兼容转写，按切片偏移合并                                                                        |
-| `extension/lib/split.js`             | 超过单文件上限时按静音点切片（只解码切点附近的窗口，不整段解码）                                              |
-| `scripts/run-media.mjs`              | 验证项 2、3 自动化：无头 Chrome 中录合成画面（每秒整点闪白 + 哔声），采样内存 / CPU，结束后校验与 ffmpeg 分析 |
-| `scripts/avsync.mjs`                 | ffprobe 容器信息 + 闪白 / 哔声配对测音画偏移，可单独对任意录制文件运行                                        |
-| `scripts/run-split.mjs`              | 验证 Groq 25MB 切片：切点是否落在静音里、每片是否不超限、时长是否守恒                                         |
-| `scripts/transcribe.mjs`             | 验证项 4：在插件页面（`chrome-extension://` 源）里跑百炼 / Groq 全流程                                        |
+| 路径                                 | 作用                                                                                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension/`                         | 不经打包、可直接「加载已解压的扩展程序」的 MV3 插件：后台 + 离屏文档 + `lab.html` 验证页面                                                    |
+| `extension/lib/recorder.js`          | 录制引擎：tabCapture / 合成画面 → Web Audio 混音（+ 麦克风）→ 两路 MediaRecorder → 每 5 秒一个分片写入 OPFS                                   |
+| `extension/lib/media.js`             | 播放 / 拖动检查、mediabunny 解析、fMP4 → 普通 MP4 流式转封装                                                                                  |
+| `extension/lib/dashscope.js`         | 百炼 Paraformer：临时文件上传 → 提交任务（发言人区分）→ 轮询 → 结果转成 `core` 的 `Transcript`                                                |
+| `extension/lib/openai-compatible.js` | Groq / OpenAI 兼容转写，按切片偏移合并                                                                                                        |
+| `extension/lib/split.js`             | 超过单文件上限时按静音点切片（只解码切点附近的窗口，不整段解码）                                                                              |
+| `scripts/run-media.mjs`              | 验证项 2、3 自动化：无头 Chrome 中录合成画面（每秒整点闪白 + 哔声），采样内存 / CPU，结束后校验与 ffmpeg 分析                                 |
+| `scripts/avsync.mjs`                 | ffprobe 容器信息 + 闪白 / 哔声配对测音画偏移，可单独对任意录制文件运行                                                                        |
+| `scripts/decode-check.test.mjs`      | `decodeErrors` 回归测试：只忽略 FFmpeg Opus 解析器在文件末尾的误报，中途坏包 / 截断仍计错误（`npm run test:decode`）                          |
+| `scripts/avsync.test.mjs`            | `avSync` / `syncVerdict` 回归测试：对齐样本接近 0；音频延后 150ms 通过、260ms 不通过（PRD ≤200ms，按每个配对点判定）（`npm run test:avsync`） |
+| `scripts/run-split.mjs`              | 验证 Groq 25MB 切片：切点是否落在静音里、每片是否不超限、时长是否守恒                                                                         |
+| `scripts/transcribe.mjs`             | 验证项 4：在插件页面（`chrome-extension://` 源）里跑百炼 / Groq 全流程                                                                        |
 
 ## 准备
 
@@ -64,3 +66,11 @@ GROQ_API_KEY=gsk_...     node scripts/transcribe.mjs --provider groq --file 会�
 3. 录制期间用 Chrome 任务管理器（Shift+Esc）观察「扩展程序：HuiLu Spikes」的内存与 CPU
 4. 回到 lab 页「刷新录制列表」→「校验分片」「播放/拖动」「转封装 MP4」「导出到文件夹」
 5. 在 lab 页顶部的视频格式下拉框里可以看到本机支持的 MIME（Windows / macOS 预期支持 `avc1 + mp4a` 即 AAC）
+
+## 音画同步测量注意事项
+
+`avSync` 把画面「闪白起点」与音频「哔声起点」配对，测的是**测试源 + 录制链路**的总偏移。测试源若在页面里用
+`AudioContext.currentTime` 决定何时画闪白，画面会领先实际播出的声音 `baseLatency + outputLatency`
+（Linux 无声卡的无头 Chrome 中实测 130–170ms，且每次运行不同），这部分不是录制链路的误差。
+端到端测试应按 `getOutputTimestamp()` 推算的实际播出时刻画闪白，并用 `syncVerdict` 对每个配对点按 200ms 判定，
+不能只看中位数。15fps 录制时画面起点的分辨率是一帧（约 67ms）。

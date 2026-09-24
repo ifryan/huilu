@@ -17,7 +17,27 @@ export default defineConfig({
     default_locale: 'zh_CN',
     key: MANIFEST_KEY,
     minimum_chrome_version: '122',
-    permissions: ['storage', 'unlimitedStorage', 'offscreen', 'tabCapture', 'sidePanel'],
+    permissions: [
+      'storage',
+      'unlimitedStorage',
+      'offscreen',
+      'tabCapture',
+      'desktopCapture',
+      'sidePanel',
+    ],
+    // 内置服务商预设的域名；插件源下请求这些域名不受 CORS 限制（ADR 0004 第 4 节）
+    host_permissions: [
+      'https://dashscope.aliyuncs.com/*',
+      'https://dashscope-intl.aliyuncs.com/*',
+      'https://*.aliyuncs.com/*',
+      'https://api.groq.com/*',
+      'https://api.openai.com/*',
+      'https://api.deepseek.com/*',
+      'http://localhost/*',
+      'http://127.0.0.1/*',
+    ],
+    // 自定义 Base URL：用户点击「测试连接」时再申请对应域名的权限
+    optional_host_permissions: ['https://*/*', 'http://*/*'],
     commands: {
       'toggle-recording': {
         suggested_key: { default: 'Alt+Shift+R' },

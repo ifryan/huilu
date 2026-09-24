@@ -1,19 +1,77 @@
 import { defineExtensionMessaging } from '@webext-core/messaging'
-import type { RecordingMode } from '@huilu/core'
+import type { Meeting, RecordingMode } from '@huilu/core'
+import type {
+  FinishedRecording,
+  RecorderStatus,
+  RecordingOptions,
+  UnfinishedRecording,
+} from '@huilu/recorder'
+import type { RecordingPrefs } from './settings'
 
-export interface RecorderStatus {
-  state: 'idle' | 'recording' | 'paused'
-  mode?: RecordingMode
-  startedAt?: number
+export type { RecorderStatus, UnfinishedRecording }
+
+export type LastRecording = NonNullable<RecorderStatus['lastResult']>
+
+/** 开始录制时使用的设置 */
+export interface RecordingSettingsSnapshot {
+  mode: RecordingMode
+  prefs: RecordingPrefs
+}
+
+/**
+ * 弹窗 / 快捷键请求开始录制。弹窗带上界面当前显示的设置快照（不依赖尚未完成的 storage 读写）；
+ * 快捷键没有界面，settings 为空，由后台读取已保存的设置。
+ */
+export interface StartRecordingRequest {
+  tabId: number
+  title: string
+  settings?: RecordingSettingsSnapshot
 }
 
 /**
  * 各运行环境（后台 / 离屏文档 / 弹窗 / 侧边栏 / 插件网页）之间的消息协议。
  * 新增消息时只需在这里加一行，发送端和接收端都会得到类型检查。
+ *
+ * runtime.sendMessage 会广播给所有插件页面，同一类型只能由一个环境处理：
+ * 界面 → 后台用普通名称，后台 → 离屏文档统一加 `offscreen:` 前缀。
  */
 interface ProtocolMap {
-  getRecorderStatus(): RecorderStatus
+  // 界面 → 后台
+  /** startError：最近一次开始录制失败的原因（快捷键、窗口选择框等弹窗已关闭的场景由侧边栏显示） */
+  getRecorderStatus(): RecorderStatus & { startError?: string }
+  startRecording(request: StartRecordingRequest): RecorderStatus
+  pauseRecording(): RecorderStatus
+  resumeRecording(): RecorderStatus
+  stopRecording(): RecorderStatus
+  listUnfinishedRecordings(): UnfinishedRecording[]
+  recoverRecording(id: string): { saved: boolean }
+  discardRecording(id: string): void
   openApp(route: string): void
+
+  // 后台 → 离屏文档（标签页录制）
+  'offscreen:start'(options: Omit<RecordingOptions, 'id'>): RecorderStatus
+  'offscreen:pause'(): RecorderStatus
+  'offscreen:resume'(): RecorderStatus
+  'offscreen:stop'(): RecorderStatus
+  'offscreen:status'(): RecorderStatus
+  'offscreen:listUnfinished'(): UnfinishedRecording[]
+  'offscreen:recover'(id: string): Meeting | null
+  'offscreen:discard'(id: string): void
+
+  // 后台 → 录制窗口（窗口 / 屏幕录制）：选择框和录制都在这个可见页面里进行
+  'window:start'(options: WindowRecordingOptions): RecorderStatus
+  'window:pause'(): RecorderStatus
+  'window:resume'(): RecorderStatus
+  'window:stop'(): RecorderStatus
+  'window:status'(): RecorderStatus
+  // 录制窗口 → 后台：页面已加载、消息处理已注册
+  recorderWindowReady(): void
+
+  // 离屏文档 → 后台：录制结束（用户结束 / 来源结束 / 写入失败）
+  recordingFinished(result: Omit<FinishedRecording, 'meeting'> & { saved: boolean }): void
 }
+
+/** 录制窗口自己弹选择框取得 streamId，后台只传录制设置 */
+export type WindowRecordingOptions = Omit<RecordingOptions, 'id' | 'streamId' | 'sourceAudio'>
 
 export const { sendMessage, onMessage } = defineExtensionMessaging<ProtocolMap>()

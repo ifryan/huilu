@@ -23,6 +23,24 @@ export const Marker = z.object({
 })
 export type Marker = z.infer<typeof Marker>
 
+/** 录制时实际使用的编码（按浏览器支持情况探测得到，见 ADR 0004 第 3 节） */
+export const MeetingMedia = z.object({
+  video: z
+    .object({
+      mimeType: z.string(),
+      width: z.number().int().positive().optional(),
+      height: z.number().int().positive().optional(),
+      fps: z.number().positive().optional(),
+    })
+    .optional(),
+  /**
+   * 转写用的低码率纯音频。缺失表示转写音轨没有录到数据（只保留了视频）：这场会议不能转写，
+   * status 为 failed。放宽为可选不影响已有的 meeting.json
+   */
+  audio: z.object({ mimeType: z.string() }).optional(),
+})
+export type MeetingMedia = z.infer<typeof MeetingMedia>
+
 export const ProcessingStatus = z.enum(['recording', 'processing', 'ready', 'failed'])
 export type ProcessingStatus = z.infer<typeof ProcessingStatus>
 
@@ -39,6 +57,8 @@ export const Meeting = z.object({
   speakers: z.array(Speaker).default([]),
   markers: z.array(Marker).default([]),
   status: ProcessingStatus,
+  /** 录制产物的编码信息；导入的外部文件可能没有 */
+  media: MeetingMedia.optional(),
   /** 该会议生成时使用的服务商，便于复现与重新生成 */
   providers: z
     .object({
