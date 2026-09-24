@@ -15,11 +15,54 @@
     "modeVideo": "音频 + 视频",
     "start": "开始记录",
     "openApp": "打开会录",
-    "notReady": "请先完成设置"
+    "notReady": "请先完成设置",
+    "source": "录制来源",
+    "sourceTab": "当前标签页",
+    "sourceWindow": "指定窗口",
+    "sourceScreen": "整个屏幕",
+    "sourceDesktopHint": "开始后会弹出选择框；需要录制声音时请勾选「分享音频」",
+    "quality": "画质",
+    "estimate": "每小时最多约 {{size}}",
+    "microphone": "同时录制麦克风",
+    "micDefault": "系统默认麦克风",
+    "micGrant": "授权麦克风",
+    "micNeedsPermission": "首次使用需要授权麦克风",
+    "micDenied": "麦克风权限被拒绝，请在浏览器的网站设置中允许后重试",
+    "language": "音视频语言",
+    "languageZh": "中文",
+    "languageEn": "英文",
+    "languageZhEn": "中英混合",
+    "languageAuto": "自动识别",
+    "meetingTitle": "会议名称",
+    "meetingTitlePlaceholder": "未命名会议",
+    "starting": "正在开始…",
+    "recordingNow": "正在录制「{{title}}」",
+    "openSidePanel": "打开侧边栏",
+    "shortcut": "快捷键 Alt+Shift+R 开始 / 结束"
   },
   "sidepanel": {
     "recording": "录制中",
-    "idle": "未在录制"
+    "idle": "未在录制",
+    "recordingAudio": "录音中",
+    "recordingVideo": "录屏中",
+    "paused": "已暂停",
+    "stopping": "正在保存…",
+    "starting": "正在开始…",
+    "recorded": "已录 {{size}}",
+    "pause": "暂停",
+    "resume": "继续",
+    "stop": "结束",
+    "confirmStop": "确定结束录制吗？",
+    "confirmStopAction": "结束录制",
+    "cancel": "取消",
+    "saved": "录制已保存",
+    "savedDetail": "「{{title}}」· {{duration}}，等待转写与生成纪要",
+    "endedBySource": "标签页已关闭或已停止共享，录制已自动结束",
+    "endedByError": "写入磁盘失败，录制已停止。停止前录制的内容已保存",
+    "notSaved": "录制未能保存：{{error}}",
+    "startFailed": "开始录制失败：{{error}}",
+    "openHistory": "查看历史记录",
+    "hint": "在弹窗中点击「开始记录」，或按 Alt+Shift+R 录制当前标签页"
   },
   "history": {
     "empty": "还没有会议记录"
@@ -40,5 +83,35 @@
   },
   "summaryTemplate": {
     "general": "通用"
+  },
+  "recorder": {
+    "warning": {
+      "micUnavailable": "未能打开麦克风，本次录制不包含麦克风声音",
+      "noAudio": "没有采集到声音，本次录制无法转写",
+      "lowStorage": "剩余存储空间不足 1 小时录制"
+    },
+    "error": {
+      "busy": "已有录制正在进行",
+      "noAudio": "没有可录制的声音：来源没有声音，麦克风也未开启或不可用",
+      "storage": "存储空间不足，无法开始录制",
+      "cancelled": "已取消选择录制来源",
+      "permission": "无法采集该页面：权限被拒绝，或该页面不允许录制（例如 chrome:// 页面）"
+    }
+  },
+  "unfinished": {
+    "title": "发现未完成的录制",
+    "body": "录制被意外中断（如浏览器崩溃），已录的内容仍在",
+    "recover": "恢复",
+    "discard": "丢弃",
+    "confirmDiscard": "确定丢弃？已录内容将被删除",
+    "recovered": "已恢复「{{title}}」，等待处理",
+    "nothingToRecover": "「{{title}}」没有可恢复的内容，已清理"
+  },
+  "permissions": {
+    "micTitle": "麦克风授权",
+    "micBody": "会录在后台录制，无法直接弹出授权提示。请点击下方按钮，并在浏览器提示中选择「允许」。",
+    "micButton": "允许使用麦克风",
+    "micGranted": "已授权。可以关闭此页面，回到弹窗开始录制。",
+    "micFailed": "授权失败：{{error}}"
   }
 }

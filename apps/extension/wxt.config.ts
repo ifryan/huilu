@@ -17,7 +17,14 @@ export default defineConfig({
     default_locale: 'zh_CN',
     key: MANIFEST_KEY,
     minimum_chrome_version: '122',
-    permissions: ['storage', 'unlimitedStorage', 'offscreen', 'tabCapture', 'sidePanel'],
+    permissions: [
+      'storage',
+      'unlimitedStorage',
+      'offscreen',
+      'tabCapture',
+      'desktopCapture',
+      'sidePanel',
+    ],
     commands: {
       'toggle-recording': {
         suggested_key: { default: 'Alt+Shift+R' },

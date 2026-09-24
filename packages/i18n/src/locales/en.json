@@ -15,11 +15,54 @@
     "modeVideo": "Audio + video",
     "start": "Start recording",
     "openApp": "Open HuiLu",
-    "notReady": "Finish setup first"
+    "notReady": "Finish setup first",
+    "source": "Source",
+    "sourceTab": "Current tab",
+    "sourceWindow": "A window",
+    "sourceScreen": "Entire screen",
+    "sourceDesktopHint": "A picker will open. Tick “Share audio” to record sound",
+    "quality": "Quality",
+    "estimate": "Up to about {{size}} per hour",
+    "microphone": "Also record microphone",
+    "micDefault": "Default microphone",
+    "micGrant": "Allow microphone",
+    "micNeedsPermission": "Microphone access is needed the first time",
+    "micDenied": "Microphone access was blocked. Allow it in the browser's site settings and try again",
+    "language": "Spoken language",
+    "languageZh": "Chinese",
+    "languageEn": "English",
+    "languageZhEn": "Chinese + English",
+    "languageAuto": "Auto detect",
+    "meetingTitle": "Meeting title",
+    "meetingTitlePlaceholder": "Untitled meeting",
+    "starting": "Starting…",
+    "recordingNow": "Recording “{{title}}”",
+    "openSidePanel": "Open side panel",
+    "shortcut": "Shortcut Alt+Shift+R to start / stop"
   },
   "sidepanel": {
     "recording": "Recording",
-    "idle": "Not recording"
+    "idle": "Not recording",
+    "recordingAudio": "Recording audio",
+    "recordingVideo": "Recording screen",
+    "paused": "Paused",
+    "stopping": "Saving…",
+    "starting": "Starting…",
+    "recorded": "{{size}} recorded",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "confirmStop": "Stop recording?",
+    "confirmStopAction": "Stop recording",
+    "cancel": "Cancel",
+    "saved": "Recording saved",
+    "savedDetail": "“{{title}}” · {{duration}}, waiting for transcription and summary",
+    "endedBySource": "The tab was closed or sharing stopped, so the recording ended",
+    "endedByError": "Writing to disk failed, so the recording stopped. Everything recorded before that was saved",
+    "notSaved": "The recording could not be saved: {{error}}",
+    "startFailed": "Could not start recording: {{error}}",
+    "openHistory": "Open history",
+    "hint": "Click “Start recording” in the popup, or press Alt+Shift+R to record the current tab"
   },
   "history": {
     "empty": "No meetings yet"
@@ -40,5 +83,35 @@
   },
   "summaryTemplate": {
     "general": "General"
+  },
+  "recorder": {
+    "warning": {
+      "micUnavailable": "The microphone could not be opened; this recording has no microphone audio",
+      "noAudio": "No audio is being captured; this recording cannot be transcribed",
+      "lowStorage": "Less than one hour of storage left"
+    },
+    "error": {
+      "busy": "A recording is already in progress",
+      "noAudio": "Nothing to record: the source has no audio and the microphone is off or unavailable",
+      "storage": "Not enough storage to start recording",
+      "cancelled": "Source selection was cancelled",
+      "permission": "Cannot capture this page: permission denied, or the page cannot be recorded (e.g. chrome:// pages)"
+    }
+  },
+  "unfinished": {
+    "title": "Unfinished recordings found",
+    "body": "A recording was interrupted (e.g. the browser crashed). What was recorded is still here",
+    "recover": "Recover",
+    "discard": "Discard",
+    "confirmDiscard": "Discard it? The recorded content will be deleted",
+    "recovered": "Recovered “{{title}}”, waiting for processing",
+    "nothingToRecover": "“{{title}}” had nothing to recover and was removed"
+  },
+  "permissions": {
+    "micTitle": "Microphone access",
+    "micBody": "HuiLu records in the background and cannot show the permission prompt there. Click the button below and choose “Allow” in the browser prompt.",
+    "micButton": "Allow microphone",
+    "micGranted": "Done. You can close this page and start recording from the popup.",
+    "micFailed": "Could not get access: {{error}}"
   }
 }

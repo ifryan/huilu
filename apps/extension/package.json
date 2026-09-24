@@ -15,6 +15,7 @@
   "dependencies": {
     "@huilu/core": "workspace:*",
     "@huilu/i18n": "workspace:*",
+    "@huilu/recorder": "workspace:*",
     "@huilu/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-router": "^1.170.39",
