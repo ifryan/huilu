@@ -25,6 +25,8 @@
     "estimate": "Up to about {{size}} per hour",
     "microphone": "Also record microphone",
     "micDefault": "Default microphone",
+    "micLevel": "Microphone level",
+    "micPreviewFailed": "Could not open this microphone for a preview. Check that it is connected",
     "micGrant": "Allow microphone",
     "micNeedsPermission": "Microphone access is needed the first time",
     "micDenied": "Microphone access was blocked. Allow it in the browser's site settings and try again",

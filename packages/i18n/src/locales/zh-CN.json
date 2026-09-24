@@ -25,6 +25,8 @@
     "estimate": "每小时最多约 {{size}}",
     "microphone": "同时录制麦克风",
     "micDefault": "系统默认麦克风",
+    "micLevel": "麦克风电平",
+    "micPreviewFailed": "无法打开该麦克风预览，请检查设备是否已连接",
     "micGrant": "授权麦克风",
     "micNeedsPermission": "首次使用需要授权麦克风",
     "micDenied": "麦克风权限被拒绝，请在浏览器的网站设置中允许后重试",
