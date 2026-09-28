@@ -17,12 +17,28 @@ const h = vi.hoisted(() => ({
   recorderWindows: new Set<number>(),
   /** 每次 window:start 广播时有多少个录制窗口页面会响应 */
   windowStartReceivers: [] as number[],
+  /** 离屏文档里的处理队列 */
+  processingBusy: false,
+  processRequests: [] as unknown[],
+  folderAuthorizedCalls: 0,
+  /** IndexedDB 中的处理任务（后台只读） */
+  jobs: [] as { meetingId: string; state: string }[],
 }))
 
 vi.mock('@/lib/messaging', () => ({
   onMessage: (type: string, handler: Handler) => void h.handlers.set(type, handler),
-  sendMessage: async (type: string): Promise<unknown> => {
+  sendMessage: async (type: string, data?: unknown): Promise<unknown> => {
     switch (type) {
+      case 'offscreen:process':
+        if (!h.offscreenOpen) throw new Error('Could not establish connection')
+        h.processRequests.push(data)
+        return { queued: true, job: {} }
+      case 'offscreen:processingBusy':
+        if (!h.offscreenOpen) throw new Error('Could not establish connection')
+        return h.processingBusy
+      case 'offscreen:folderAuthorized':
+        h.folderAuthorizedCalls++
+        return undefined
       case 'offscreen:start':
         if (!h.offscreenOpen) throw new Error('Could not establish connection')
         return h.offscreenStart()
@@ -55,7 +71,14 @@ vi.mock('@/platform/capture', () => ({
   requestTabCapture: async () => ({ streamId: 'tab-stream', sourceAudio: true }),
 }))
 
-vi.mock('@/platform', () => ({ openAppPage: async () => {} }))
+vi.mock('@/platform', () => ({ openAppPage: async () => {}, hasHostPermission: async () => true }))
+
+vi.mock('@huilu/pipeline/jobs', () => ({
+  IdbJobStore: class {
+    list = async () => h.jobs
+  },
+  isActive: (j: { state: string }) => j.state === 'queued' || j.state === 'running',
+}))
 
 const { default: background } = await import('@/entrypoints/background')
 
@@ -92,6 +115,10 @@ beforeEach(() => {
     closeCalls: 0,
     windowState: 'idle',
     windowStartReceivers: [],
+    processingBusy: false,
+    processRequests: [],
+    folderAuthorizedCalls: 0,
+    jobs: [],
   })
   h.recorderWindows.clear()
   // Chrome 的 windows.get 对不存在的窗口会报错（fakeBrowser 返回 undefined）
@@ -180,5 +207,101 @@ describe('background recording lifecycle', () => {
     await start('screen')
     expect(h.windowStartReceivers).toEqual([1, 1])
     expect(h.recorderWindows.has(first!)).toBe(false)
+  })
+})
+
+const finished = (id: string, saved = true) => ({
+  id,
+  title: '评审',
+  mode: 'audio',
+  endReason: 'user',
+  durationMs: 1000,
+  bytes: 10,
+  saved,
+})
+
+describe('background processing lifecycle', () => {
+  it('queues a finished tab recording and keeps the offscreen document while processing', async () => {
+    await start('tab')
+    h.offscreenState = 'idle'
+    h.processingBusy = true
+    await call('recordingFinished', finished('r1'))
+    await settle()
+    expect(h.processRequests).toEqual([{ meetingId: 'r1', auto: true }])
+    // 录制结束的清理不能关掉正在转写的离屏文档
+    expect(h.offscreenOpen).toBe(true)
+    expect(h.closeCalls).toBe(0)
+
+    // 队列跑完后离屏文档报告空闲：此时才关闭
+    h.processingBusy = false
+    await call('processingIdle')
+    await settle()
+    expect(h.offscreenOpen).toBe(false)
+  })
+
+  it('opens the offscreen document to process a window recording', async () => {
+    await start('screen')
+    expect(h.offscreenOpen).toBe(false)
+    const [windowId] = [...h.recorderWindows]
+    h.processingBusy = true
+    await call('recordingFinished', finished('r2'), { tab: { windowId } })
+    await settle()
+    expect(h.offscreenOpen).toBe(true)
+    expect(h.processRequests).toEqual([{ meetingId: 'r2', auto: true }])
+  })
+
+  it('does not queue recordings that were not saved', async () => {
+    await start('tab')
+    await call('recordingFinished', finished('r3', false))
+    await settle()
+    expect(h.processRequests).toEqual([])
+    expect(h.offscreenOpen).toBe(false)
+  })
+
+  it('does not close the offscreen document while a recording is running', async () => {
+    await start('tab')
+    h.offscreenState = 'recording'
+    await call('processingIdle')
+    await settle()
+    expect(h.offscreenOpen).toBe(true)
+  })
+
+  it('handles manual processing requests from the history page', async () => {
+    h.processingBusy = true
+    await expect(call('processMeeting', 'r4')).resolves.toMatchObject({ queued: true })
+    expect(h.processRequests).toEqual([{ meetingId: 'r4', auto: false }])
+    expect(h.offscreenOpen).toBe(true)
+  })
+
+  it('resumes interrupted jobs when the service worker starts', async () => {
+    h.jobs = [{ meetingId: 'r5', state: 'running' }]
+    h.processingBusy = true
+    background.main()
+    await settle()
+    expect(h.offscreenOpen).toBe(true)
+    expect(h.processRequests).toContainEqual({})
+  })
+
+  it('stays idle on start when there is nothing to process', async () => {
+    h.jobs = [
+      { meetingId: 'a', state: 'done' },
+      { meetingId: 'b', state: 'waitingFolder' },
+    ]
+    background.main()
+    await settle()
+    expect(h.offscreenOpen).toBe(false)
+  })
+
+  it('rewrites waiting results after the data folder is re-authorized', async () => {
+    const { dataFolderAuthorizedSetting } = await import('@/lib/settings')
+    h.jobs = [{ meetingId: 'r6', state: 'waitingFolder' }]
+    await dataFolderAuthorizedSetting.setValue({ name: 'HuiLu', at: Date.now() })
+    await settle()
+    expect(h.folderAuthorizedCalls).toBe(1)
+    // 没有在等待写入的任务时，授权变化不用打开离屏文档
+    h.jobs = []
+    await dataFolderAuthorizedSetting.setValue({ name: 'HuiLu', at: Date.now() + 1 })
+    await settle()
+    expect(h.folderAuthorizedCalls).toBe(1)
   })
 })

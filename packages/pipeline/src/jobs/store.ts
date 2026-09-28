@@ -19,7 +19,8 @@ const STORE = 'jobs'
 export class IdbJobStore implements JobStore {
   #writes: Promise<unknown> = Promise.resolve()
 
-  constructor(private readonly idb: IDBFactory = indexedDB) {}
+  /** idb 缺省时在第一次使用时取全局 indexedDB（后台测试等环境可以只构造、不使用） */
+  constructor(private readonly idb?: IDBFactory) {}
 
   async get(meetingId: string): Promise<ProcessingJob | undefined> {
     return (await this.#tx('readonly', (s) => s.get(meetingId))) as ProcessingJob | undefined
@@ -62,7 +63,7 @@ export class IdbJobStore implements JobStore {
 
   #open(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const req = this.idb.open(DB_NAME, 1)
+      const req = (this.idb ?? indexedDB).open(DB_NAME, 1)
       req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'meetingId' })
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)

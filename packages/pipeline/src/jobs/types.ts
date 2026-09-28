@@ -67,3 +67,7 @@ export interface ProcessingJob {
 /** 仍需要离屏文档保持运行的任务 */
 export const isActive = (job: Pick<ProcessingJob, 'state'>) =>
   job.state === 'queued' || job.state === 'running'
+
+export type EnqueueResult =
+  | { queued: true; job: ProcessingJob }
+  | { queued: false; reason: 'noAudio' | 'notConfigured' | 'meetingNotFound' | 'notProcessing' }

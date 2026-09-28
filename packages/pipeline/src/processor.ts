@@ -13,6 +13,7 @@ import { FolderNotReadyError, WriteVerificationError } from '@huilu/storage'
 import { meetingFolderName } from './folder'
 import {
   isActive,
+  type EnqueueResult,
   type JobError,
   type JobStore,
   type PipelineErrorCode,
@@ -117,10 +118,6 @@ export interface EnqueueOptions {
    */
   auto?: boolean
 }
-
-export type EnqueueResult =
-  | { queued: true; job: ProcessingJob }
-  | { queued: false; reason: 'noAudio' | 'notConfigured' | 'meetingNotFound' | 'notProcessing' }
 
 /**
  * 会后处理队列：转写 → 纪要 → 写入数据文件夹，在离屏文档中执行。

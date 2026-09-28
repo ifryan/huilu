@@ -22,12 +22,16 @@ export async function ensureOffscreenDocument(): Promise<void> {
   creating ??= browser.offscreen
     .createDocument({
       url: OFFSCREEN_PATH,
+      // 同一个文档既录制又执行会后处理（ADR 0002）。只有 AUDIO_PLAYBACK 一个理由时，
+      // Chrome 会在 30 秒没有播放声音后关闭文档；这里始终带着 USER_MEDIA / BLOBS，
+      // 何时关闭由后台根据录制状态和处理队列决定（closeIdleOffscreen）
       reasons: [
         browser.offscreen.Reason.USER_MEDIA,
         browser.offscreen.Reason.AUDIO_PLAYBACK,
         browser.offscreen.Reason.BLOBS,
       ],
-      justification: 'Record tab / screen audio and video, and write chunks to OPFS',
+      justification:
+        'Record tab / screen audio and video to OPFS, then transcribe, summarize and save meetings in the background',
     })
     .finally(() => (creating = undefined))
   await creating

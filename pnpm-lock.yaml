@@ -53,6 +53,9 @@ importers:
       '@huilu/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@huilu/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@huilu/providers':
         specifier: workspace:*
         version: link:../../packages/providers
