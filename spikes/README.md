@@ -4,20 +4,20 @@
 
 ## 内容
 
-| 路径                                 | 作用                                                                                                                                          |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extension/`                         | 不经打包、可直接「加载已解压的扩展程序」的 MV3 插件：后台 + 离屏文档 + `lab.html` 验证页面                                                    |
-| `extension/lib/recorder.js`          | 录制引擎：tabCapture / 合成画面 → Web Audio 混音（+ 麦克风）→ 两路 MediaRecorder → 每 5 秒一个分片写入 OPFS                                   |
-| `extension/lib/media.js`             | 播放 / 拖动检查、mediabunny 解析、fMP4 → 普通 MP4 流式转封装                                                                                  |
-| `extension/lib/dashscope.js`         | 百炼 Paraformer：临时文件上传 → 提交任务（发言人区分）→ 轮询 → 结果转成 `core` 的 `Transcript`                                                |
-| `extension/lib/openai-compatible.js` | Groq / OpenAI 兼容转写，按切片偏移合并                                                                                                        |
-| `extension/lib/split.js`             | 超过单文件上限时按静音点切片（只解码切点附近的窗口，不整段解码）                                                                              |
-| `scripts/run-media.mjs`              | 验证项 2、3 自动化：无头 Chrome 中录合成画面（每秒整点闪白 + 哔声），采样内存 / CPU，结束后校验与 ffmpeg 分析                                 |
-| `scripts/avsync.mjs`                 | ffprobe 容器信息 + 闪白 / 哔声配对测音画偏移，可单独对任意录制文件运行                                                                        |
-| `scripts/decode-check.test.mjs`      | `decodeErrors` 回归测试：只忽略 FFmpeg Opus 解析器在文件末尾的误报，中途坏包 / 截断仍计错误（`npm run test:decode`）                          |
-| `scripts/avsync.test.mjs`            | `avSync` / `syncVerdict` 回归测试：对齐样本接近 0；音频延后 150ms 通过、260ms 不通过（PRD ≤200ms，按每个配对点判定）（`npm run test:avsync`） |
-| `scripts/run-split.mjs`              | 验证 Groq 25MB 切片：切点是否落在静音里、每片是否不超限、时长是否守恒                                                                         |
-| `scripts/transcribe.mjs`             | 验证项 4：在插件页面（`chrome-extension://` 源）里跑百炼 / Groq 全流程                                                                        |
+| 路径                                 | 作用                                                                                                                                                                        |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension/`                         | 不经打包、可直接「加载已解压的扩展程序」的 MV3 插件：后台 + 离屏文档 + `lab.html` 验证页面                                                                                  |
+| `extension/lib/recorder.js`          | 录制引擎：tabCapture / 合成画面 → Web Audio 混音（+ 麦克风）→ 两路 MediaRecorder → 每 5 秒一个分片写入 OPFS                                                                 |
+| `extension/lib/media.js`             | 播放 / 拖动检查、mediabunny 解析、fMP4 → 普通 MP4 流式转封装                                                                                                                |
+| `extension/lib/dashscope.js`         | 百炼 Paraformer：临时文件上传 → 提交任务（发言人区分）→ 轮询 → 结果转成 `core` 的 `Transcript`                                                                              |
+| `extension/lib/openai-compatible.js` | Groq / OpenAI 兼容转写，按切片偏移合并                                                                                                                                      |
+| `extension/lib/split.js`             | 超过单文件上限时按静音点切片（只解码切点附近的窗口，不整段解码）                                                                                                            |
+| `scripts/run-media.mjs`              | 验证项 2、3 自动化：无头 Chrome 中录合成画面（非周期闪白 + 哔声），采样内存 / CPU，结束后校验与 ffmpeg 分析                                                                 |
+| `scripts/avsync.mjs`                 | ffprobe 容器信息 + 闪白 / 哔声按序号对齐测音画偏移，可单独对任意录制文件运行                                                                                                |
+| `scripts/decode-check.test.mjs`      | `decodeErrors` 回归测试：只忽略 FFmpeg Opus 解析器在文件末尾的误报，中途坏包 / 截断仍计错误（`npm run test:decode`）                                                        |
+| `scripts/avsync.test.mjs`            | `avSync` / `syncVerdict` 回归测试：对齐样本接近 0；音频延后 150ms 通过、260ms / 850ms 不通过，周期标记不能判定通过（PRD ≤200ms，按每个配对点判定）（`npm run test:avsync`） |
+| `scripts/run-split.mjs`              | 验证 Groq 25MB 切片：切点是否落在静音里、每片是否不超限、时长是否守恒                                                                                                       |
+| `scripts/transcribe.mjs`             | 验证项 4：在插件页面（`chrome-extension://` 源）里跑百炼 / Groq 全流程                                                                                                      |
 
 ## 准备
 
@@ -74,3 +74,9 @@ GROQ_API_KEY=gsk_...     node scripts/transcribe.mjs --provider groq --file 会�
 （Linux 无声卡的无头 Chrome 中实测 130–170ms，且每次运行不同），这部分不是录制链路的误差。
 端到端测试应按 `getOutputTimestamp()` 推算的实际播出时刻画闪白，并用 `syncVerdict` 对每个配对点按 200ms 判定，
 不能只看中位数。15fps 录制时画面起点的分辨率是一帧（约 67ms）。
+
+标记必须是非周期的（`markerTimes`，合成来源用同一规则）：周期标记下偏移只能测到「模一个周期」，
+每秒一次的标记里音频晚 850ms 与早 150ms 无法区分。`avSync` 按序号对齐闪白与哔声，对应关系不确定
+（另一种错位同样一致）时记为 `ambiguous`，`syncVerdict` 判为不通过（PR #6 审查 r4092377794）。
+ADR 0004 中的音画偏移数据是修正前用每秒整点标记、按最近哔声配对测得的，只说明偏移在整秒周期内接近 0，
+不排除整秒的错位；保留原记录，不作为 ≤200ms 已验证的依据。

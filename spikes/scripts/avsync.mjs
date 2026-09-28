@@ -172,19 +172,75 @@ function beepOnsets(file, start, dur) {
   return [...err.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]))
 }
 
-/** 每个窗口内把闪白起点和最近的哔声起点配对，offset = 音频 - 视频（毫秒，正数表示声音晚于画面） */
+/**
+ * 非周期标记序列：闪白 + 哔声（各 100ms）的起点，相邻间隔从 MARKER_INTERVALS_S 中伪随机选取且不与上一个相同。
+ * 周期信号无法区分整周期的偏移：每秒一次的标记下，音频晚 850ms 与早 150ms 完全一样（PR #6 审查 r4092377794）。
+ * 间隔两两相差 250ms，远大于 15fps 的画面分辨率（约 67ms），错一位对齐时偏移不可能保持一致。
+ * spikes/extension/lib/recorder.js 的合成来源用同样的规则生成。
+ */
+export const MARKER_INTERVALS_S = [0.75, 1, 1.25, 1.5]
+
+export function markerTimes(durationS, seed = 1) {
+  const times = []
+  let state = seed >>> 0 || 1
+  let prev = -1
+  for (let t = 0; t < durationS;) {
+    times.push(+t.toFixed(3))
+    let i
+    do {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      i = (state >>> 16) % MARKER_INTERVALS_S.length
+    } while (i === prev)
+    prev = i
+    t += MARKER_INTERVALS_S[i]
+  }
+  return times
+}
+
+/** 同一次对齐里偏移与中位数相差在此范围内算作一致（覆盖一帧的画面起点误差） */
+const CONSISTENT_MS = 100
+
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+
+/**
+ * 按序号对齐闪白与哔声：第 i 个闪白对应第 i + k 个哔声，k 取让偏移最一致的那个（窗口边缘可能多 / 少一个哔声）。
+ * 不按「最近的哔声」配对：那样偏移超过半个标记间隔时会被配到相邻的哔声上，测出一个小偏移。
+ * 另一个 k 也几乎同样一致时（周期标记，或非周期性不足）无法确定对应关系，标记为 ambiguous，不能据此判定通过。
+ */
+export function alignPulses(flashes, beeps) {
+  const candidates = []
+  for (let k = -(flashes.length - 1); k < beeps.length; k++) {
+    const offsets = []
+    for (let i = 0; i < flashes.length; i++) {
+      const b = beeps[i + k]
+      if (b !== undefined) offsets.push(Math.round((b - flashes[i]) * 1000))
+    }
+    if (offsets.length === 0) continue
+    const m = median(offsets)
+    const consistent = offsets.filter((o) => Math.abs(o - m) <= CONSISTENT_MS).length
+    candidates.push({ k, offsets, consistent, medianMs: m })
+  }
+  // 最一致的优先；同样一致时取配对更多、再取偏移更小的
+  candidates.sort(
+    (a, b) =>
+      b.consistent - a.consistent ||
+      b.offsets.length - a.offsets.length ||
+      Math.abs(a.medianMs) - Math.abs(b.medianMs),
+  )
+  const [best, second] = candidates
+  if (!best) return { offsetsMs: [], ambiguous: false }
+  const ambiguous =
+    best.consistent < 3 ||
+    (second !== undefined && second.consistent >= Math.max(3, best.consistent - 1))
+  return { offsetsMs: best.offsets, ambiguous }
+}
+
+/** 每个窗口内按序号对齐闪白起点与哔声起点，offset = 音频 - 视频（毫秒，正数表示声音晚于画面） */
 export function avSync(file, windows) {
   return windows.map(([start, dur]) => {
     const flashes = flashOnsets(file, start, dur)
     const beeps = beepOnsets(file, start, dur)
-    const offsets = flashes
-      .map(
-        (f) =>
-          beeps.reduce((best, b) => (Math.abs(b - f) < Math.abs(best - f) ? b : best), Infinity) -
-          f,
-      )
-      .filter((o) => Math.abs(o) < 0.5)
-      .map((o) => Math.round(o * 1000))
+    const { offsetsMs: offsets, ambiguous } = alignPulses(flashes, beeps)
     const sorted = [...offsets].sort((a, b) => a - b)
     return {
       window: `${start}s+${dur}s`,
@@ -192,6 +248,7 @@ export function avSync(file, windows) {
       pairs: offsets.length,
       flashes: flashes.length,
       beeps: beeps.length,
+      ambiguous,
       medianMs: sorted[Math.floor(sorted.length / 2)] ?? null,
       minMs: sorted[0] ?? null,
       maxMs: sorted.at(-1) ?? null,
@@ -205,7 +262,8 @@ export const AV_SYNC_LIMIT_MS = 200
 /**
  * 汇总 avSync 各窗口的全部配对点并按阈值判定：任一点 |offset| 超过 limitMs 即不通过；
  * 某个窗口没有配对点（闪白 / 哔声检测失败）也不通过，避免把测不到当成同步。
- * avSync 只配对 ±500ms 内的哔声，偏移更大的点会变成「未配对」：窗口边缘最多允许 1 个，否则不通过。
+ * 闪白与哔声的对应关系不确定（ambiguous，例如周期标记）的窗口不通过：偏移可能差整数个周期。
+ * 窗口边缘的闪白可能没有对应的哔声：最多允许 1 个，否则不通过。
  */
 export function syncVerdict(windows, limitMs = AV_SYNC_LIMIT_MS) {
   const all = windows.flatMap((w) => w.offsetsMs)
@@ -220,11 +278,12 @@ export function syncVerdict(windows, limitMs = AV_SYNC_LIMIT_MS) {
     maxAbsMs: all.length ? Math.max(...all.map(Math.abs)) : null,
     over: over.length,
     emptyWindows: windows.filter((w) => w.pairs === 0).map((w) => w.window),
+    ambiguousWindows: windows.filter((w) => w.ambiguous !== false).map((w) => w.window),
     unpaired: windows.map((w) => w.flashes - w.pairs),
     pass:
       all.length > 0 &&
       over.length === 0 &&
-      windows.every((w) => w.pairs > 0 && w.flashes - w.pairs <= 1),
+      windows.every((w) => w.ambiguous === false && w.pairs > 0 && w.flashes - w.pairs <= 1),
   }
 }
 

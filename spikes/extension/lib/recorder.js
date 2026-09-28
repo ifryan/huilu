@@ -42,8 +42,25 @@ export function mimeMatrix() {
 
 const pad = (n) => String(n).padStart(6, '0')
 
+/** 与 scripts/avsync.mjs 的 MARKER_INTERVALS_S / markerTimes 同一规则：相邻间隔伪随机且不与上一个相同 */
+const MARKER_INTERVALS_S = [0.75, 1, 1.25, 1.5]
+function markerIntervals(seed = 1) {
+  let state = seed >>> 0 || 1
+  let prev = -1
+  return () => {
+    let i
+    do {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      i = (state >>> 16) % MARKER_INTERVALS_S.length
+    } while (i === prev)
+    prev = i
+    return MARKER_INTERVALS_S[i]
+  }
+}
+
 /**
- * 合成来源：画布 + 振荡器。每秒整点同时「闪白 + 1kHz 哔声 100ms」，用于离线检测音画同步。
+ * 合成来源：画布 + 振荡器。按非周期的时刻同时「闪白 + 1kHz 哔声 100ms」，用于离线检测音画同步。
+ * 不用每秒整点：周期标记下偏移会差整数个周期而无法分辨（PR #6 审查 r4092377794）。
  * 画面由 Worker 定时驱动（隐藏文档里的 setInterval / rAF 会被节流）。
  */
 function syntheticSource(ctx, { width, height, fps, busy }) {
@@ -59,21 +76,25 @@ function syntheticSource(ctx, { width, height, fps, busy }) {
   gate.gain.value = 0
   osc.connect(gate)
   osc.start()
-  // 预先排好未来的哔声，每次 tick 补排
+  // 预先排好未来的哔声，每次 tick 补排；markers 记下已排的时刻，画面按同样的时刻闪白
+  const nextInterval = markerIntervals()
+  const markers = []
   let scheduledUntil = Math.ceil(ctx.currentTime)
   const scheduleBeeps = () => {
     while (scheduledUntil < ctx.currentTime + 5) {
       gate.gain.setValueAtTime(0.5, scheduledUntil)
       gate.gain.setValueAtTime(0, scheduledUntil + 0.1)
-      scheduledUntil += 1
+      markers.push(scheduledUntil)
+      scheduledUntil += nextInterval()
     }
+    while (markers.length > 0 && markers[0] + 0.1 < ctx.currentTime) markers.shift()
   }
 
   let frame = 0
   const draw = () => {
     scheduleBeeps()
     const t = ctx.currentTime
-    const flash = t % 1 < 0.1
+    const flash = markers.some((m) => t >= m && t < m + 0.1)
     g.fillStyle = flash ? '#fff' : '#101418'
     g.fillRect(0, 0, width, height)
     if (!flash) {
