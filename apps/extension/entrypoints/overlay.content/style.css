@@ -4,7 +4,16 @@
  * 悬浮面板在网页的 Shadow DOM 里：Tailwind 的 rem 会随网页 html 的 font-size 变化，
  * 这里把间距与字号固定为 px；深色模式变量也要作用在 :host 上。
  */
+/* 显式覆盖 WXT 的 all: initial !important，宿主本身不能占网页布局空间。 */
 :host {
+  position: fixed !important;
+  inset: 0 auto auto 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  display: block !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
   --spacing: 4px;
   --text-xs: 12px;
   --text-xs--line-height: 16px;
