@@ -1266,3 +1266,32 @@ describe('ProcessingQueue', () => {
     expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
   })
 })
+
+it('runs a persisted job even when the initial source status update fails', async () => {
+  const t = setup({ meeting: meeting({ status: 'failed' }) })
+  vi.spyOn(t.source, 'writeMeeting').mockRejectedValueOnce(new Error('source write failed'))
+  const idle = t.onIdle()
+  await expect(t.queue.enqueue(MEETING_ID)).rejects.toThrow('source write failed')
+  await idle
+  expect(await t.job()).toMatchObject({ state: 'done' })
+  t.queue.stop()
+})
+
+it('retries folder reconciliation when saving a newly authorized job fails', async () => {
+  const t = setup()
+  t.deps.startRetryMs = 5
+  await t.jobs.put({
+    meetingId: MEETING_ID,
+    state: 'waitingFolder',
+    attempts: 1,
+    checkpoints: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  vi.spyOn(t.jobs, 'put').mockRejectedValueOnce(new Error('idb write failed'))
+  const idle = t.onIdle()
+  await expect(t.queue.onFolderAuthorized()).rejects.toThrow('idb write failed')
+  await idle
+  expect(await t.job()).toMatchObject({ state: 'done' })
+  t.queue.stop()
+})

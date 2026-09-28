@@ -41,8 +41,8 @@ export interface LocalRecording {
 export async function listLocalRecordings(store: RecordingStore): Promise<LocalRecording[]> {
   const out: LocalRecording[] = []
   for (const id of (await store.list()).reverse()) {
-    const dir = await store.open(id)
-    const manifest = await dir?.readManifest()
+    const dir = await store.open(id).catch(() => undefined)
+    const manifest = await dir?.readManifest().catch(() => undefined)
     if (!dir || !manifest) {
       out.push({
         id,

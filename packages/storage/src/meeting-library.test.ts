@@ -120,3 +120,15 @@ describe('folder authority and atomic metadata editing', () => {
     await pipeline
   })
 })
+
+it('isolates a meeting.json directory and disables ambiguous duplicate IDs', async () => {
+  const store = await fixture()
+  await store.writeFile('wrong/meeting.json/nested.txt', 'retained')
+  await store.writeFile('copy/meeting.json', JSON.stringify(meeting))
+  const entries = await scanMeetings(store)
+  expect(entries.find((e) => e.dir === 'wrong')?.issue).toBe('damaged')
+  expect(entries.filter((e) => e.meeting?.id === 'a').every((e) => e.issue === 'duplicate')).toBe(
+    true,
+  )
+  expect(await (await store.readFile('wrong/meeting.json/nested.txt'))!.text()).toBe('retained')
+})

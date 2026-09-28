@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   processRequests: [] as unknown[],
   folderAuthorizedCalls: 0,
   /** IndexedDB 中的处理任务（后台只读） */
+  jobsReadFailures: 0,
   jobs: [] as { meetingId: string; state: string }[],
   /** declarativeNetRequest 会话规则 */
   sessionRules: [] as { id: number; condition: { urlFilter?: string } }[],
@@ -77,7 +78,14 @@ vi.mock('@/platform', () => ({ openAppPage: async () => {}, hasHostPermission: a
 
 vi.mock('@huilu/pipeline/jobs', () => ({
   IdbJobStore: class {
-    list = async () => h.jobs
+    list = async () => {
+      if (h.jobsReadFailures > 0) {
+        h.jobsReadFailures--
+        throw new Error('IndexedDB unavailable')
+      }
+      return h.jobs
+    }
+    get = async (id: string) => h.jobs.find((j) => j.meetingId === id)
   },
   isActive: (j: { state: string }) => j.state === 'queued' || j.state === 'running',
 }))
@@ -121,6 +129,7 @@ beforeEach(() => {
     processRequests: [],
     folderAuthorizedCalls: 0,
     jobs: [],
+    jobsReadFailures: 0,
     sessionRules: [],
   })
   h.recorderWindows.clear()
@@ -385,4 +394,13 @@ describe('GLM Coding Plan header rule (experimental)', () => {
     await call('processingSettings')
     expect(h.sessionRules).toHaveLength(1)
   })
+})
+
+it('wakes the queue recovery when startup job discovery fails', async () => {
+  await settle()
+  h.jobsReadFailures = 1
+  h.processRequests = []
+  await fakeBrowser.runtime.onStartup.trigger()
+  await settle()
+  expect(h.processRequests).toContainEqual({})
 })

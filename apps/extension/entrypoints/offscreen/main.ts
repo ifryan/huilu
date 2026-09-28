@@ -39,6 +39,12 @@ const queue = new ProcessingQueue({
       sendMessage('processingHasHostPermission', url),
     ),
   splitter: createMediabunnySplitter(),
+  onChange: async (job) => {
+    if (job.state === 'done')
+      await sendMessage('processingCompleted', job.meetingId).catch((e: unknown) =>
+        console.error('[huilu] result notification failed', e),
+      )
+  },
   onIdle: () => {
     void sendMessage('processingIdle').catch(() => {})
   },

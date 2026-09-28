@@ -303,3 +303,12 @@ describe('config import / export', () => {
     expect(merged.transcription.configs['dashscope-paraformer']?.apiKey).toBe('sk-t')
   })
 })
+
+it('does not offer processing for an unregistered provider with a valid fallback-shaped config', () => {
+  expect(
+    isConfigured('transcription', {
+      providerId: 'unknown',
+      configs: { unknown: { region: 'cn', apiKey: 'fixture', model: 'paraformer-v2' } },
+    }),
+  ).toBe(false)
+})

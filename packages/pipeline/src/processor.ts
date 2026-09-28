@@ -84,7 +84,7 @@ export interface ProcessingDeps {
   /** 队列读写任务存储（IndexedDB）失败后重新执行的起始间隔，按次数翻倍，上限 1 分钟；默认 1 秒 */
   storageRetryMs?: number
   /** 任务有变化（状态、进度）时回调，用于通知界面刷新 */
-  onChange?: (job: ProcessingJob) => void
+  onChange?: (job: ProcessingJob) => void | Promise<void>
   /** 队列里没有待执行的任务了：后台据此关闭空闲的离屏文档 */
   onIdle?: () => void
 }
@@ -281,22 +281,20 @@ export class ProcessingQueue {
       updatedAt: now,
     }
     await this.#save(job)
-    if (meeting.status !== 'processing') {
-      await this.deps.source.writeMeeting(meetingId, { ...meeting, status: 'processing' })
+    try {
+      if (meeting.status !== 'processing') {
+        await this.deps.source.writeMeeting(meetingId, { ...meeting, status: 'processing' })
+      }
+    } finally {
+      this.kick()
     }
-    this.kick()
     return { queued: true, job }
   }
 
   /** 数据文件夹重新授权后：等待写入的任务重新排队 */
   async onFolderAuthorized(): Promise<void> {
-    if (!(await this.deps.folder.isReady())) return
-    for (const job of await this.deps.jobs.list()) {
-      if (job.state === 'waitingFolder') {
-        await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })
-      }
-    }
-    this.kick()
+    this.#reconciled = false
+    await this.start()
   }
 
   /** 停止正在执行的任务（离屏文档关闭前）；任务回到 queued，下次启动时继续 */
@@ -365,7 +363,7 @@ export class ProcessingQueue {
   async #save(job: ProcessingJob): Promise<void> {
     job.updatedAt = this.#now()
     await this.deps.jobs.put(job)
-    this.deps.onChange?.(structuredClone(job))
+    await this.deps.onChange?.(structuredClone(job))
   }
 
   #checkpoint(job: ProcessingJob, key: string): Checkpoint {

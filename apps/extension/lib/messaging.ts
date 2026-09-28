@@ -96,6 +96,7 @@ interface ProtocolMap {
   processingHasHostPermission(url: string): boolean
   /** 处理队列已空：后台检查后关闭空闲的离屏文档 */
   processingIdle(): void
+  processingCompleted(meetingId: string): void
 }
 
 /** 录制窗口自己弹选择框取得 streamId，后台只传录制设置 */

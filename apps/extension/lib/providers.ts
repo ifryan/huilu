@@ -40,6 +40,7 @@ export function getProvider(kind: ProviderKind, id: string) {
 export function isConfigured(kind: ProviderKind, settings: ProviderSettings): boolean {
   const saved = settings.configs[settings.providerId]
   return (
+    hasProvider(kind, settings.providerId) &&
     saved !== undefined &&
     getProvider(kind, settings.providerId).configSchema.safeParse(saved).success
   )

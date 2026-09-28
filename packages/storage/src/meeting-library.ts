@@ -13,14 +13,18 @@ export interface MeetingDocument {
   warnings: ('transcript' | 'summary')[]
 }
 
-export async function scanMeetings(storage: StorageAdapter): Promise<MeetingEntry[]> {
+export async function scanMeetings(adapter: StorageAdapter): Promise<MeetingEntry[]> {
   const entries: MeetingEntry[] = []
   const ids = new Set<string>()
-  for (const dir of await storage.listMeetingDirs()) {
+  for (const dir of await adapter.listMeetingDirs()) {
     try {
-      const blob = await storage.readFile(`${dir}/meeting.json`)
+      const blob = await adapter.readFile(`${dir}/meeting.json`)
       const meeting = Meeting.parse(JSON.parse(await blob!.text()))
       const duplicate = ids.has(meeting.id)
+      if (duplicate) {
+        const previous = entries.find((entry) => entry.meeting?.id === meeting.id)
+        if (previous) previous.issue = 'duplicate'
+      }
       ids.add(meeting.id)
       entries.push({
         key: dir,
@@ -30,7 +34,7 @@ export async function scanMeetings(storage: StorageAdapter): Promise<MeetingEntr
       })
     } catch (error) {
       // A revoked root cannot be mistaken for a successful empty rebuild.
-      if (!(await storage.isReady())) throw error
+      if (!(await adapter.isReady())) throw error
       entries.push({ key: dir, dir, issue: 'damaged' })
     }
   }
@@ -40,18 +44,18 @@ export async function scanMeetings(storage: StorageAdapter): Promise<MeetingEntr
 }
 
 export async function readMeetingDocument(
-  storage: StorageAdapter,
+  adapter: StorageAdapter,
   dir: string,
   id: string,
 ): Promise<MeetingDocument> {
-  const blob = await storage.readFile(`${dir}/meeting.json`)
+  const blob = await adapter.readFile(`${dir}/meeting.json`)
   if (!blob) throw new Error('missingMeeting')
   const meeting = Meeting.parse(JSON.parse(await blob.text()))
   if (meeting.id !== id) throw new Error('foreignMeeting')
   const result: MeetingDocument = { meeting, warnings: [] }
   for (const kind of ['transcript', 'summary'] as const) {
     try {
-      const file = await storage.readFile(`${dir}/${kind}.json`)
+      const file = await adapter.readFile(`${dir}/${kind}.json`)
       if (!file) continue
       const data: unknown = JSON.parse(await file.text())
       if (kind === 'transcript') {
@@ -100,14 +104,14 @@ export function withMeetingLock<T>(id: string, action: () => Promise<T>): Promis
 }
 
 export async function editMeeting(
-  storage: StorageAdapter,
+  adapter: StorageAdapter,
   dir: string,
   id: string,
   edit: MeetingEdit,
 ): Promise<Meeting> {
   return withMeetingLock(id, async () => {
     const path = `${dir}/meeting.json`
-    const file = await storage.readFile(path)
+    const file = await adapter.readFile(path)
     if (!file) throw new Error('missingMeeting')
     const before = await file.text()
     const raw = JSON.parse(before) as Record<string, unknown>
@@ -142,9 +146,9 @@ export async function editMeeting(
     meeting.editRevision = (meeting.editRevision ?? 0) + 1
     const content = JSON.stringify({ ...raw, ...Meeting.parse(meeting) }, null, 2)
     // Detect outside editors before creating the atomic writable replacement.
-    if ((await (await storage.readFile(path))?.text()) !== before) throw new EditConflictError()
-    await storage.writeFile(path, content)
-    if ((await (await storage.readFile(path))?.text()) !== content) throw new Error('writeFailed')
+    if ((await (await adapter.readFile(path))?.text()) !== before) throw new EditConflictError()
+    await adapter.writeFile(path, content)
+    if ((await (await adapter.readFile(path))?.text()) !== content) throw new Error('writeFailed')
     return meeting
   })
 }

@@ -150,3 +150,40 @@ describe('recordingSource', () => {
     expect(await source.readAudio('missing')).toBeUndefined()
   })
 })
+
+it('rejects missing recordings and missing declared tracks instead of committing empty media', async () => {
+  const fs = new MemoryFs()
+  const store = new RecordingStore(fs.provider)
+  const source = recordingSource(store)
+  await expect(source.readMedia('missing')).rejects.toMatchObject({ code: 'sourceDataUnavailable' })
+  const dir = await store.create('broken')
+  await dir.writeManifest({
+    version: 1,
+    id: 'broken',
+    title: 'Broken',
+    mode: 'audio',
+    videoSource: 'tab',
+    language: 'en',
+    microphone: false,
+    state: 'stopped',
+    startedAt: 0,
+    updatedAt: 0,
+    activeMs: 1000,
+    tracks: {},
+  })
+  await dir.writeMeeting({
+    schemaVersion: 1,
+    id: 'broken',
+    title: 'Broken',
+    createdAt: new Date(0).toISOString(),
+    durationMs: 1000,
+    mode: 'audio',
+    language: 'en',
+    status: 'processing',
+    speakers: [],
+    markers: [],
+    providers: {},
+    media: { audio: { mimeType: 'audio/webm' } },
+  })
+  await expect(source.readMedia('broken')).rejects.toMatchObject({ code: 'sourceDataUnavailable' })
+})
