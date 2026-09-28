@@ -5,6 +5,23 @@ and locally exercised. This is ready for code review, **not full product accepta
 real service compatibility and the 60-minute Chinese meeting / three-minute
 processing target remain unverified. U-35 has not been started.
 
+## PR #7 第二轮三项审查修复（2026-09-28，MBP 本地，当前增量）
+
+三条新意见（06:46:40 UTC）均核实有效，在 MBP `Ryans-MBP.local` 的
+`/Users/ryan/Code/Labs/huilu-worktrees/pr-6` 修复，基线为已推送
+`2f6537c810c60f26a76827c65fc3f3efcbe283c1`；新提交未 push，GitHub 线程未改动。
+
+| 评论 ID    | 修复与回归证据                                                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4119300591 | 启动恢复成功后才标记完成；失败时定时重试，offscreen:process / folderAuthorized 先重新 start()。并发 start 共用一次恢复，部分恢复后不重复退还次数。 |
+| 4119300594 | Paraformer 下载结果和构造的 Transcript 运行时校验；缺失、非数字、null、非有限、负值、反向时间戳统一 badResponse；接受零长度、重叠、空结果。        |
+| 4119300598 | 所有权探测遇到 TypeMismatchError（候选名是普通文件）视为他人内容并尝试 (2)；IO 错误和权限失效照常失败 / 等待授权，不跳过。                         |
+
+新增回归在修复前代码上失败、修复后通过。MBP `pnpm check` / `pnpm build` 直接退出码均为 **0**，
+共 **319** 项测试：core 14、i18n 3、storage 26、recorder 32、providers 106、pipeline 59、extension 79
+（未改动的四套复用本机同代码缓存）。本轮按 RH 要求不做浏览器 / 录制测试，由 RH 手动验收；
+未调用真实 API。
+
 ## PR #7 九项审查修复（2026-09-28，当前增量）
 
 九条意见均核实有效，已在原 U-34 工作树本地修复。基线为已推送
