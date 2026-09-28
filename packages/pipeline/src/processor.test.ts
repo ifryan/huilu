@@ -153,6 +153,7 @@ function setup(
     services: async () => services,
     splitter: options.splitter,
     now: () => now,
+    startRetryMs: undefined as number | undefined,
     onIdle: () => idle(),
   }
   const queue = new ProcessingQueue(deps)
@@ -542,7 +543,14 @@ describe('ProcessingQueue', () => {
     const t = setup()
     t.deps.startRetryMs = 60_000
     for (const meetingId of ['a', 'b']) {
-      await t.jobs.put({ meetingId, state: 'running', attempts: 3, checkpoints: {}, createdAt: 1, updatedAt: 1 })
+      await t.jobs.put({
+        meetingId,
+        state: 'running',
+        attempts: 3,
+        checkpoints: {},
+        createdAt: 1,
+        updatedAt: 1,
+      })
     }
     const put = t.jobs.put.bind(t.jobs)
     let failB = true
@@ -760,7 +768,11 @@ describe('ProcessingQueue', () => {
   })
 
   it.each([
-    ['an IO error', () => new DOMException('disk error', 'NotReadableError'), { error: { code: 'writeFailed' } }],
+    [
+      'an IO error',
+      () => new DOMException('disk error', 'NotReadableError'),
+      { error: { code: 'writeFailed' } },
+    ],
     ['a permission loss', () => new FolderNotReadyError('prompt'), { state: 'waitingFolder' }],
   ])('does not skip a candidate folder on %s', async (_name, error, expected) => {
     const t = setup()

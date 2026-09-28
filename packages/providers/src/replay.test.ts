@@ -315,7 +315,10 @@ describe('paraformer.transcribe', () => {
     ['missing end_time', sentence({ begin_time: 100 })],
     ['string timestamp', sentence({ begin_time: '100', end_time: 200 })],
     ['null timestamp', sentence({ begin_time: null, end_time: 200 })],
-    ['non-finite timestamp', '{"transcripts":[{"sentences":[{"text":"x","begin_time":0,"end_time":1e400}]}]}'],
+    [
+      'non-finite timestamp',
+      '{"transcripts":[{"sentences":[{"text":"x","begin_time":0,"end_time":1e400}]}]}',
+    ],
     ['negative timestamp', sentence({ begin_time: -5, end_time: 200 })],
     ['reversed timestamps', sentence({ begin_time: 300, end_time: 200 })],
     ['malformed speaker', sentence({ begin_time: 0, end_time: 200, speaker_id: 'a' })],
