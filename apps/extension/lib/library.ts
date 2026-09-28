@@ -13,7 +13,12 @@ const store = new RecordingStore(() => navigator.storage.getDirectory())
 export const libraryKey = ['localRecordings'] as const
 
 export function useLocalRecordings() {
-  return useQuery({ queryKey: libraryKey, queryFn: () => listLocalRecordings(store) })
+  return useQuery({
+    queryKey: libraryKey,
+    queryFn: () => listLocalRecordings(store),
+    // 没有录制行时也要发现后台刚结束的录制；可见页面才轮询。
+    refetchInterval: 3000,
+  })
 }
 
 /** 按分片拼出可播放 / 下载的文件（File 是惰性的，不会把整段读进内存） */
