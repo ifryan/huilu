@@ -1,0 +1,27 @@
+{
+  "name": "@huilu/pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jobs": "./src/jobs/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@huilu/core": "workspace:*",
+    "@huilu/providers": "workspace:*",
+    "@huilu/storage": "workspace:*",
+    "mediabunny": "^1.60.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}
