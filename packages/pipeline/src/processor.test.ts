@@ -197,6 +197,7 @@ describe('ProcessingQueue', () => {
       llmProviderId: 'fake-llm',
     })
     expect(t.folder.writes).toEqual([
+      `${DIR}/.huilu-owner.json`,
       `${DIR}/video.mp4`,
       `${DIR}/audio.webm`,
       `${DIR}/transcript.json`,
@@ -507,6 +508,60 @@ describe('ProcessingQueue', () => {
     expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
     expect(await t.folder.json(`${DIR}/meeting.json`)).toEqual({ id: 'someone-else' })
     expect(t.folder.files.has(`${DIR} (2)/transcript.json`)).toBe(true)
+  })
+
+  it('rechecks a cached directory after switching to a folder owned by another meeting', async () => {
+    const t = setup()
+    let idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    // The user selects a different root containing an identically named directory.
+    t.folder.files.clear()
+    const other = meeting({ id: 'other', title: 'Do not overwrite', status: 'ready' })
+    await t.folder.writeFile(`${DIR}/meeting.json`, JSON.stringify(other))
+    await t.folder.writeFile(`${DIR}/audio.webm`, 'unrelated audio')
+    idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
+    expect(await t.folder.json(`${DIR}/meeting.json`)).toEqual(other)
+    expect(await t.folder.text(`${DIR}/audio.webm`)).toBe('unrelated audio')
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('reserves a partial directory before a failed write so another job cannot adopt it', async () => {
+    const first = setup()
+    const write = first.folder.writeFile.bind(first.folder)
+    vi.spyOn(first.folder, 'writeFile').mockImplementation(async (path, data) => {
+      if (path.endsWith('/summary.md')) throw new Error('disk unavailable')
+      await write(path, data)
+    })
+    await first.queue.enqueue(MEETING_ID)
+    await first.settle()
+    first.queue.stop()
+    expect(first.folder.files.has(`${DIR}/meeting.json`)).toBe(false)
+    expect(await first.folder.json(`${DIR}/.huilu-owner.json`)).toEqual({ id: MEETING_ID })
+    vi.mocked(first.folder.writeFile).mockImplementation(write)
+    const second = setup({ meeting: meeting({ id: 'second' }) })
+    second.deps.folder = first.folder
+    const idle = second.onIdle()
+    await second.queue.enqueue('second')
+    await idle
+    expect(await second.jobs.get('second')).toMatchObject({
+      state: 'done',
+      folderDir: `${DIR} (2)`,
+    })
+    expect(await first.folder.json(`${DIR}/.huilu-owner.json`)).toEqual({ id: MEETING_ID })
+  })
+
+  it('preserves unowned partial artifacts instead of mixing them into a new meeting', async () => {
+    const t = setup()
+    await t.folder.writeFile(`${DIR}/transcript.json`, 'unrelated partial transcript')
+    const idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
+    expect(await t.folder.text(`${DIR}/transcript.json`)).toBe('unrelated partial transcript')
   })
 
   it('keeps speaker names and titles the user edited in the folder', async () => {

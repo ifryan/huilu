@@ -477,26 +477,41 @@ export class ProcessingQueue {
     return { summary: normalizeSummary(raw, speakers, meeting.durationMs) }
   }
 
-  /** 第一次写入时确定子文件夹；同名文件夹属于另一场会议时加序号，绝不覆盖别的会议 */
-  async #folderDir(job: ProcessingJob, meeting: Meeting): Promise<string> {
-    if (job.folderDir) return job.folderDir
+  /** Verify ownership on every write, including after the user changes folders. */
+  async #folderDir(job: ProcessingJob, meeting: Meeting, mediaNames: string[]): Promise<string> {
     const base = meetingFolderName(meeting)
-    for (let n = 1; n < 100; n++) {
-      const dir = n === 1 ? base : `${base} (${n})`
-      const existing = await this.deps.folder.readFile(`${dir}/meeting.json`)
-      let owner: string | undefined
-      if (existing) {
+    const candidates = [
+      ...(job.folderDir ? [job.folderDir] : []),
+      ...Array.from({ length: 99 }, (_, i) => (i === 0 ? base : `${base} (${i + 1})`)),
+    ]
+    for (const dir of new Set(candidates)) {
+      const metadata = await this.deps.folder.readFile(`${dir}/meeting.json`)
+      const reservation = await this.deps.folder.readFile(`${dir}/.huilu-owner.json`)
+      const ownedByMeeting = async (blob: Blob) => {
         try {
-          owner = (JSON.parse(await existing.text()) as { id?: string }).id
+          return (JSON.parse(await blob.text()) as { id?: unknown }).id === meeting.id
         } catch {
-          owner = undefined
+          return false
         }
       }
-      if (!existing || owner === meeting.id) {
-        job.folderDir = dir
-        await this.#save(job)
-        return dir
+      if (metadata && !(await ownedByMeeting(metadata))) continue
+      if (reservation && !(await ownedByMeeting(reservation))) continue
+      if (!metadata && !reservation) {
+        // A partial directory without an ownership record is not safe to reuse.
+        const names = [...mediaNames, 'transcript.json', 'summary.json', 'summary.md']
+        const files = await Promise.all(
+          names.map((name) => this.deps.folder.readFile(`${dir}/${name}`)),
+        )
+        if (files.some(Boolean)) continue
       }
+      // Reserve before writing artifacts: another job must not adopt this
+      // directory if writing fails before the final meeting.json commit.
+      if (!reservation) {
+        await this.deps.folder.writeFile(`${dir}/.huilu-owner.json`, toJson({ id: meeting.id }))
+      }
+      job.folderDir = dir
+      await this.#save(job)
+      return dir
     }
     throw new PipelineError('writeFailed', false, `no free folder name for ${base}`)
   }
@@ -514,8 +529,12 @@ export class ProcessingQueue {
     locale: string,
   ): Promise<void> {
     const folder = this.deps.folder
-    const dir = await this.#folderDir(job, meeting)
     const media = await this.deps.source.readMedia(meeting.id)
+    const dir = await this.#folderDir(
+      job,
+      meeting,
+      media.map((m) => m.name),
+    )
     const total = media.reduce((sum, m) => sum + m.blob.size, 0) || 1
     let written = 0
     for (const { name, blob } of media) {
