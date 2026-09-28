@@ -71,6 +71,8 @@ export interface ProcessingDeps {
   services(): Promise<ResolvedServices>
   splitter?: AudioSplitter
   now?: () => number
+  /** 启动恢复（读取任务 / 检查文件夹权限）失败后多久自动重试，默认 5 秒 */
+  startRetryMs?: number
   /** 任务有变化（状态、进度）时回调，用于通知界面刷新 */
   onChange?: (job: ProcessingJob) => void
   /** 队列里没有待执行的任务了：后台据此关闭空闲的离屏文档 */
@@ -134,7 +136,10 @@ export class ProcessingQueue {
   #kickAgain = false
   #timer?: ReturnType<typeof setTimeout>
   #current?: { meetingId: string; controller: AbortController }
-  #started = false
+  /** 启动恢复成功完成后才为 true；失败时保持 false，下次 start() / 定时重试会重新恢复 */
+  #reconciled = false
+  #starting?: Promise<void>
+  #retryTimer?: ReturnType<typeof setTimeout>
   #stopped = false
 
   constructor(private readonly deps: ProcessingDeps) {}
@@ -143,19 +148,47 @@ export class ProcessingQueue {
     return (this.deps.now ?? Date.now)()
   }
 
-  /** 离屏文档启动时调用：上次没跑完（running）的任务改回 queued 并继续 */
-  async start(): Promise<void> {
+  /**
+   * 离屏文档启动时调用：上次没跑完（running）的任务改回 queued 并继续。
+   * 恢复失败（读取任务 / 检查文件夹权限出错）时抛出并定时重试，再次调用 start() 也会重试；
+   * 已恢复后再调用只触发队列。并发调用共用同一次恢复，不会重复退还尝试次数
+   */
+  start(): Promise<void> {
     this.#stopped = false
-    if (this.#started) return this.kick()
-    this.#started = true
-    for (const job of await this.deps.jobs.list()) {
-      if (job.state === 'running') {
-        await this.#save({ ...job, state: 'queued', attempts: Math.max(0, job.attempts - 1) })
-      } else if (job.state === 'waitingFolder' && (await this.deps.folder.isReady())) {
-        await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })
-      }
+    if (this.#reconciled) {
+      this.kick()
+      return Promise.resolve()
     }
-    this.kick()
+    this.#starting ??= this.#reconcile()
+      .finally(() => (this.#starting = undefined))
+      .then(() => this.kick())
+    return this.#starting
+  }
+
+  async #reconcile(): Promise<void> {
+    clearTimeout(this.#retryTimer)
+    try {
+      for (const listed of await this.deps.jobs.list()) {
+        // 部分恢复后重试：已改回 queued 的不会再退还；本进程正在执行的不是中断遗留
+        if (listed.meetingId === this.#current?.meetingId) continue
+        const job = await this.deps.jobs.get(listed.meetingId)
+        if (job?.state === 'running') {
+          await this.#save({ ...job, state: 'queued', attempts: Math.max(0, job.attempts - 1) })
+        } else if (job?.state === 'waitingFolder' && (await this.deps.folder.isReady())) {
+          await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })
+        }
+      }
+    } catch (e) {
+      if (!this.#stopped) {
+        this.#retryTimer = setTimeout(() => {
+          this.start().catch((err: unknown) => {
+            console.warn('[huilu] processing queue recovery failed again', err)
+          })
+        }, this.deps.startRetryMs ?? 5000)
+      }
+      throw e
+    }
+    this.#reconciled = true
   }
 
   /** 是否还有需要离屏文档保持运行的任务 */
@@ -227,6 +260,7 @@ export class ProcessingQueue {
   stop(): void {
     this.#stopped = true
     clearTimeout(this.#timer)
+    clearTimeout(this.#retryTimer)
     this.#current?.controller.abort()
   }
 
@@ -259,6 +293,8 @@ export class ProcessingQueue {
             }
             break
           }
+          // 启动恢复进行中：不开始新任务，恢复完成后会再次触发队列
+          if (this.#starting) break
           await this.#run(due)
         }
       } while (this.#kickAgain)

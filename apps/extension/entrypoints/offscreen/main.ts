@@ -44,10 +44,18 @@ const queue = new ProcessingQueue({
   },
 })
 
-// 文档创建即恢复上次中断的任务（浏览器重启、离屏文档被关闭）
-const started = queue.start().catch((e: unknown) => {
-  console.error('[huilu] failed to start the processing queue', e)
-})
+/**
+ * 恢复上次中断的任务（浏览器重启、离屏文档被关闭）。失败时队列会定时重试；
+ * 每次处理请求也会先确保恢复完成：已恢复时只触发队列，未恢复时重新执行恢复
+ */
+function startQueue() {
+  return queue.start().catch((e: unknown) => {
+    console.error('[huilu] failed to start the processing queue', e)
+  })
+}
+
+// 文档创建即恢复
+void startQueue()
 
 onMessage('offscreen:start', ({ data }) => controller.start(data))
 onMessage('offscreen:pause', () => controller.pause())
@@ -59,12 +67,12 @@ onMessage('offscreen:recover', async ({ data: id }) => (await controller.recover
 onMessage('offscreen:discard', ({ data: id }) => controller.discard(id))
 
 onMessage('offscreen:process', async ({ data }) => {
-  await started
-  if (!data.meetingId) {
-    queue.kick()
-    return null
-  }
+  await startQueue()
+  if (!data.meetingId) return null
   return queue.enqueue(data.meetingId, { auto: data.auto })
 })
 onMessage('offscreen:processingBusy', () => queue.isBusy())
-onMessage('offscreen:folderAuthorized', () => queue.onFolderAuthorized())
+onMessage('offscreen:folderAuthorized', async () => {
+  await startQueue()
+  await queue.onFolderAuthorized()
+})

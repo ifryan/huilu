@@ -495,6 +495,78 @@ describe('ProcessingQueue', () => {
     t.queue.stop()
   })
 
+  it('retries startup recovery after reading the jobs fails, then finishes the interrupted job', async () => {
+    const t = setup()
+    t.deps.startRetryMs = 60_000
+    await t.jobs.put({
+      meetingId: MEETING_ID,
+      state: 'running',
+      attempts: 2,
+      checkpoints: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const list = vi.spyOn(t.jobs, 'list').mockRejectedValueOnce(new Error('IndexedDB unavailable'))
+    await expect(t.queue.start()).rejects.toThrow('IndexedDB unavailable')
+    expect(await t.job()).toMatchObject({ state: 'running', attempts: 2 })
+    // offscreen:process 再次调用 start()：重新恢复，而不是只 kick 已卡住的 running 任务
+    const idle = t.onIdle()
+    await t.queue.start()
+    await idle
+    expect(list).toHaveBeenCalled()
+    expect(await t.job()).toMatchObject({ state: 'done', attempts: 2 })
+    expect(await t.queue.isBusy()).toBe(false)
+    t.queue.stop()
+  })
+
+  it('retries startup recovery on its own after a folder permission check fails', async () => {
+    const t = setup()
+    t.deps.startRetryMs = 5
+    await t.jobs.put({
+      meetingId: MEETING_ID,
+      state: 'waitingFolder',
+      attempts: 1,
+      checkpoints: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    vi.spyOn(t.folder, 'isReady').mockRejectedValueOnce(new Error('permission query failed'))
+    const idle = t.onIdle()
+    await expect(t.queue.start()).rejects.toThrow('permission query failed')
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done' })
+    t.queue.stop()
+  })
+
+  it('does not refund attempts twice for concurrent or partially completed recovery', async () => {
+    const t = setup()
+    t.deps.startRetryMs = 60_000
+    for (const meetingId of ['a', 'b']) {
+      await t.jobs.put({ meetingId, state: 'running', attempts: 3, checkpoints: {}, createdAt: 1, updatedAt: 1 })
+    }
+    const put = t.jobs.put.bind(t.jobs)
+    let failB = true
+    vi.spyOn(t.jobs, 'put').mockImplementation(async (job) => {
+      if (job.meetingId === 'b' && failB) {
+        failB = false
+        throw new Error('write failed')
+      }
+      return put(job)
+    })
+    const kick = vi.spyOn(t.queue, 'kick').mockImplementation(() => {})
+    await expect(t.queue.start()).rejects.toThrow('write failed')
+    expect(await t.jobs.get('a')).toMatchObject({ state: 'queued', attempts: 2 })
+    expect(await t.jobs.get('b')).toMatchObject({ state: 'running', attempts: 3 })
+    await Promise.all([t.queue.start(), t.queue.start()])
+    expect(await t.jobs.get('a')).toMatchObject({ state: 'queued', attempts: 2 })
+    expect(await t.jobs.get('b')).toMatchObject({ state: 'queued', attempts: 2 })
+    // 恢复完成后再调用只触发队列，不再改动任务
+    await t.queue.start()
+    expect(await t.jobs.get('a')).toMatchObject({ attempts: 2 })
+    expect(kick).toHaveBeenCalled()
+    t.queue.stop()
+  })
+
   it.each([true, false])(
     'reconciles waiting jobs against actual folder permission (%s)',
     async (ready) => {
