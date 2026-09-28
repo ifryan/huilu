@@ -13,9 +13,11 @@ import {
   type MeetingDocument,
   type MeetingEntry,
 } from '@huilu/storage'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo } from 'react'
 import { opfs } from '@/platform/storage'
-import { listRecordings, openRecordingTrack } from './library'
+import { listRecordings, openRecordingTrack, useLocalRecordings } from './library'
+import { dataFolderAuthorizedSetting } from './settings'
 
 const index = new MeetingIndex()
 const handles = new IdbHandleStore()
@@ -44,12 +46,8 @@ export interface LibrarySnapshot {
   scanFailed: boolean
 }
 
-export async function loadLibrary(): Promise<LibrarySnapshot> {
-  const [local, root, cached] = await Promise.all([
-    listRecordings(),
-    currentRoot(),
-    index.read().catch(() => undefined),
-  ])
+async function loadFolderLibrary() {
+  const [root, cached] = await Promise.all([currentRoot(), index.read().catch(() => undefined)])
   let entries: MeetingEntry[] = []
   let available = false
   let scanFailed = false
@@ -68,6 +66,13 @@ export async function loadLibrary(): Promise<LibrarySnapshot> {
       }
     }
   }
+  return { entries, root, available, scanFailed }
+}
+
+function combineLibrary(
+  { entries, root, available, scanFailed }: Awaited<ReturnType<typeof loadFolderLibrary>>,
+  local: LocalRecording[],
+): LibrarySnapshot {
   const byId = new Map(local.map((r) => [r.id, r]))
   const items: LibraryItem[] = entries.map((entry) => {
     const recording = entry.meeting && byId.get(entry.meeting.id)
@@ -99,8 +104,35 @@ export async function loadLibrary(): Promise<LibrarySnapshot> {
   return { items, folderUnavailable: !!root && !available, scanFailed }
 }
 
+export async function loadLibrary(): Promise<LibrarySnapshot> {
+  const [folder, local] = await Promise.all([loadFolderLibrary(), listRecordings()])
+  return combineLibrary(folder, local)
+}
+
 export function useMeetingLibrary() {
-  return useQuery({ queryKey: meetingLibraryKey, queryFn: loadLibrary, refetchInterval: 3000 })
+  const client = useQueryClient()
+  // Folder scans happen on entry/focus, explicit refresh, and invalidation.
+  // The polling query only reads OPFS recordings; it never rebuilds the folder index.
+  const folder = useQuery({ queryKey: meetingLibraryKey, queryFn: loadFolderLibrary })
+  const local = useLocalRecordings()
+  useEffect(
+    () =>
+      dataFolderAuthorizedSetting.watch(() => {
+        void client.invalidateQueries({ queryKey: meetingLibraryKey })
+      }),
+    [client],
+  )
+  const data = useMemo(
+    () => (folder.data && local.data ? combineLibrary(folder.data, local.data) : undefined),
+    [folder.data, local.data],
+  )
+  return {
+    data,
+    isLoading: folder.isLoading || local.isLoading,
+    isFetching: folder.isFetching || local.isFetching,
+    error: folder.error ?? local.error,
+    refetch: () => Promise.all([folder.refetch(), local.refetch()]),
+  }
 }
 export interface ResultDocument extends MeetingDocument {
   dir: string
