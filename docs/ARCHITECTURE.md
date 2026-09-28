@@ -19,7 +19,7 @@
 | 界面状态        | Zustand 5                                                     | 轻量，不需要样板代码                                                                                                                                       |
 | 数据校验        | Zod 4                                                         | 数据格式、配置、模型输出、跨模块消息，全部用同一套 schema 描述和校验                                                                                       |
 | 大模型调用      | Vercel AI SDK 7 + `@ai-sdk/openai-compatible`                 | 统一接口，支持结构化输出（直接按 Zod schema 返回纪要 JSON）和流式输出；以后加 Claude、Gemini 等只要换一个包                                                |
-| 本地索引        | Dexie 4（IndexedDB）                                          | 历史列表、全文搜索（规划）；U-34 任务队列使用原生 IndexedDB                                                                                                |
+| 本地索引        | 原生 IndexedDB（独立可重建缓存；Dexie 全文索引留待后续）      | 历史列表、全文搜索（规划）；U-34 任务队列使用原生 IndexedDB                                                                                                |
 | 跨模块通信      | 类型安全的消息层（`@webext-core/messaging` 或自己封装 + Zod） | 后台、离屏文档、侧边栏、网页之间调用像调函数一样，并且有类型检查                                                                                           |
 | 国际化          | i18next + react-i18next                                       | **MVP 同时支持简体中文和英文**；翻译 key 有类型检查，测试保证两种语言的 key 完全一致                                                                       |
 | 工程            | pnpm workspace + Turborepo                                    | 多个包按依赖顺序构建，有构建缓存                                                                                                                           |
@@ -148,7 +148,7 @@ registry.transcription.register(openaiCompatible) // 内置 Groq / OpenAI 预设
 | `packages/storage`   | ✅ 本地文件夹（File System Access，句柄存 IndexedDB，读写前检查授权）、OPFS；每次写入回读校验大小                                     |
 | `packages/providers` | ✅ U-34: Paraformer upload/polling/diarization, compatible ASR, and AI SDK summaries; mock/browser validated, real APIs pending       |
 | `packages/pipeline`  | ✅ U-34: persistent queue, splitting, retry/recovery, folder writes, History processing controls; see verification limits             |
-| `packages/exporters` | ⏳ U-35 / later                                                                                                                       |
+| `packages/exporters` | ✅ U-35: TXT / SRT / Markdown, verified MP4 download, AAC/M4A conversion when supported                                               |
 
 ## 9. 已确认的决策（2026-09-24）
 

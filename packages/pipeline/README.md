@@ -184,3 +184,36 @@ three minutes, Windows/macOS AAC and CPU measurements, and extension reload or
 update permission retention remain untested. Native Linux picker and restart
 reauthorization tests narrow the earlier ADR gap but do not establish those other
 platform or lifecycle behaviors.
+
+## U-35 result pages and editing
+
+The result page now scans the authorized folder and reads its current metadata,
+transcript, and structured summary. `huilu-library` is a disposable native
+IndexedDB snapshot, bound to the selected directory handle; rebuilding it never
+clears recordings, processing jobs, or folder authorization. Individual damaged
+or duplicate records are isolated. Permission loss keeps the last valid list;
+completed meetings do not silently fall back to an older intermediate transcript.
+Original OPFS recordings remain available before transcription or folder export.
+
+Additive optional `Meeting` fields retain schema version 1: `editRevision`,
+`favorite`, and `speakerAliases`. A title, speaker rename, or merge replaces only
+`meeting.json` through an atomic writable stream. Merges retain original speaker
+IDs in transcript/summary files. Consumers must use `mappedTranscript` and
+`mappedSummary` from core to resolve them; the pipeline applies the same mapping
+when generating a follow-up summary. Action-item owners remain free text.
+Generated Markdown exports reflect the current structured guide and speaker
+names; the original `summary.md` file is not overwritten.
+
+UI edits and the pipeline's final write share a per-meeting Web Lock. Title and
+name edits compare their previous field value; merges compare `editRevision`.
+Conflicts are reported rather than silently replacing another tab's edit. A
+result page retains its original directory handle and refuses edits after the
+selected root changes. External file editors do not participate in Web Locks;
+changes detected before replacement are rejected, but arbitrary concurrent OS
+writes cannot be made transactional by the browser.
+
+Completion notifications are emitted only when processing reaches `done`, and
+are awaited before offscreen cleanup. A separate durable IndexedDB claim permits
+at most one automatic opening per meeting. Old completed jobs are not replayed
+at startup. A crash after claiming but before opening may suppress that automatic
+opening; the result remains accessible from History.
