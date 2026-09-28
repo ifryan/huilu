@@ -5,6 +5,66 @@ and locally exercised. This is ready for code review, **not full product accepta
 real service compatibility and the 60-minute Chinese meeting / three-minute
 processing target remain unverified. U-35 has not been started.
 
+## PR #7 九项审查修复（2026-09-28，当前增量）
+
+九条意见均核实有效，已在原 U-34 工作树本地修复。基线为已推送
+`3c98197732c9b2104d1958020cce9e70cb2a213a`；未 push、未合并、未发布，
+GitHub 线程保持 unresolved。以下增量说明优先于下文历史验证记录。
+
+| 评论 ID    | 修复与回归证据                                                                                                                                                        |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4119095386 | 可见历史页持续轮询任务（1.5 秒）与录制列表（3 秒）。浏览器覆盖空历史新增、空任务新增、刷新先于激活、done 再激活，均无需焦点切换或再次手动刷新。                       |
+| 4119095391 | JSON schema 校验、写入意图日志与文本回读验证；修复空/截断 JSON、Markdown 及静默短写。覆盖初次落盘、ready 会议补纪要中断、合法 JSON/Markdown 编辑保留。                |
+| 4119095394 | running 启动恢复退还中断消耗的一次尝试。模拟六次中断后首个 timeout 仍进入自动重试。                                                                                   |
+| 4119095398 | SHA-256 绑定有效配置与音频参数；分片再绑定切点。覆盖 model/baseURL/key、切点变化与损坏、配置键顺序不变、旧无绑定断点；未持久化明文密钥。                              |
+| 4119095406 | 响应运行时校验后再解析 Transcript。覆盖缺失、字符串/null、非有限、负值、反向/乱序时间戳；接受零长度、重叠、空结果与 text-only 兼容响应。                              |
+| 4119095410 | 后台启动唤醒等待任务，离屏队列按实际 handle 权限决定继续；不申请权限。单测和浏览器覆盖已授权但没有 watcher 事件、缓存授权标记过期且实际无 handle。                    |
+| 4119095413 | 完成目录是补纪要的权威来源，使用用户修改的逐字稿、标题与发言人。权限失效等待；换目录、缺失/损坏或归属错误明确失败。覆盖生成中再次编辑、失败后修改输入、编辑结果保留。 |
+| 4119095418 | 新增 isDirectoryEmpty，通过枚举证明未归属目录为空。覆盖 notes.md、其他媒体后缀、空子目录和目录位置被文件占用。                                                        |
+| 4119095424 | HTTP 408 映射 timeout；provider HTTP 回放与队列自动退避回归，与 400/401/403/404 终态分类对照。                                                                        |
+
+代码提交（相对已推送基线）：`d59c3f6`、`995f7a7`、`9d922e5`、`a42a5e3`、`de14f15`。
+最终 `pnpm check` / `pnpm build` 直接退出码均为 **0**。共 **302** 项测试：
+core 14、i18n 3、storage 26、recorder 32、providers 95、pipeline 53、extension 79。
+最后一轮仅 extension 重新测试，其余六套复用本轮代码对应的成功缓存；构建无缓存。
+构建仍有既有非致命 chunk-size warning（最大约 588 kB）。
+
+浏览器验证代码版本为 `de14f15`：Linux、Chromium 145.0.7632.6，1280×720，
+独立 `/tmp` profile。Browser plugin 不可用，使用已安装 Playwright Core。
+页面 `chrome-extension://fddknloecifbbeomieckhnegffdobgni/app.html#/`，标题 HuiLu；
+非空、无框架错误覆盖层、无 console/page error，截图已检查。
+空历史新增约 2.57 秒、空任务新增约 1.49 秒自动呈现；重启后 waitingFolder
+在实际 granted handle 下完成，在实际无 handle/缓存仍称已授权时继续等待并关闭空闲 offscreen。
+测试只有一次本地 HTTPS mock ASR 请求，未录屏、未读真实会议、未调用付费 API。
+音频为 20 字节合成网络夹具，不是可解码录音；本轮不重复验证录制/编码。
+
+文件夹使用持久化的真实 **OPFS DirectoryHandle 作为测试替身**，实际调用
+queryPermission 与存储适配器，未重测原生目录选择/授权弹窗。授权刷新竞态由
+两个独立扩展页面在可见页刷新后延迟修改 IndexedDB 重现；不是一次原生授权操作。
+本轮是完整浏览器重启，未单独强杀 Service Worker。两个早期测试脚本文案断言错误
+已修正，失败报告保留，未计为通过。
+
+证据（报告、截图、DOM 文本、脚本和命令日志）：
+
+```text
+/root/org-projects/huilu-worktrees/U-34-e2e/out/pr7-review-1790576987895/
+  report.json
+  u34-review-browser.mjs
+  u34-review-check.log
+  u34-review-build.log
+  startup-reconciled.png
+  external-new-job.png
+  refresh-before-activation.png
+  stale-authorization-cache.png
+  harness-failure-*.json
+```
+
+mock Preview ID `0765057c6891251f15522b89` 已停止；所有测试浏览器进程均已关闭。
+交付前重读 PR comments/reviews，仍为上述九条、无新增。真实 API、跨账户真实上传、
+Windows/macOS、60 分钟会议性能与原生授权边界仍未验收。
+旧无配置绑定的未完成转写断点会被安全失效，可能重新调用服务；已完成逐字稿不因改配置重转写。
+远端成功/本地尚未持久化的崩溃窗口仍无法保证恰好一次计费。
+
 ## Revisions and checks
 
 - Source: `/root/org-projects/huilu-worktrees/U-34`, branch
@@ -116,8 +176,9 @@ display were awaited and closed after each run.
   real-speech silence boundary quality, and Windows/macOS AAC/CPU.
 - Extension reload/update permission retention, cross-platform folder permissions,
   and forced service-worker termination independently of a full browser restart.
-- Switching the API key to another account during an in-flight Paraformer task.
-  Checkpoints bind region/model, not account; temporary uploads are account-bound.
+- Real cross-account Paraformer behavior remains untested. The PR #7 fixes above
+  now invalidate checkpoints on credential changes at the next attempt; an active
+  request continues using its captured configuration.
 - Exactly-once billing cannot be guaranteed across the remote-success/local-save
   crash window. Saved task IDs and intermediate results prevent duplicates in the
   exercised recovery paths; this does not prove every possible crash boundary.

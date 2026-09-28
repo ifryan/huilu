@@ -16,8 +16,12 @@ service settings and endpoint permission checks. The UI reads jobs and sends
   by `meetingId`. This is native IndexedDB, independent of the future Dexie index.
 - The queue executes one meeting at a time. Steps are `transcribe`, `summarize`,
   and `write`; completed artifacts are reused on retry.
-- On document startup, `running` jobs become `queued`. The service worker checks
-  for active jobs on startup and on `runtime.onStartup`.
+- On document startup, `running` jobs become `queued` and their interrupted attempt
+  is refunded. Waiting jobs are reconciled against the saved handle's current
+  `queryPermission`; no worker requests permission. The service worker wakes the
+  offscreen queue for active or waiting jobs, independent of cached UI flags.
+- Visible History polls jobs every 1.5 seconds, including inactive/empty results,
+  and recordings every 3 seconds, including a completely empty history.
 - Offscreen reasons include `USER_MEDIA`, `AUDIO_PLAYBACK`, and `BLOBS`. Cleanup
   requires an idle recorder, no temporary offscreen operations, and no queued or
   running processing job. Delayed retries keep the document alive.
@@ -25,19 +29,23 @@ service settings and endpoint permission checks. The UI reads jobs and sends
   a larger `Retry-After` takes precedence. A manual retry resets the attempt count.
 - Paraformer saves its upload URL and task ID. Network/polling failures retain
   the task ID; terminal task failures clear it so an explicit retry can submit
-  again using the uploaded file. Region/model changes invalidate its checkpoint.
+  again using the uploaded file. The queue binds checkpoints and pieces to a stable
+  SHA-256 digest of provider ID, effective configuration (including credentials),
+  audio parameters/size and upload limit; piece bindings additionally include cuts.
+  Raw configurations/keys are not persisted in these bindings. Changed inputs or
+  legacy unbound checkpoints are discarded; unchanged inputs preserve resumption.
 - Checkpoints reduce duplicate work; they do **not** guarantee exactly-once billing.
   A browser exit after a remote request succeeds but before its local checkpoint
   commits can cause that request to be repeated. OpenAI-compatible transcription
   and LLM calls have no remote task-recovery API in this implementation.
 
-| Job state       | UI meaning and next action                                                 |
-| --------------- | -------------------------------------------------------------------------- |
-| `queued`        | Pending or backing off; inspect `nextAttemptAt` and `error`                |
-| `running`       | Display `step` and optional 0–1 `progress`                                 |
-| `waitingFolder` | Results are safe in OPFS; select or authorize the folder in a visible page |
-| `failed`        | Show the classified error; fix configuration if needed, then retry         |
-| `done`          | Folder write finished; inspect `summary` for a skipped LLM step            |
+| Job state       | UI meaning and next action                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------- |
+| `queued`        | Pending or backing off; inspect `nextAttemptAt` and `error`                                     |
+| `running`       | Display `step` and optional 0–1 `progress`                                                      |
+| `waitingFolder` | Folder access needed for reading completed data or writing results; authorize in a visible page |
+| `failed`        | Show the classified error; fix configuration if needed, then retry                              |
+| `done`          | Folder write finished; inspect `summary` for a skipped LLM step                                 |
 
 Do not infer this state from `Meeting.status` alone. That coarse status remains
 `processing` while awaiting a folder, becomes `failed` after terminal processing
@@ -59,8 +67,9 @@ fail explicitly; no fallback provider is selected. Custom endpoint permission is
 requested in the visible settings page, never by the offscreen worker. Keys stay
 in `chrome.storage.local`; meeting files and job checkpoints do not store them.
 Configuration is resolved at step boundaries, not continuously during a request.
-Changing credentials to another account while a Paraformer upload/task is in
-flight has not been validated; its upload URLs are account-bound.
+A subsequent retry with changed credentials invalidates the previous account's
+checkpoint. An already-running request retains its captured configuration until
+that attempt ends; real cross-account API behavior remains unverified.
 
 ## Files to consume in U-35
 
@@ -75,7 +84,7 @@ OPFS /recordings/<meetingId>/
   pieces/000.json ...             private per-slice retry cache
 
 <selected folder>/<local-date>_<HHmm>_<sanitized-title>[ (N)]/
-  .huilu-owner.json               { "id": "<meetingId>" }, internal reservation
+  .huilu-owner.json               id, optional pending / markdownComplete; private write journal
   audio.webm                     actual audio container extension may differ
   video.mp4                      optional; actual container extension may differ
   transcript.json
@@ -89,13 +98,29 @@ it is not an additional directory level. `job.folderDir` records the chosen name
 Resolve `meeting.id` to `folderDir`; do not reconstruct paths from a mutable title.
 Folder ownership is checked again on retry and after the selected root changes.
 The reservation prevents a second meeting from adopting a partial write. Unknown
-partial artifacts are preserved in place and a different directory is chosen.
+content is preserved in place and a different directory is chosen. The storage
+adapter proves an unowned directory empty by enumerating all entries, including
+arbitrary names and empty subdirectories, before reservation.
 
 U-35 should prefer the authorized data folder for completed meetings and user
 edits. OPFS is the fallback for recordings and intermediate results that have not
 been written. Do not delete OPFS media or completed intermediate results as part
-of a retry. Folder writes skip existing transcripts/summaries and same-size media;
-they preserve existing title, markers, and speaker names. This is retry behavior,
+of a retry. Folder writes preserve valid JSON, completed Markdown edits, and same-size media;
+empty/malformed or journaled incomplete generated artifacts are repaired and new
+text writes are read back exactly before the final metadata commit. Markdown has
+no semantic schema, so completion uses the private journal (or legacy ready metadata
+with an LLM provider), not file existence. Uncommitted generated Markdown may be
+regenerated; arbitrary edits to completed Markdown remain intact.
+
+Completed jobs retain `folderCommitted` (migrated from legacy `done` on enqueue).
+Summary backfill requires the owned folder's valid ready `meeting.json` and
+`transcript.json`; it uses edited titles/speaker names/text and validates timeline
+order. Missing permission waits; missing/foreign/corrupt data fails with
+`sourceDataUnavailable`, without falling back to stale OPFS or copying to a new root.
+Re-select the original folder or repair its data before retrying. Edits during an
+LLM request are detected before writing. Uncommitted summary retries reuse cache
+only when the prompt digest still matches; committed summary edits are preserved.
+Folder writes preserve existing title, markers, and speaker names. This is retry behavior,
 not a “regenerate and overwrite” feature. P1 regeneration needs a separate contract.
 
 | Artifact            | Schema and units                                                                                                                                         |
@@ -104,7 +129,7 @@ not a “regenerate and overwrite” feature. P1 regeneration needs a separate c
 | `transcript.json`   | `Transcript`: `language`, `segments[]` with integer `startMs`, `endMs`, string `speakerId`, and `text`; timestamps are relative to recording start       |
 | `summary.json`      | `Summary`: `keywords`, `overview`, `chapters`, `speakerSummaries`, `keyPoints`, `actionItems`; chapter `startMs` uses the same timeline                  |
 | `summary.md`        | Rendered companion; U-35 should use `summary.json` for the structured guide                                                                              |
-| `.huilu-owner.json` | Internal ownership only; its presence does not mark a completed meeting                                                                                  |
+| `.huilu-owner.json` | Internal ownership/write journal; its presence does not mark a completed meeting                                                                         |
 
 Join transcript and summary speaker IDs against `Meeting.speakers[].id` for display
 names. Paraformer retains provider speaker IDs as strings; the compatible Whisper
