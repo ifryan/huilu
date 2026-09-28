@@ -55,7 +55,7 @@ const extension = fileURLToPath(new URL('../../apps/extension/.output/chrome-mv3
 const profile = resolve('browser-output/profile-' + Date.now())
 await mkdir(profile, { recursive: true })
 const ctx = await chromium.launchPersistentContext(profile, {
-  executablePath: chromium.executablePath(),
+  executablePath: process.env.U35_CHROMIUM_PATH ?? chromium.executablePath(),
   headless: true,
   viewport: { width: 1440, height: 1000 },
   acceptDownloads: true,
@@ -230,10 +230,18 @@ try {
   await page.getByRole('textbox', { name: 'Speaker name: Alice', exact: true }).press('Enter')
   await page.getByText('All changes saved', { exact: true }).waitFor()
   await page.getByText('Manage speakers', { exact: true }).click()
+  const speakerFilter = page.getByRole('combobox', { name: 'Filter by speaker' })
+  await speakerFilter.selectOption('1')
+  assert.equal(await page.locator('[data-segment]').count(), 1)
   await page.getByRole('combobox', { name: 'Merge speaker', exact: true }).selectOption('1')
   await page.getByRole('combobox', { name: 'Into speaker', exact: true }).selectOption('0')
   await page.getByRole('button', { name: 'Merge speakers', exact: true }).click()
   await page.getByText('All changes saved', { exact: true }).waitFor()
+  assert.equal(await speakerFilter.inputValue(), '0')
+  assert.equal(await page.locator('[data-segment]').count(), 3)
+  await speakerFilter.selectOption('')
+  assert.equal(await page.locator('[data-segment]').count(), 3)
+  results.push('Selected speaker B merged into A: filter remaps to A and transcript stays visible')
   await page.reload()
   await page.getByRole('textbox', { name: 'Meeting title', exact: true }).waitFor()
   assert.equal(

@@ -73,7 +73,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
   const client = useQueryClient()
   const [time, setTime] = useState(0)
   const [search, setSearch] = useState('')
-  const [speaker, setSpeaker] = useState('')
+  const [selectedSpeaker, setSpeaker] = useState('')
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error' | 'conflict' | 'empty'>(
     'saved',
   )
@@ -84,6 +84,8 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
   const transcript = doc.transcript ? mappedTranscript(meeting, doc.transcript) : undefined
   const summary = doc.summary ? mappedSummary(meeting, doc.summary) : undefined
   const speakers = meeting.speakers.filter((s) => resolveSpeaker(meeting, s.id) === s.id)
+  const resolvedSpeaker = resolveSpeaker(meeting, selectedSpeaker)
+  const speaker = speakers.some((s) => s.id === resolvedSpeaker) ? resolvedSpeaker : ''
   const previewKind = meeting.media?.video ? 'video' : 'audio'
   useEffect(() => {
     let cancelled = false
