@@ -16,15 +16,17 @@ export type StepId = (typeof PIPELINE_STEPS)[number]
  * 失败原因。服务商错误沿用 ProviderErrorCode（i18n：providers.error.<code>），
  * 其余为处理管线自己的原因（i18n：processing.error.<code>）
  */
-export type PipelineErrorCode =
-  | 'transcriptionNotConfigured'
-  | 'unknownProvider'
-  | 'hostPermission'
-  | 'noAudio'
-  | 'meetingNotFound'
-  | 'splitFailed'
-  | 'writeFailed'
-  | 'unknown'
+export const PIPELINE_ERROR_CODES = [
+  'transcriptionNotConfigured',
+  'unknownProvider',
+  'hostPermission',
+  'noAudio',
+  'meetingNotFound',
+  'splitFailed',
+  'writeFailed',
+  'unknown',
+] as const
+export type PipelineErrorCode = (typeof PIPELINE_ERROR_CODES)[number]
 
 export interface JobError {
   step: StepId
@@ -37,8 +39,13 @@ export interface JobError {
 }
 
 /** 没有生成纪要的原因：大模型未配置 / 服务商未知 / 未授予域名权限 / 逐字稿为空 */
-export type SummarySkipReason =
-  'notConfigured' | 'unknownProvider' | 'hostPermission' | 'emptyTranscript'
+export const SUMMARY_SKIP_REASONS = [
+  'notConfigured',
+  'unknownProvider',
+  'hostPermission',
+  'emptyTranscript',
+] as const
+export type SummarySkipReason = (typeof SUMMARY_SKIP_REASONS)[number]
 
 export interface ProcessingJob {
   meetingId: string

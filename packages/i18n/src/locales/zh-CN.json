@@ -75,7 +75,7 @@
   "history": {
     "empty": "还没有录制",
     "refresh": "刷新",
-    "localNote": "录制先保存在浏览器内部存储中，不需要配置转写服务或数据文件夹。这里只做预览和下载，不会删除任何录制。",
+    "localNote": "录制先保存在浏览器内部存储中，不需要配置转写服务或数据文件夹。配置转写服务后，录制结束会自动转写、生成纪要并写入数据文件夹；这里不会删除任何录制。",
     "location": "浏览器内部存储",
     "state": {
       "saved": "已保存",
@@ -91,6 +91,52 @@
     "download": "下载",
     "noMedia": "没有可播放的内容",
     "noTranscriptAudio": "没有录到转写音频，无法转写；视频已保留，可预览或下载"
+  },
+  "processing": {
+    "start": "转写并生成纪要",
+    "transcriptOnly": "尚未配置大模型服务：这次只生成逐字稿，配置后可以再补生成纪要",
+    "goSettings": "去设置",
+    "queued": "排队等待处理…",
+    "step": {
+      "transcribe": "正在转写…",
+      "summarize": "正在生成纪要…",
+      "write": "正在写入数据文件夹…"
+    },
+    "stepName": {
+      "transcribe": "转写",
+      "summarize": "生成纪要",
+      "write": "写入数据文件夹"
+    },
+    "retrying": "{{step}}出错：{{reason}}。将在 {{time}} 自动重试",
+    "failed": "{{step}}失败：{{reason}}",
+    "retry": "重试",
+    "waitingFolder": "逐字稿和纪要已生成，暂存在浏览器内部存储；数据文件夹授权后会自动写入",
+    "authorizeFolder": "授权数据文件夹",
+    "chooseFolder": "选择数据文件夹",
+    "done": "处理完成，已写入数据文件夹「{{folder}}」",
+    "summarize": "生成纪要",
+    "summarySkipped": {
+      "notConfigured": "未生成纪要：尚未配置大模型服务",
+      "unknownProvider": "未生成纪要：无法识别所选的大模型服务商，请在设置中重新选择",
+      "hostPermission": "未生成纪要：没有访问大模型服务地址的权限，请在设置中重新保存",
+      "emptyTranscript": "未生成纪要：录音中没有识别到语音"
+    },
+    "notQueued": {
+      "noAudio": "没有录到转写音频，无法转写",
+      "notConfigured": "尚未配置转写服务",
+      "meetingNotFound": "找不到这场录制的会议信息",
+      "notProcessing": "这场录制不需要处理"
+    },
+    "error": {
+      "transcriptionNotConfigured": "尚未配置转写服务",
+      "unknownProvider": "无法识别所选的服务商，请在设置中重新选择",
+      "hostPermission": "没有访问该服务地址的权限，请在设置中重新保存以授权",
+      "noAudio": "没有录到转写音频",
+      "meetingNotFound": "找不到这场录制",
+      "splitFailed": "音频切片失败",
+      "writeFailed": "写入失败",
+      "unknown": "未知错误"
+    }
   },
   "settings": {
     "language": "界面语言",

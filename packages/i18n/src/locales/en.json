@@ -75,7 +75,7 @@
   "history": {
     "empty": "No recordings yet",
     "refresh": "Refresh",
-    "localNote": "Recordings are first kept in the browser's internal storage and do not need a transcription service or data folder. This page only previews and downloads; it never deletes a recording.",
+    "localNote": "Recordings are first kept in the browser's internal storage and do not need a transcription service or data folder. Once a transcription service is set up, finished recordings are transcribed, summarized and saved to the data folder automatically. Nothing here deletes a recording.",
     "location": "Browser storage",
     "state": {
       "saved": "Saved",
@@ -91,6 +91,52 @@
     "download": "Download",
     "noMedia": "Nothing to play",
     "noTranscriptAudio": "No transcription audio was recorded, so this cannot be transcribed. The video was kept and can be previewed or downloaded"
+  },
+  "processing": {
+    "start": "Transcribe & summarize",
+    "transcriptOnly": "No LLM service is set up: only the transcript will be created. You can add the summary after setting one up",
+    "goSettings": "Open settings",
+    "queued": "Waiting to be processed…",
+    "step": {
+      "transcribe": "Transcribing…",
+      "summarize": "Writing the summary…",
+      "write": "Saving to the data folder…"
+    },
+    "stepName": {
+      "transcribe": "Transcription",
+      "summarize": "Summary",
+      "write": "Saving to the data folder"
+    },
+    "retrying": "{{step}} failed: {{reason}}. Retrying automatically at {{time}}",
+    "failed": "{{step}} failed: {{reason}}",
+    "retry": "Retry",
+    "waitingFolder": "The transcript and summary are ready and kept in browser storage. They will be saved once the data folder is authorized",
+    "authorizeFolder": "Authorize data folder",
+    "chooseFolder": "Choose data folder",
+    "done": "Done. Saved to “{{folder}}” in the data folder",
+    "summarize": "Create summary",
+    "summarySkipped": {
+      "notConfigured": "No summary: no LLM service is set up",
+      "unknownProvider": "No summary: the selected LLM provider is not recognized. Choose it again in settings",
+      "hostPermission": "No summary: HuiLu is not allowed to reach the LLM address. Save it again in settings",
+      "emptyTranscript": "No summary: no speech was recognized"
+    },
+    "notQueued": {
+      "noAudio": "No transcription audio was recorded, so this cannot be transcribed",
+      "notConfigured": "No transcription service is set up",
+      "meetingNotFound": "The meeting information for this recording is missing",
+      "notProcessing": "This recording does not need processing"
+    },
+    "error": {
+      "transcriptionNotConfigured": "No transcription service is set up",
+      "unknownProvider": "The selected provider is not recognized. Choose it again in settings",
+      "hostPermission": "HuiLu is not allowed to reach this address. Save it again in settings to grant access",
+      "noAudio": "No transcription audio was recorded",
+      "meetingNotFound": "The recording was not found",
+      "splitFailed": "Could not split the audio",
+      "writeFailed": "Could not write the files",
+      "unknown": "Unknown error"
+    }
   },
   "settings": {
     "language": "Language",
