@@ -82,6 +82,17 @@ describe('processingView', () => {
     expect(processingView(recording, failed, ready)).toMatchObject({ canRetry: true })
   })
 
+  it('offers a manual retry for a balance error in the summary step without auto-retry', () => {
+    const error = { step: 'summarize' as const, code: 'quotaExceeded', retryable: false }
+    const failed = job({ state: 'failed', step: 'summarize', error })
+    expect(processingView(recording, failed, ready)).toEqual({
+      kind: 'failed',
+      error,
+      canRetry: true,
+    })
+    expect(errorKey('quotaExceeded')).toBe('providers.error.quotaExceeded')
+  })
+
   it('offers the summary later when it was skipped for configuration reasons', () => {
     const done = (reason: (typeof SUMMARY_SKIP_REASONS)[number]) =>
       job({ state: 'done', folderDir: 'd', summary: { state: 'skipped', reason } })
@@ -105,7 +116,7 @@ describe('processing i18n keys', () => {
     key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], tree)
   const keys = [
     ...PIPELINE_ERROR_CODES.map(errorKey),
-    ...['rateLimited', 'unauthorized', 'taskFailed', 'fileTooLarge'].map(errorKey),
+    ...['rateLimited', 'quotaExceeded', 'unauthorized', 'taskFailed', 'fileTooLarge'].map(errorKey),
     ...SUMMARY_SKIP_REASONS.map((r) => `processing.summarySkipped.${r}`),
     ...PIPELINE_STEPS.flatMap((s) => [`processing.step.${s}`, `processing.stepName.${s}`]),
     ...['noAudio', 'notConfigured', 'meetingNotFound', 'notProcessing'].map(
