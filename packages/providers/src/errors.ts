@@ -35,6 +35,7 @@ export class ProviderError extends Error {
 export function statusToCode(status: number): ProviderErrorCode {
   if (status === 401) return 'unauthorized'
   if (status === 403) return 'forbidden'
+  if (status === 408) return 'timeout'
   if (status === 404) return 'notFound'
   if (status === 429) return 'rateLimited'
   if (status >= 500) return 'server'

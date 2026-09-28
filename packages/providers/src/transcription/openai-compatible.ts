@@ -1,4 +1,9 @@
-import type { AudioInput, Transcript, TaskContext, TranscriptionProvider } from '@huilu/core'
+import {
+  Transcript,
+  type AudioInput,
+  type TaskContext,
+  type TranscriptionProvider,
+} from '@huilu/core'
 import { z } from 'zod'
 import { httpUrl, requireKeyForPresets } from '../config-fields'
 import { ProviderError } from '../errors'
@@ -28,12 +33,24 @@ export type OpenAiCompatibleTranscriptionConfig = z.infer<
 /** 单次上传的超时：25MB 的音频在慢速代理下也要能传完 */
 const TRANSCRIBE_TIMEOUT_MS = 10 * 60_000
 
-interface VerboseTranscription {
-  text?: string
-  language?: string
-  duration?: number
-  segments?: { start: number; end: number; text: string }[]
-}
+const VerboseTranscription = z
+  .object({
+    text: z.string().optional(),
+    language: z.string().optional(),
+    duration: z.number().nonnegative().optional(),
+    segments: z
+      .array(
+        z
+          .object({
+            start: z.number().nonnegative(),
+            end: z.number().nonnegative(),
+            text: z.string(),
+          })
+          .refine((s) => s.end >= s.start),
+      )
+      .optional(),
+  })
+  .refine((body) => body.segments !== undefined || body.text !== undefined)
 
 /** Whisper 的 language 参数只接受单个 ISO-639-1 代码；中英混合、自动识别时不传 */
 export function whisperLanguage(language: string): string | undefined {
@@ -75,16 +92,27 @@ async function transcribe(
   const language = whisperLanguage(input.language)
   if (language) form.append('language', language)
   ctx.onProgress?.(0)
-  const body = await fetchJson<VerboseTranscription>(
+  const raw = await fetchJson(
     `${trimBaseUrl(config.baseUrl)}/audio/transcriptions`,
     { method: 'POST', headers: bearer(config.apiKey), body: form },
     ctx,
     TRANSCRIBE_TIMEOUT_MS,
   )
-  ctx.onProgress?.(1)
+  const parsed = VerboseTranscription.safeParse(raw)
+  if (!parsed.success) throw new ProviderError('badResponse', 'invalid transcription response')
+  const body = parsed.data
+  if (body.segments?.some((s, i, all) => i > 0 && s.start < all[i - 1]!.start)) {
+    throw new ProviderError('badResponse', 'unordered transcription segments')
+  }
+  const validate = (value: unknown): Transcript => {
+    const result = Transcript.safeParse(value)
+    if (!result.success) throw new ProviderError('badResponse', 'invalid transcript')
+    ctx.onProgress?.(1)
+    return result.data
+  }
   const lang = normalizeLanguage(body.language, language ?? input.language)
   if (Array.isArray(body.segments)) {
-    return {
+    return validate({
       language: lang,
       segments: body.segments
         .filter((s) => typeof s.text === 'string' && s.text.trim() !== '')
@@ -94,15 +122,15 @@ async function transcribe(
           speakerId: '0',
           text: s.text.trim(),
         })),
-    }
+    })
   }
   if (typeof body.text !== 'string') throw new ProviderError('badResponse', 'no text')
   const text = body.text.trim()
   const endMs = Math.round((body.duration ?? input.durationMs / 1000) * 1000)
-  return {
+  return validate({
     language: lang,
     segments: text ? [{ startMs: 0, endMs: Math.max(0, endMs), speakerId: '0', text }] : [],
-  }
+  })
 }
 
 /** OpenAI 兼容转写接口（/audio/transcriptions），内置 Groq / OpenAI 预设 */

@@ -393,6 +393,89 @@ describe('openAiCompatibleTranscription.transcribe', () => {
     ])
   })
 
+  it.each([
+    null,
+    {},
+    { text: 1 },
+    { text: 'ok', language: 3 },
+    { text: 'ok', duration: -1 },
+    { text: 'ok', duration: '1' },
+    { text: 'ok', duration: null },
+    { segments: [{ end: 1, text: 'x' }] },
+    { segments: [{ start: '0', end: 1, text: 'x' }] },
+    { segments: [{ start: -1, end: 1, text: 'x' }] },
+    { segments: [{ start: 2, end: 1, text: 'x' }] },
+    { segments: [{ start: 0, end: null, text: 'x' }] },
+    { segments: [{ start: 0, end: 1, text: 5 }] },
+    {
+      segments: [
+        { start: 2, end: 3, text: 'a' },
+        { start: 1, end: 2, text: 'b' },
+      ],
+    },
+  ])('rejects malformed responses: %j', async (body) => {
+    replay([[/transcriptions/, () => json(body)]])
+    await expect(
+      openAiCompatibleTranscription.transcribe(audio(), groq, {
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'badResponse' })
+  })
+
+  it('rejects non-finite JSON numbers and non-finite fallback duration', async () => {
+    replay([
+      [/transcriptions/, () => new Response('{"segments":[{"start":0,"end":1e400,"text":"x"}]}')],
+    ])
+    await expect(
+      openAiCompatibleTranscription.transcribe(audio(), groq, {
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'badResponse' })
+    replay([[/transcriptions/, () => json({ text: 'ok' })]])
+    await expect(
+      openAiCompatibleTranscription.transcribe({ ...audio(), durationMs: NaN }, groq, {
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'badResponse' })
+  })
+
+  it('accepts zero-length, overlapping, empty and text-only compatible responses', async () => {
+    for (const body of [
+      {
+        segments: [
+          { start: 0, end: 0, text: 'a' },
+          { start: 0, end: 2, text: 'b' },
+          { start: 1, end: 3, text: 'c' },
+        ],
+      },
+      { segments: [] },
+      { text: '' },
+      { text: 'hello', duration: 0.123 },
+    ]) {
+      replay([[/transcriptions/, () => json(body)]])
+      await expect(
+        openAiCompatibleTranscription.transcribe(audio(), groq, {
+          signal: new AbortController().signal,
+        }),
+      ).resolves.toMatchObject({ segments: expect.any(Array) })
+    }
+  })
+
+  it.each([
+    [408, 'timeout'],
+    [400, 'badRequest'],
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'notFound'],
+  ])('maps HTTP %i to %s', async (status, code) => {
+    replay([[/transcriptions/, () => json({ error: 'failure' }, status as number)]])
+    await expect(
+      openAiCompatibleTranscription.transcribe(audio(), groq, {
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code, status })
+  })
+
   it('refuses files over the single-file limit (the pipeline splits them first)', async () => {
     const calls = replay([])
     const err = await openAiCompatibleTranscription
