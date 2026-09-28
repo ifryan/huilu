@@ -154,6 +154,7 @@ function setup(
     splitter: options.splitter,
     now: () => now,
     startRetryMs: undefined as number | undefined,
+    storageRetryMs: 5 as number | undefined,
     onIdle: () => idle(),
   }
   const queue = new ProcessingQueue(deps)
@@ -686,6 +687,100 @@ describe('ProcessingQueue', () => {
     await t.queue.start()
     expect(await t.jobs.get('a')).toMatchObject({ attempts: 2 })
     expect(kick).toHaveBeenCalled()
+    t.queue.stop()
+  })
+
+  it('reschedules the pump after listing jobs fails instead of stalling', async () => {
+    const t = setup()
+    const list = t.jobs.list.bind(t.jobs)
+    let failures = 1
+    vi.spyOn(t.jobs, 'list').mockImplementation(async () => {
+      if (failures-- > 0) throw new Error('IndexedDB transaction aborted')
+      return list()
+    })
+    const idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', attempts: 1 })
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+    t.queue.stop()
+  })
+
+  it('clears the current job and retries when marking it running fails', async () => {
+    const t = setup()
+    const put = t.jobs.put.bind(t.jobs)
+    let failRunning = true
+    vi.spyOn(t.jobs, 'put').mockImplementation(async (job) => {
+      if (job.state === 'running' && failRunning) {
+        failRunning = false
+        throw new Error('QuotaExceededError')
+      }
+      return put(job)
+    })
+    const idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done' })
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+    expect(await t.queue.isBusy()).toBe(false)
+    t.queue.stop()
+  })
+
+  it('requeues a job left running when saving its result fails, without transcribing again', async () => {
+    const t = setup()
+    const put = t.jobs.put.bind(t.jobs)
+    // 保存 done 失败，随后 #fail 记录这次失败时存储仍不可用：持久化状态停在 running
+    let failing = 0
+    let armed = true
+    vi.spyOn(t.jobs, 'put').mockImplementation(async (job) => {
+      if (job.state === 'done' && armed) {
+        armed = false
+        failing = 2
+      }
+      if (failing > 0) {
+        failing--
+        throw new Error('IndexedDB write failed')
+      }
+      return put(job)
+    })
+    const idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', attempts: 2 })
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+    expect(t.llm.generateObject).toHaveBeenCalledTimes(1)
+    t.queue.stop()
+  })
+
+  it('backs off on persistent storage failures and stops retrying after stop()', async () => {
+    const t = setup()
+    t.deps.storageRetryMs = 10
+    await t.jobs.put({
+      meetingId: MEETING_ID,
+      state: 'queued',
+      attempts: 0,
+      checkpoints: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const list = vi.spyOn(t.jobs, 'list').mockRejectedValue(new Error('IndexedDB unavailable'))
+    t.queue.kick()
+    await new Promise((r) => setTimeout(r, 120))
+    // 间隔 10 / 20 / 40 / 80 ms：120 ms 内最多约 4 轮（每轮执行循环与 isBusy 各读一次），而不是忙循环
+    const calls = list.mock.calls.length
+    expect(calls).toBeGreaterThanOrEqual(2)
+    expect(calls).toBeLessThanOrEqual(10)
+    t.queue.stop()
+    const stoppedAt = list.mock.calls.length
+    await new Promise((r) => setTimeout(r, 200))
+    expect(list.mock.calls.length).toBe(stoppedAt)
+
+    // 存储恢复后重新启动：继续执行
+    list.mockRestore()
+    const idle = t.onIdle()
+    await t.queue.start()
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done' })
     t.queue.stop()
   })
 

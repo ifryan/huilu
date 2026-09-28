@@ -79,6 +79,8 @@ export interface ProcessingDeps {
   now?: () => number
   /** 启动恢复（读取任务 / 检查文件夹权限）失败后多久自动重试，默认 5 秒 */
   startRetryMs?: number
+  /** 队列读写任务存储（IndexedDB）失败后重新执行的起始间隔，按次数翻倍，上限 1 分钟；默认 1 秒 */
+  storageRetryMs?: number
   /** 任务有变化（状态、进度）时回调，用于通知界面刷新 */
   onChange?: (job: ProcessingJob) => void
   /** 队列里没有待执行的任务了：后台据此关闭空闲的离屏文档 */
@@ -168,6 +170,10 @@ export class ProcessingQueue {
   #starting?: Promise<void>
   #retryTimer?: ReturnType<typeof setTimeout>
   #stopped = false
+  /** 连续几轮执行循环因任务存储读写失败而中断，用于退避 */
+  #storageFailures = 0
+  /** 执行中途因存储失败中断、可能仍被持久化为 running 的任务：下一轮先改回 queued */
+  #stranded = new Set<string>()
 
   constructor(private readonly deps: ProcessingDeps) {}
 
@@ -315,6 +321,7 @@ export class ProcessingQueue {
     try {
       do {
         this.#kickAgain = false
+        await this.#requeueStranded()
         while (!this.#stopped) {
           const now = this.#now()
           const queued = (await this.deps.jobs.list())
@@ -333,8 +340,20 @@ export class ProcessingQueue {
           await this.#run(due)
         }
       } while (this.#kickAgain)
+      this.#storageFailures = 0
     } catch (e) {
+      // 任务存储（IndexedDB）读写失败：没有新的定时器或 kick 时队列会一直停住，
+      // 按次数退避后重新执行（有上限，不会忙循环）
+      this.#storageFailures++
       console.error('[huilu] processing queue failed', e)
+      if (!this.#stopped) {
+        const delay = Math.min(
+          60_000,
+          (this.deps.storageRetryMs ?? 1000) * 2 ** (this.#storageFailures - 1),
+        )
+        clearTimeout(this.#timer)
+        this.#timer = setTimeout(() => this.kick(), delay)
+      }
     } finally {
       this.#pumping = false
     }
@@ -378,13 +397,30 @@ export class ProcessingQueue {
     job.state = 'running'
     job.attempts += 1
     job.nextAttemptAt = undefined
-    await this.#save(job)
     try {
-      await this.#process(job, controller.signal)
+      // 标记 running 失败时任务仍是 queued；记录失败 / 完成时写入失败则可能停在 running
+      await this.#save(job)
+      try {
+        await this.#process(job, controller.signal)
+      } catch (e) {
+        await this.#fail(job, e, controller.signal)
+      }
     } catch (e) {
-      await this.#fail(job, e, controller.signal)
+      this.#stranded.add(job.meetingId)
+      throw e
     } finally {
       this.#current = undefined
+    }
+  }
+
+  /** 上一轮因存储失败中断的任务：仍是 running 的改回 queued（本进程没有在执行它），重新排队 */
+  async #requeueStranded(): Promise<void> {
+    for (const meetingId of this.#stranded) {
+      const job = await this.deps.jobs.get(meetingId)
+      if (job?.state === 'running') {
+        await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined, progress: undefined })
+      }
+      this.#stranded.delete(meetingId)
     }
   }
 
