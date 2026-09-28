@@ -14,6 +14,8 @@ export interface FieldMeta {
   placeholder?: string
   /** 枚举选项名称的 i18n key 前缀：`${optionKeyPrefix}.${value}` */
   optionKeyPrefix?: string
+  /** 只在这些预设下显示（其他预设下该字段不起作用） */
+  presets?: string[]
 }
 
 export interface ConfigField extends FieldMeta {
@@ -45,6 +47,7 @@ export function describeConfigFields(schema: z.ZodType): ConfigField[] {
     secret: p.secret,
     placeholder: p.placeholder,
     optionKeyPrefix: p.optionKeyPrefix,
+    presets: p.presets,
     kind: p.enum ? 'select' : p.secret ? 'secret' : p.format === 'uri' ? 'url' : 'text',
     // 有默认值的字段在界面上不算必填
     required: required.has(key) && p.default === undefined,

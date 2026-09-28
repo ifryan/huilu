@@ -314,10 +314,20 @@
       "baseUrl": "Base URL",
       "apiKey": "API key",
       "model": "Model",
-      "region": "Region"
+      "region": "Region",
+      "clientHeaders": "Tool request headers (experimental)",
+      "clientHeadersHint": "When on, the extension adds User-Agent: claude-cli/2.1.88 (external, cli) and x-app: cli only to its own requests to open.bigmodel.cn/api/coding/paas/v4/ (a Chrome declarativeNetRequest rule, without the API key). Web pages and other providers are not affected. This imitates a coding tool's headers as an experiment; it is not an integration supported by Zhipu."
+    },
+    "clientHeaders": {
+      "claudeCli": "On: Claude Code CLI headers",
+      "off": "Off: leave headers unchanged"
     },
     "preset": {
       "groq": "Groq",
+      "zhipu": "Zhipu BigModel (standard API)",
+      "zhipuHint": "The standard API is billed per use or against resource packs; it does not use GLM Coding Plan quota. Enter the model name from Zhipu's docs.",
+      "glmCodingPlan": "Zhipu GLM Coding Plan (experimental)",
+      "glmCodingPlanHint": "Experimental: uses the Coding Plan endpoint; enter the key and model name from your plan page. Zhipu limits plan quota to officially supported tools, HuiLu is not on that list, and whether the service accepts these requests is unverified. A successful request does not prove plan quota was used; check Zhipu's billing details. Errors never fall back to the standard API; errors such as 1113 may mean insufficient balance or that the plan was not recognized.",
       "openai": "OpenAI",
       "custom": "Custom",
       "qwen": "Qwen (Model Studio)",

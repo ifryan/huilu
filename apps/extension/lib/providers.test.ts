@@ -24,6 +24,8 @@ describe('provider forms', () => {
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       apiKey: '',
       model: 'qwen-plus',
+      // 只在 GLM Coding Plan 预设下显示的开关，其他预设留空、保存时不写入
+      clientHeaders: '',
     })
     expect(initialFormValues(paraformer)).toEqual({
       region: 'cn',

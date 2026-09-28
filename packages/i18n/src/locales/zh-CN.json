@@ -314,10 +314,20 @@
       "baseUrl": "Base URL",
       "apiKey": "API Key",
       "model": "模型",
-      "region": "地域"
+      "region": "地域",
+      "clientHeaders": "工具请求头适配（实验）",
+      "clientHeadersHint": "开启后，插件只对自身发往 open.bigmodel.cn/api/coding/paas/v4/ 的请求添加 User-Agent: claude-cli/2.1.88 (external, cli) 与 x-app: cli（Chrome declarativeNetRequest 规则，不含 API Key），不影响网页和其他服务商。这是模仿编程工具请求头的实验，并非智谱官方支持的接入方式。"
+    },
+    "clientHeaders": {
+      "claudeCli": "开启：Claude Code CLI 请求头",
+      "off": "关闭：不修改请求头"
     },
     "preset": {
       "groq": "Groq",
+      "zhipu": "智谱 BigModel（普通 API）",
+      "zhipuHint": "普通 API 按量计费或抵扣资源包，不使用 GLM Coding Plan 额度。模型名请按智谱文档填写。",
+      "glmCodingPlan": "智谱 GLM Coding Plan（实验）",
+      "glmCodingPlanHint": "实验功能：使用 Coding Plan 专用端点，Key 与模型名按套餐页面填写。智谱规定套餐额度仅限官方支持的工具使用，会录不在支持名单内，服务端是否接受尚未验证；请求成功也不代表抵扣了套餐额度，请到智谱「费用明细」确认。出错时不会自动改用普通 API；1113 等错误可能是余额不足，也可能是套餐未被识别。",
       "openai": "OpenAI",
       "custom": "自定义",
       "qwen": "通义千问（百炼）",
