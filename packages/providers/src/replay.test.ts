@@ -327,6 +327,9 @@ describe('paraformer.transcribe', () => {
     ['malformed speaker', sentence({ begin_time: 0, end_time: 200, speaker_id: 'a' })],
     ['non-object result', 'null'],
     ['non-array transcripts', JSON.stringify({ transcripts: {} })],
+    ['missing transcripts', '{}'],
+    ['null transcripts', JSON.stringify({ transcripts: null })],
+    ['non-object transcript entry', JSON.stringify({ transcripts: ['x'] })],
   ])('rejects a downloaded result with %s as badResponse', async (_name, body) => {
     noWait()
     resultRoutes(body)

@@ -79,27 +79,26 @@ interface TaskOutput {
 
 /**
  * 下载的识别结果只校验用到的字段：时间戳必须是有限的非负数且不倒序，
- * 否则换算出 NaN / null 的逐字稿会被当成成功写入
+ * 否则换算出 NaN / null 的逐字稿会被当成成功写入。transcripts 必须存在：
+ * 缺失（如 `{}`）是异常响应，不能当成静音；明确的 `transcripts: []` 才是无语音结果
  */
 const RecognitionResult = z.object({
-  transcripts: z
-    .array(
-      z.object({
-        sentences: z
-          .array(
-            z
-              .object({
-                begin_time: z.number().nonnegative(),
-                end_time: z.number().nonnegative(),
-                text: z.string(),
-                speaker_id: z.number().int().nonnegative().nullish(),
-              })
-              .refine((s) => s.end_time >= s.begin_time),
-          )
-          .optional(),
-      }),
-    )
-    .optional(),
+  transcripts: z.array(
+    z.object({
+      sentences: z
+        .array(
+          z
+            .object({
+              begin_time: z.number().nonnegative(),
+              end_time: z.number().nonnegative(),
+              text: z.string(),
+              speaker_id: z.number().int().nonnegative().nullish(),
+            })
+            .refine((s) => s.end_time >= s.begin_time),
+        )
+        .optional(),
+    }),
+  ),
 })
 
 /** 会议语言 → language_hints；自动识别时不传，由服务端判断 */
@@ -117,7 +116,7 @@ export function paraformerLanguageHints(language: string): string[] | undefined 
 export function paraformerToTranscript(raw: unknown, language: string): Transcript {
   const parsed = RecognitionResult.safeParse(raw)
   if (!parsed.success) throw new ProviderError('badResponse', 'invalid recognition result')
-  const sentences = (parsed.data.transcripts ?? []).flatMap((t) => t.sentences ?? [])
+  const sentences = parsed.data.transcripts.flatMap((t) => t.sentences ?? [])
   const transcript = Transcript.safeParse({
     language,
     segments: sentences
