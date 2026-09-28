@@ -291,13 +291,8 @@ export class ProcessingQueue {
 
   /** 数据文件夹重新授权后：等待写入的任务重新排队 */
   async onFolderAuthorized(): Promise<void> {
-    if (!(await this.deps.folder.isReady())) return
-    for (const job of await this.deps.jobs.list()) {
-      if (job.state === 'waitingFolder') {
-        await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })
-      }
-    }
-    this.kick()
+    this.#reconciled = false
+    await this.start()
   }
 
   /** 停止正在执行的任务（离屏文档关闭前）；任务回到 queued，下次启动时继续 */

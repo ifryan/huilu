@@ -187,6 +187,50 @@ function setup(
 const DIR = '2026-09-28_1030_需求评审'
 
 describe('ProcessingQueue', () => {
+  it.each(['list', 'save', 'partialSave'])(
+    'retries folder reconciliation after a %s failure without stranding jobs',
+    async (failure) => {
+      const t = setup()
+      t.deps.startRetryMs = 5
+      await t.queue.start()
+      await t.settle()
+      const ids = failure === 'partialSave' ? [MEETING_ID, 'another-meeting'] : [MEETING_ID]
+      vi.spyOn(t.source, 'readMeeting').mockImplementation(async (id) => meeting({ id }))
+      for (const id of ids) {
+        await t.jobs.put({
+          meetingId: id,
+          state: 'waitingFolder',
+          attempts: 1,
+          checkpoints: {},
+          createdAt: 1,
+          updatedAt: 1,
+        })
+      }
+      if (failure === 'list') {
+        vi.spyOn(t.jobs, 'list').mockRejectedValueOnce(new Error('idb failure'))
+      } else {
+        const put = t.jobs.put.bind(t.jobs)
+        let failed = false
+        vi.spyOn(t.jobs, 'put').mockImplementation(async (job) => {
+          if (!failed && job.meetingId === ids.at(-1) && job.state === 'queued') {
+            failed = true
+            throw new Error('idb failure')
+          }
+          return put(job)
+        })
+      }
+      try {
+        const idle = t.onIdle()
+        await expect(t.queue.onFolderAuthorized()).rejects.toThrow('idb failure')
+        await idle
+        for (const id of ids) expect(await t.jobs.get(id)).toMatchObject({ state: 'done' })
+        expect(t.transcription.transcribe).toHaveBeenCalledTimes(ids.length)
+      } finally {
+        t.queue.stop()
+      }
+    },
+  )
+
   it('runs a persisted job even when the initial source status update fails', async () => {
     const t = setup({ meeting: meeting({ status: 'failed' }) })
     vi.spyOn(t.source, 'writeMeeting').mockRejectedValueOnce(new Error('source write failed'))
