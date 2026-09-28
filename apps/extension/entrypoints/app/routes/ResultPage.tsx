@@ -14,6 +14,7 @@ import {
   loadResult,
   meetingLibraryKey,
   resultMedia,
+  resultMediaInfo,
   saveResultEdit,
   type ResultDocument,
 } from '@/lib/meeting-library'
@@ -86,7 +87,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
   const speakers = meeting.speakers.filter((s) => resolveSpeaker(meeting, s.id) === s.id)
   const resolvedSpeaker = resolveSpeaker(meeting, selectedSpeaker)
   const speaker = speakers.some((s) => s.id === resolvedSpeaker) ? resolvedSpeaker : ''
-  const previewKind = meeting.media?.video ? 'video' : 'audio'
+  const previewKind = resultMediaInfo(doc, 'video') ? 'video' : 'audio'
   useEffect(() => {
     let cancelled = false
     let url: string | undefined

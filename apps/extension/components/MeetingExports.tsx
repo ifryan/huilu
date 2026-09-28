@@ -4,7 +4,7 @@ import { useTranslation } from '@huilu/i18n'
 import { extensionForMime } from '@huilu/recorder'
 import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
-import { resultMedia, type ResultDocument } from '@/lib/meeting-library'
+import { resultMedia, resultMediaInfo, type ResultDocument } from '@/lib/meeting-library'
 
 for (const exporter of textExporters)
   if (!registries.exporter.has(exporter.id)) registries.exporter.register(exporter)
@@ -35,8 +35,8 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
       active = false
     }
   }, [])
-  const video = doc.meeting.media?.video
-  const audio = doc.meeting.media?.audio
+  const video = resultMediaInfo(doc, 'video')
+  const audio = resultMediaInfo(doc, 'audio')
   const name = doc.meeting.title.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 160) || 'HuiLu'
   const run = async (exporter: Exporter) => {
     setBusy(true)
@@ -58,7 +58,7 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
     setError(false)
     try {
       const kind = video ? 'video' : 'audio'
-      const info = doc.meeting.media?.[kind]
+      const info = resultMediaInfo(doc, kind)
       const blob = await resultMedia(doc, kind)
       if (!blob || !info) throw new Error('missing')
       downloadBlob(blob, `${name}.${extensionForMime(info.mimeType)}`)

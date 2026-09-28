@@ -140,11 +140,18 @@ export async function loadResult(id: string): Promise<ResultDocument> {
   }
 }
 
+/** Use the metadata of the actual media source, including legacy OPFS recordings. */
+export function resultMediaInfo(doc: ResultDocument, kind: 'audio' | 'video') {
+  if (doc.source === 'folder') return doc.meeting.media?.[kind]
+  const track = doc.local?.tracks[kind]
+  return track && track.chunks > 0 ? track : undefined
+}
+
 export async function resultMedia(
   doc: ResultDocument,
   kind: 'audio' | 'video',
 ): Promise<Blob | undefined> {
-  const info = doc.meeting.media?.[kind]
+  const info = resultMediaInfo(doc, kind)
   if (!info) return undefined
   if (doc.source === 'folder') {
     if (!doc.root) throw new Error('folderUnavailable')
