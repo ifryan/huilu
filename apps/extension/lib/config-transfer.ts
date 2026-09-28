@@ -1,20 +1,37 @@
 // 配置导入 / 导出（纯逻辑，不依赖 WXT）
 import { describeConfigFields } from '@huilu/providers'
 import { z } from 'zod'
-import { getProvider, type ProviderKind, type ProviderSettings } from './providers'
+import {
+  getProvider,
+  hasProvider,
+  serviceOrigin,
+  type ProviderKind,
+  type ProviderSettings,
+} from './providers'
 
-const ProviderSettingsSchema = z.object({
-  providerId: z.string(),
-  configs: z.record(z.string(), z.record(z.string(), z.unknown())),
-})
+/**
+ * 服务商 ID 必须在对应的注册表里：getProvider 对未知 ID 会回退到默认服务商，
+ * 拼错的 ID 会被按另一家的 schema 校验并显示为「已配置」（PR #6 审查 r4092377798）
+ */
+const providerSettingsSchema = (kind: ProviderKind) => {
+  const known = (id: string) => hasProvider(kind, id)
+  const message = (id: string) => `Unknown ${kind} provider: ${id}`
+  return z.object({
+    providerId: z.string().refine(known, { error: (issue) => message(String(issue.input)) }),
+    configs: z.record(
+      z.string().refine(known, { error: (issue) => message(String(issue.input)) }),
+      z.record(z.string(), z.unknown()),
+    ),
+  })
+}
 
 export const ConfigFile = z.object({
   app: z.literal('huilu'),
   kind: z.literal('settings'),
   version: z.literal(1),
   exportedAt: z.string(),
-  transcription: ProviderSettingsSchema,
-  llm: ProviderSettingsSchema,
+  transcription: providerSettingsSchema('transcription'),
+  llm: providerSettingsSchema('llm'),
 })
 export type ConfigFile = z.infer<typeof ConfigFile>
 
@@ -57,7 +74,8 @@ export function buildConfigFile(
 
 /**
  * 合并导入的配置：导入文件里没有的服务商保持不变；
- * 导入的配置没带密钥（导出时未勾选）时，保留本机已保存的密钥。
+ * 导入的配置没带密钥（导出时未勾选）时，只有服务地址的 origin 没变才保留本机已保存的密钥——
+ * Key 属于原来的服务商，不能随导入被发给另一家（PR #6 审查 r4092377777，与表单的处理一致）。
  */
 export function mergeImported(
   current: TransferableSettings,
@@ -66,10 +84,14 @@ export function mergeImported(
   const merge = (kind: ProviderKind): ProviderSettings => {
     const configs = { ...current[kind].configs }
     for (const [id, imported] of Object.entries(file[kind].configs)) {
+      const local = configs[id]
+      const origin = serviceOrigin(id, imported)
+      const sameService =
+        local !== undefined && origin !== undefined && origin === serviceOrigin(id, local)
       const kept = Object.fromEntries(
         secretKeys(kind, id)
-          .filter((k) => imported[k] === undefined && configs[id]?.[k] !== undefined)
-          .map((k) => [k, configs[id]![k]]),
+          .filter((k) => sameService && imported[k] === undefined && local[k] !== undefined)
+          .map((k) => [k, local![k]]),
       )
       configs[id] = { ...imported, ...kept }
     }

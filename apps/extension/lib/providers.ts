@@ -22,6 +22,11 @@ export function listProviders(kind: ProviderKind): (TranscriptionProvider | LlmP
   return kind === 'transcription' ? registries.transcription.list() : registries.llm.list()
 }
 
+/** 该类服务商中是否注册了这个 ID（getProvider 对未知 ID 会回退到默认服务商） */
+export function hasProvider(kind: ProviderKind, id: string): boolean {
+  return (kind === 'transcription' ? registries.transcription : registries.llm).has(id)
+}
+
 export function getProvider(kind: ProviderKind, id: string) {
   const registry = kind === 'transcription' ? registries.transcription : registries.llm
   return registry.has(id) ? registry.get(id) : listProviders(kind)[0]!
@@ -56,9 +61,9 @@ export function initialFormValues(
   return values
 }
 
-/** 表单当前指向的服务地址的 origin；地址不完整时为 undefined */
-export function formOrigin(providerId: string, values: FormValues): string | undefined {
-  const url = connectionUrl(providerId, values)
+/** 表单 / 已保存配置指向的服务地址的 origin；地址不完整时为 undefined */
+export function serviceOrigin(providerId: string, config: ProviderConfig): string | undefined {
+  const url = connectionUrl(providerId, config)
   try {
     return url ? new URL(url).origin : undefined
   } catch {
@@ -75,7 +80,7 @@ function clearSecretsOnOriginChange(
   prev: FormValues,
   next: FormValues,
 ): FormValues {
-  if (formOrigin(provider.id, prev) === formOrigin(provider.id, next)) return next
+  if (serviceOrigin(provider.id, prev) === serviceOrigin(provider.id, next)) return next
   const cleared = { ...next }
   for (const field of describeConfigFields(provider.configSchema)) {
     if (field.kind === 'secret') cleared[field.key] = ''

@@ -198,30 +198,82 @@ describe('config import / export', () => {
     expect(() => parseConfigFile('not json')).toThrow()
   })
 
-  it('keeps local keys when importing a file without keys', () => {
-    const file = buildConfigFile(
+  const withoutKeys = (llmConfig: Record<string, unknown>) =>
+    buildConfigFile(
       {
         ...settings,
-        llm: {
-          providerId: 'openai-compatible',
-          configs: {
-            'openai-compatible': {
-              preset: 'openai',
-              baseUrl: 'https://api.openai.com/v1',
-              model: 'gpt-4o-mini',
-            },
-          },
-        },
+        llm: { providerId: 'openai-compatible', configs: { 'openai-compatible': llmConfig } },
       },
       { includeSecrets: false },
     )
-    const merged = mergeImported(settings, file)
+
+  it('keeps local keys when importing a file without keys for the same service address', () => {
+    const merged = mergeImported(
+      settings,
+      withoutKeys({
+        preset: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1/',
+        model: 'deepseek-reasoner',
+      }),
+    )
+    expect(merged.llm.configs['openai-compatible']).toEqual({
+      preset: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1/',
+      model: 'deepseek-reasoner',
+      apiKey: 'sk-l',
+    })
+    // 百炼没有 Base URL，地址由地域决定：同一地域保留 Key
+    expect(merged.transcription.configs['dashscope-paraformer']?.apiKey).toBe('sk-t')
+  })
+
+  // PR #6 审查 r4092377777：Key 属于原来的服务地址，不能随导入被发给另一家
+  it('drops local keys when the imported config points to another origin', () => {
+    const merged = mergeImported(
+      settings,
+      withoutKeys({ preset: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' }),
+    )
     expect(merged.llm.configs['openai-compatible']).toEqual({
       preset: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o-mini',
-      apiKey: 'sk-l',
     })
+    expect(isConfigured('llm', merged.llm)).toBe(false)
+
+    const intl = buildConfigFile(
+      {
+        ...settings,
+        transcription: {
+          providerId: 'dashscope-paraformer',
+          configs: { 'dashscope-paraformer': { region: 'intl', model: 'paraformer-v2' } },
+        },
+      },
+      { includeSecrets: false },
+    )
+    const toIntl = mergeImported(settings, intl)
+    expect(toIntl.transcription.configs['dashscope-paraformer']).not.toHaveProperty('apiKey')
+  })
+
+  it('drops local keys when the imported service address cannot be resolved', () => {
+    const merged = mergeImported(settings, withoutKeys({ preset: 'custom', model: 'x' }))
+    expect(merged.llm.configs['openai-compatible']).not.toHaveProperty('apiKey')
+  })
+
+  // PR #6 审查 r4092377798：未知 ID 不能回退成默认服务商后被当作已配置
+  it('rejects unknown provider IDs instead of falling back to a default provider', () => {
+    const file = buildConfigFile(settings, { includeSecrets: true })
+    const typo = {
+      ...file,
+      transcription: { ...file.transcription, providerId: 'dashscope-paraform' },
+    }
+    expect(() => parseConfigFile(JSON.stringify(typo))).toThrow(/dashscope-paraform/)
+    const unknownConfig = {
+      ...file,
+      llm: { ...file.llm, configs: { ...file.llm.configs, 'no-such-llm': { apiKey: 'x' } } },
+    }
+    expect(() => parseConfigFile(JSON.stringify(unknownConfig))).toThrow(/no-such-llm/)
+    // 转写的 ID 不能拿到大模型里用（反之亦然）
+    const crossKind = { ...file, llm: { ...file.llm, providerId: 'dashscope-paraformer' } }
+    expect(() => parseConfigFile(JSON.stringify(crossKind))).toThrow(/dashscope-paraformer/)
   })
 
   it('imports keys when present and switches the selected provider', () => {
