@@ -1,6 +1,11 @@
 // 处理管线在插件中的装配：服务配置解析、OPFS 录制读取。纯逻辑部分不依赖 WXT，便于单元测试
 import { registries, type LlmProvider, type TranscriptionProvider } from '@huilu/core'
-import type { MeetingSource, ResolvedService, ResolvedServices } from '@huilu/pipeline'
+import {
+  PipelineError,
+  type MeetingSource,
+  type ResolvedService,
+  type ResolvedServices,
+} from '@huilu/pipeline'
 import { extensionForMime, type RecordingStore } from '@huilu/recorder'
 import { connectionUrl, type ProviderKind } from './providers'
 import type { ProcessingSettings } from './processing-settings'
@@ -72,7 +77,12 @@ export function recordingSource(store: RecordingStore): MeetingSource {
     },
     async readMedia(id) {
       const found = await open(id)
-      if (!found) return []
+      if (!found) throw new PipelineError('sourceDataUnavailable')
+      const meeting = await found.dir.readMeeting()
+      for (const kind of ['audio', 'video'] as const) {
+        if (meeting?.media?.[kind] && !found.manifest.tracks[kind]?.chunks)
+          throw new PipelineError('sourceDataUnavailable')
+      }
       const out: { name: string; blob: Blob }[] = []
       for (const name of ['video', 'audio'] as const) {
         const track = found.manifest.tracks[name]

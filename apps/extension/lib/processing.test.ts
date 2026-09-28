@@ -149,4 +149,28 @@ describe('recordingSource', () => {
     expect((await source.readMedia('r1')).map((m) => m.name)).toEqual(['video.webm'])
     expect(await source.readAudio('missing')).toBeUndefined()
   })
+
+  it.each(['directory', 'manifest', 'invalidManifest', 'unreadableManifest', 'declaredTrack'])(
+    'rejects unavailable source media after losing %s',
+    async (missing) => {
+      const fs = new MemoryFs()
+      const store = new RecordingStore(fs.provider)
+      const dir = await store.create('r1')
+      await dir.writeMeeting({ ...meeting, media: { audio: { mimeType: 'audio/webm' } } })
+      if (missing === 'directory') await store.remove('r1')
+      if (missing === 'declaredTrack') await dir.writeManifest(manifest({}))
+      if (missing === 'invalidManifest') {
+        const file = await dir.handle.getFileHandle('manifest.json', { create: true })
+        const writer = await file.createWritable()
+        await writer.write('{}')
+        await writer.close()
+      }
+      if (missing === 'unreadableManifest') {
+        vi.spyOn(dir.handle, 'getFileHandle').mockRejectedValueOnce(new Error('read failed'))
+      }
+      await expect(recordingSource(store).readMedia('r1')).rejects.toMatchObject({
+        code: 'sourceDataUnavailable',
+      })
+    },
+  )
 })
