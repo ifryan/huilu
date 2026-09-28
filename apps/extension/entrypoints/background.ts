@@ -20,6 +20,7 @@ import {
 } from '@/lib/settings'
 import { hasHostPermission, openAppPage } from '@/platform'
 import { CaptureCancelledError, requestTabCapture } from '@/platform/capture'
+import { syncCodingPlanHeaders } from '@/platform/coding-plan-headers'
 import {
   closeOffscreenDocument,
   ensureOffscreenDocument,
@@ -408,11 +409,15 @@ export default defineBackground(() => {
   onMessage('dismissRecordingNotice', () => dismissNotice())
   onMessage('processMeeting', ({ data: id }) => processMeeting(id))
 
-  // 离屏文档里的处理队列需要的平台能力
-  onMessage('processingSettings', async () => ({
-    transcription: await transcriptionSetting.getValue(),
-    llm: await llmSetting.getValue(),
-  }))
+  // 离屏文档里的处理队列需要的平台能力。每一步开始前都会来取设置：
+  // 先按同一份设置同步 Coding Plan 请求头规则，保证发出的请求与所用配置一致
+  onMessage('processingSettings', async () => {
+    await syncCodingPlanHeaders().catch(logHeaderRuleError)
+    return {
+      transcription: await transcriptionSetting.getValue(),
+      llm: await llmSetting.getValue(),
+    }
+  })
   onMessage('processingHasHostPermission', ({ data: url }) => hasHostPermission(url))
   onMessage('processingIdle', () => closeOffscreenIfIdle())
 
@@ -433,6 +438,10 @@ export default defineBackground(() => {
     await closeOffscreenIfIdle()
   })
 
+  // GLM Coding Plan 请求头规则（实验）：启动 / 安装升级 / 设置变化时按已保存的设置同步
+  void syncCodingPlanHeaders().catch(logHeaderRuleError)
+  llmSetting.watch(() => void syncCodingPlanHeaders().catch(logHeaderRuleError))
+
   // 浏览器重启 / Service Worker 被唤醒：继续没做完的处理任务
   browser.runtime.onStartup.addListener(() => void resumeProcessing())
   void resumeProcessing()
@@ -449,6 +458,10 @@ export default defineBackground(() => {
     toggleRecording(tab).catch((e: unknown) => console.error('[huilu] toggle recording failed', e))
   })
 })
+
+function logHeaderRuleError(e: unknown) {
+  console.error('[huilu] failed to sync coding plan header rules', e)
+}
 
 function logProcessingError(e: unknown) {
   console.error('[huilu] processing request failed', e)

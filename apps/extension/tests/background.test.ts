@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
   folderAuthorizedCalls: 0,
   /** IndexedDB 中的处理任务（后台只读） */
   jobs: [] as { meetingId: string; state: string }[],
+  /** declarativeNetRequest 会话规则 */
+  sessionRules: [] as { id: number; condition: { urlFilter?: string } }[],
 }))
 
 vi.mock('@/lib/messaging', () => ({
@@ -119,6 +121,7 @@ beforeEach(() => {
     processRequests: [],
     folderAuthorizedCalls: 0,
     jobs: [],
+    sessionRules: [],
   })
   h.recorderWindows.clear()
   // Chrome 的 windows.get 对不存在的窗口会报错（fakeBrowser 返回 undefined）
@@ -137,6 +140,18 @@ beforeEach(() => {
   Object.assign(fakeBrowser, {
     scripting: { executeScript: async () => [] },
     commands: { onCommand: { addListener: () => {} } },
+    declarativeNetRequest: {
+      getSessionRules: async () => h.sessionRules,
+      updateSessionRules: async (u: {
+        removeRuleIds: number[]
+        addRules: typeof h.sessionRules
+      }) => {
+        h.sessionRules = [
+          ...h.sessionRules.filter((r) => !u.removeRuleIds.includes(r.id)),
+          ...u.addRules,
+        ]
+      },
+    },
   })
   background.main()
 })
@@ -307,5 +322,67 @@ describe('background processing lifecycle', () => {
     await dataFolderAuthorizedSetting.setValue({ name: 'HuiLu', at: Date.now() + 1 })
     await settle()
     expect(h.folderAuthorizedCalls).toBe(1)
+  })
+})
+
+describe('GLM Coding Plan header rule (experimental)', () => {
+  const planConfig = {
+    preset: 'glmCodingPlan',
+    baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    apiKey: 'plan-key',
+    model: 'glm-x',
+  }
+
+  it('follows the saved LLM settings: on, switched off, back to the standard API', async () => {
+    const { llmSetting } = await import('@/lib/settings')
+    await settle()
+    expect(h.sessionRules).toEqual([])
+
+    await llmSetting.setValue({
+      providerId: 'openai-compatible',
+      configs: { 'openai-compatible': planConfig },
+    })
+    await settle()
+    expect(h.sessionRules.map((r) => r.condition.urlFilter)).toEqual([
+      '|https://open.bigmodel.cn/api/coding/paas/v4/',
+    ])
+
+    await llmSetting.setValue({
+      providerId: 'openai-compatible',
+      configs: { 'openai-compatible': { ...planConfig, clientHeaders: 'off' } },
+    })
+    await settle()
+    expect(h.sessionRules).toEqual([])
+
+    await llmSetting.setValue({
+      providerId: 'openai-compatible',
+      configs: {
+        'openai-compatible': {
+          ...planConfig,
+          preset: 'zhipu',
+          baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        },
+      },
+    })
+    await settle()
+    expect(h.sessionRules).toEqual([])
+  })
+
+  it('re-creates the rule on worker start and before each processing step', async () => {
+    const { llmSetting } = await import('@/lib/settings')
+    await llmSetting.setValue({
+      providerId: 'openai-compatible',
+      configs: { 'openai-compatible': planConfig },
+    })
+    await settle()
+    // 浏览器重启：会话规则被清空，后台启动时按已保存的设置恢复
+    h.sessionRules = []
+    background.main()
+    await settle()
+    expect(h.sessionRules).toHaveLength(1)
+    // 处理步骤取设置前也会同步
+    h.sessionRules = []
+    await call('processingSettings')
+    expect(h.sessionRules).toHaveLength(1)
   })
 })
