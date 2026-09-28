@@ -381,6 +381,41 @@ describe('RecorderController', () => {
     expect(manifest.microphone).toBe(false)
   })
 
+  // PR #6 审查 r4092377788：没有任何声音时不能录一条静音当作可转写的音频
+  it('keeps the video but records no transcript audio when there is no audio at all', async () => {
+    media.warnings = ['no-audio']
+    await controller.start(options({ id: 'mute', source: 'screen', sourceAudio: false }))
+    expect(media.recorders).toHaveLength(1)
+    const [video] = media.recorders
+    video!.emit('v1')
+    await flush()
+    const { lastResult } = await controller.stop()
+    expect(lastResult).toMatchObject({ saved: true, endReason: 'user', error: undefined })
+
+    const dir = (await store.open('mute'))!
+    const manifest = (await dir.readManifest())!
+    expect(manifest.tracks.audio).toBeUndefined()
+    expect(manifest.tracks.video?.chunks).toBe(2)
+    const meeting = (await dir.readMeeting())!
+    expect(meeting.status).toBe('failed')
+    expect(meeting.media?.audio).toBeUndefined()
+    const [listed] = await listLocalRecordings(store)
+    expect(listed).toMatchObject({ id: 'mute', state: 'saved', transcribable: false })
+  })
+
+  it('recovers a crashed recording without audio as saved video that cannot be transcribed', async () => {
+    media.warnings = ['no-audio']
+    await controller.start(options({ id: 'mutecrash', source: 'screen', sourceAudio: false }))
+    media.recorders[0]!.emit('v1')
+    await flush()
+    const next = new RecorderController({ store, media, now: clock.now })
+    const meeting = await next.recover('mutecrash')
+    expect(meeting).toMatchObject({ status: 'failed' })
+    expect(meeting?.media?.audio).toBeUndefined()
+    const [listed] = await listLocalRecordings(store)
+    expect(listed).toMatchObject({ state: 'saved', transcribable: false })
+  })
+
   describe('recovery after a crash', () => {
     /** 模拟浏览器崩溃：录制到一半，离屏文档连同 controller 一起消失 */
     async function crashMidRecording() {

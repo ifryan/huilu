@@ -165,7 +165,8 @@ export class RecorderController {
       await this.deps.store.remove(id)
       return undefined
     }
-    if (!manifest.tracks.audio?.chunks) {
+    // 录制时就没有声音（没有 audio 轨道）不算出错；有 audio 轨道却没写成分片才算
+    if (manifest.tracks.audio && !manifest.tracks.audio.chunks) {
       manifest.error ??=
         'Transcript audio track recorded no data; this recording cannot be transcribed'
     }

@@ -194,13 +194,19 @@ export class RecordingSession {
           }),
         )
       }
-      this.#addTrack(
-        'audio',
-        media.createRecorder([this.#media.transcriptAudioTrack], {
-          mimeType: audioMime,
-          audioBitsPerSecond: TRANSCRIPT_AUDIO_BITRATE,
-        }),
-      )
+      // 没有任何声音时没有转写音轨：manifest 里就没有 audio 轨道，meeting.json 标为不可转写
+      const { transcriptAudioTrack } = this.#media
+      if (transcriptAudioTrack) {
+        this.#addTrack(
+          'audio',
+          media.createRecorder([transcriptAudioTrack], {
+            mimeType: audioMime,
+            audioBitsPerSecond: TRANSCRIPT_AUDIO_BITRATE,
+          }),
+        )
+      } else if (o.mode === 'audio') {
+        throw new Error('Audio capture returned no transcript audio track')
+      }
 
       this.#startedAt = this.#now()
       // manifest 先落盘再开始录：之后任何时刻崩溃都能在「恢复未完成的录制」里看到它

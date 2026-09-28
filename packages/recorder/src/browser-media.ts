@@ -57,20 +57,12 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
   }
 
   try {
-    // 所有声音先汇到 bus，再分两路输出：视频用的立体声轨，和转写用的单声道轨
+    // 所有声音先汇到 bus，再分两路输出：视频用的立体声轨，和转写用的单声道轨（有声音时才有）
     const bus = ctx.createGain()
     const mix = ctx.createMediaStreamDestination()
     bus.connect(mix)
-    // 转写只要单声道：MediaStreamDestination 默认两声道，一条轨道不等于单声道，要显式下混。
-    // 百炼 Paraformer 的发言人分离要求单声道音频，固定 24kbps 下单声道也不会被两个声道平分
-    const transcript = ctx.createMediaStreamDestination()
-    transcript.channelCount = 1
-    transcript.channelCountMode = 'explicit'
-    transcript.channelInterpretation = 'speakers'
-    bus.connect(transcript)
-    // 没有任何输入时（窗口 / 屏幕没分享声音且麦克风关闭）目标轨道不产生音频帧，
-    // 转写音频的 MediaRecorder 就一个分片都没有，整场录制会被当作「没有数据」丢弃。
-    // 接一路恒为 0 的信号保证音轨持续输出（静音），视频照常保留
+    // 没有任何输入时（窗口 / 屏幕没分享声音且麦克风关闭）目标轨道不产生音频帧。
+    // 接一路恒为 0 的信号保证视频里的音轨持续输出（静音）；这路静音不进转写（见下）
     const silence = ctx.createConstantSource()
     silence.offset.value = 0
     silence.connect(bus)
@@ -92,16 +84,28 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
       }
     }
 
-    if (sourceAudio.length === 0 && !mic) {
+    const hasAudio = sourceAudio.length > 0 || mic !== undefined
+    if (!hasAudio) {
       if (req.mode === 'audio') throw new NoAudioSourceError()
+      // 只保留视频：不生成转写音轨，否则会录出一整条静音，之后被当作可转写的内容上传（PR #6 审查 r4092377788）
       warnings.push('no-audio')
+    }
+    let transcriptAudioTrack: MediaStreamTrack | undefined
+    if (hasAudio) {
+      // 转写只要单声道：MediaStreamDestination 默认两声道，一条轨道不等于单声道，要显式下混。
+      // 百炼 Paraformer 的发言人分离要求单声道音频，固定 24kbps 下单声道也不会被两个声道平分
+      const transcript = ctx.createMediaStreamDestination()
+      transcript.channelCount = 1
+      transcript.channelCountMode = 'explicit'
+      transcript.channelInterpretation = 'speakers'
+      bus.connect(transcript)
+      transcriptAudioTrack = transcript.stream.getAudioTracks()[0]
+      if (!transcriptAudioTrack) throw new Error('AudioContext produced no transcript audio track')
     }
     if (ctx.state === 'suspended') await ctx.resume()
 
     const audioTrack = mix.stream.getAudioTracks()[0]
-    const transcriptAudioTrack = transcript.stream.getAudioTracks()[0]
-    if (!audioTrack || !transcriptAudioTrack)
-      throw new Error('AudioContext produced no audio track')
+    if (!audioTrack) throw new Error('AudioContext produced no audio track')
     const videoTrack = source.getVideoTracks()[0]
     const settings = videoTrack?.getSettings()
 

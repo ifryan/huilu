@@ -164,7 +164,8 @@ export class FakeMedia implements MediaBackend {
     return {
       videoTrack: request.mode === 'video' ? fakeTrack('video') : undefined,
       audioTrack: fakeTrack('audio'),
-      transcriptAudioTrack: fakeTrack('audio'),
+      // 与 browser-media 一致：没有任何声音时不提供转写音轨
+      transcriptAudioTrack: this.warnings.includes('no-audio') ? undefined : fakeTrack('audio'),
       videoSettings: request.mode === 'video' ? { width: 1280, height: 720, fps: 15 } : undefined,
       warnings: [...this.warnings],
       onEnded: (cb) => void this.#ended.push(cb),
