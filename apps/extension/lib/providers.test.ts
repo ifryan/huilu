@@ -18,6 +18,26 @@ const llm = getProvider('llm', 'openai-compatible')
 const paraformer = getProvider('transcription', 'dashscope-paraformer')
 
 describe('provider forms', () => {
+  it.each([
+    {
+      kind: 'transcription' as const,
+      config: { region: 'cn', apiKey: 'fixture', model: 'paraformer-v2' },
+    },
+    {
+      kind: 'llm' as const,
+      config: {
+        preset: 'qwen',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        apiKey: 'fixture',
+        model: 'qwen-plus',
+      },
+    },
+  ])('does not offer processing for an unregistered $kind provider', ({ kind, config }) => {
+    expect(isConfigured(kind, { providerId: 'unknown', configs: { unknown: config } })).toBe(
+      false,
+    )
+  })
+
   it('prefills the default preset for a new provider', () => {
     expect(initialFormValues(llm)).toEqual({
       preset: 'qwen',
