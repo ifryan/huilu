@@ -743,6 +743,42 @@ describe('ProcessingQueue', () => {
     expect(t.folder.files.has(`${DIR} (2)/transcript.json`)).toBe(true)
   })
 
+  it('skips a candidate folder name occupied by a regular file', async () => {
+    const t = setup()
+    const read = t.folder.readFile.bind(t.folder)
+    vi.spyOn(t.folder, 'readFile').mockImplementation(async (path) => {
+      // `${DIR}` is a file at the root: traversing it as a directory fails like the real API.
+      if (path.startsWith(`${DIR}/`)) throw new DOMException('not a directory', 'TypeMismatchError')
+      return read(path)
+    })
+    const idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
+    expect(t.folder.files.has(`${DIR} (2)/meeting.json`)).toBe(true)
+    expect(t.folder.writes.some((p) => p.startsWith(`${DIR}/`))).toBe(false)
+  })
+
+  it.each([
+    ['an IO error', () => new DOMException('disk error', 'NotReadableError'), { error: { code: 'writeFailed' } }],
+    ['a permission loss', () => new FolderNotReadyError('prompt'), { state: 'waitingFolder' }],
+  ])('does not skip a candidate folder on %s', async (_name, error, expected) => {
+    const t = setup()
+    const read = t.folder.readFile.bind(t.folder)
+    vi.spyOn(t.folder, 'readFile').mockImplementation(async (path) => {
+      if (path === `${DIR}/meeting.json`) throw error()
+      return read(path)
+    })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    const job = await t.job()
+    expect(job).toMatchObject(expected)
+    expect(job?.state).not.toBe('done')
+    expect(job?.folderDir).toBeUndefined()
+    expect(t.folder.writes.some((p) => p.startsWith(`${DIR} (2)/`))).toBe(false)
+    t.queue.stop()
+  })
+
   it('rechecks a cached directory after switching to a folder owned by another meeting', async () => {
     const t = setup()
     let idle = t.onIdle()

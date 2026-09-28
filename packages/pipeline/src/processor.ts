@@ -94,6 +94,11 @@ const WORK = {
   piece: (id: string, i: number) => `${id}/pieces/${String(i).padStart(3, '0')}.json`,
 }
 
+/** 路径上某一段的类型不对：期望目录却是文件，或反过来 */
+const isTypeMismatch = (e: unknown) =>
+  typeof e === 'object' && e !== null && (e as { name?: unknown }).name === 'TypeMismatchError'
+const OCCUPIED = Symbol('occupied')
+
 /** 切片上限：留出余量，避免编码 / 封装开销让切片刚好超限 */
 const SPLIT_MARGIN = 0.9
 
@@ -622,9 +627,21 @@ export class ProcessingQueue {
       ...(job.folderDir ? [job.folderDir] : []),
       ...Array.from({ length: 99 }, (_, i) => (i === 0 ? base : `${base} (${i + 1})`)),
     ]
+    // 候选名已被普通文件占用（或 meeting.json 是目录）时读取会抛 TypeMismatchError：
+    // 视为别人的内容，换下一个后缀；权限 / IO 等其他错误照常抛出
+    const probe = async (path: string): Promise<Blob | undefined | typeof OCCUPIED> => {
+      try {
+        return await this.deps.folder.readFile(path)
+      } catch (e) {
+        if (isTypeMismatch(e)) return OCCUPIED
+        throw e
+      }
+    }
     for (const dir of new Set(candidates)) {
-      const metadata = await this.deps.folder.readFile(`${dir}/meeting.json`)
-      const reservation = await this.deps.folder.readFile(`${dir}/.huilu-owner.json`)
+      const metadata = await probe(`${dir}/meeting.json`)
+      if (metadata === OCCUPIED) continue
+      const reservation = await probe(`${dir}/.huilu-owner.json`)
+      if (reservation === OCCUPIED) continue
       const ownedByMeeting = async (blob: Blob) => {
         try {
           return (JSON.parse(await blob.text()) as { id?: unknown }).id === meeting.id
