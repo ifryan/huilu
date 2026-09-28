@@ -1,4 +1,4 @@
-import type { Meeting } from '@huilu/core'
+import { migrateMeeting, type Meeting } from '@huilu/core'
 import { IdbJobStore } from '@huilu/pipeline/jobs'
 import { extensionForMime, type LocalRecording } from '@huilu/recorder'
 import {
@@ -52,7 +52,26 @@ async function loadFolderLibrary() {
   let available = false
   let scanFailed = false
   if (root) {
-    if (cached && (await root.isSameEntry(cached.root))) entries = cached.entries
+    try {
+      if (cached && Array.isArray(cached.entries) && (await root.isSameEntry(cached.root))) {
+        entries = cached.entries.map((entry) => {
+          if (
+            !entry ||
+            typeof entry.key !== 'string' ||
+            typeof entry.dir !== 'string' ||
+            (entry.issue !== undefined &&
+              entry.issue !== 'damaged' &&
+              entry.issue !== 'duplicate') ||
+            (!entry.meeting && entry.issue !== 'damaged')
+          )
+            throw new Error('invalidIndex')
+          return { ...entry, meeting: entry.meeting ? migrateMeeting(entry.meeting) : undefined }
+        })
+      }
+    } catch {
+      // The index is disposable: invalid handles or old cache shapes cannot block source reads.
+      entries = []
+    }
     const folder = LocalFolderStorageAdapter.forHandle(root)
     if (await folder.isReady()) {
       try {
@@ -144,6 +163,7 @@ export interface ResultDocument extends MeetingDocument {
 export async function loadResult(id: string): Promise<ResultDocument> {
   const library = await loadLibrary()
   const item = library.items.find((r) => r.id === id)
+  if (item?.folder?.issue === 'duplicate') throw new Error('duplicateMeeting')
   const job = await jobs.get(id)
   if (item?.folder || job?.folderCommitted || job?.state === 'done') {
     const root = item?.root ?? (await currentRoot())
