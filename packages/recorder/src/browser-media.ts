@@ -69,6 +69,11 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
     silence.offset.value = 0
     silence.connect(bus)
     silence.start()
+    // 生命周期监听保留已结束的已授权来源轨道；混音可以排除它们，但不能漏掉启动期间来源结束。
+    const lifecycleTracks = [
+      ...source.getVideoTracks(),
+      ...(req.sourceAudio ? source.getAudioTracks() : []),
+    ]
     // 即使浏览器意外返回音轨，关闭来源音频时也不能把它接入混音。
     const sourceAudio = req.sourceAudio
       ? source.getAudioTracks().filter((t) => t.readyState !== 'ended')
@@ -145,7 +150,7 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
           fired = true
           callback()
         }
-        for (const track of [...source.getVideoTracks(), ...sourceAudio]) {
+        for (const track of lifecycleTracks) {
           if (track.readyState === 'ended') queueMicrotask(once)
           else track.addEventListener('ended', once, { once: true })
         }

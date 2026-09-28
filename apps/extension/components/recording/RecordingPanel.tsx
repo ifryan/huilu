@@ -13,10 +13,10 @@ import { LastRecordingNotice, RecordingStatusCard, StartErrorNotice } from './Re
  */
 export function RecordingPanel() {
   const { t } = useTranslation()
-  const { data: status } = useRecorderStatus()
   // 关闭时记下当时的录制（或「空闲」）；换了一场录制就重新显示
   const [hiddenFor, setHiddenFor] = useState<string>()
   const [collapsed, setCollapsed] = useState(false)
+  const { data: status } = useRecorderStatus({ meterVisible: !collapsed, hiddenFor })
   const [pos, setPos] = useState<{ right: number; bottom: number }>({ right: 16, bottom: 16 })
   const panel = useRef<HTMLElement | null>(null)
   const drag = useRef<{ x: number; y: number; right: number; bottom: number }>(undefined)

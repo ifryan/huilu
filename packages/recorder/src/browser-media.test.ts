@@ -161,6 +161,31 @@ describe('actual audio routing', () => {
     expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
     expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
   })
+  it('reports an audio-only source that ended before microphone initialization completed', async () => {
+    const ended = new Track('audio')
+    ended.readyState = 'ended'
+    source = new Stream([ended])
+    getUserMedia.mockReset().mockResolvedValueOnce(source).mockResolvedValueOnce(mic)
+    const captured = await browserMediaBackend.capture({ ...request, mode: 'audio' })
+    expect(Context.current.sources.map((s) => s.stream)).toEqual([mic])
+    const onEnded = vi.fn()
+    captured.onEnded(onEnded)
+    await Promise.resolve()
+    expect(onEnded).toHaveBeenCalledOnce()
+    captured.stop()
+  })
+  it('does not classify intentionally stopped, excluded audio as an ended source', async () => {
+    const captured = await browserMediaBackend.capture({
+      ...request,
+      sourceAudio: false,
+      sourceAudioRequested: false,
+    })
+    const onEnded = vi.fn()
+    captured.onEnded(onEnded)
+    await Promise.resolve()
+    expect(onEnded).not.toHaveBeenCalled()
+    captured.stop()
+  })
   it('stops the already opened source if AudioContext creation fails', async () => {
     vi.stubGlobal(
       'AudioContext',
