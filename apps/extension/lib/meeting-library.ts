@@ -20,6 +20,13 @@ import { listRecordings, openRecordingTrack } from './library'
 const index = new MeetingIndex()
 const handles = new IdbHandleStore()
 const jobs = new IdbJobStore()
+let lastRoot: FolderHandle | undefined
+async function currentRoot(): Promise<FolderHandle | undefined> {
+  const root = await handles.get()
+  if (root && lastRoot && (await root.isSameEntry(lastRoot))) return lastRoot
+  lastRoot = root
+  return root
+}
 export const meetingLibraryKey = ['meetingLibrary'] as const
 export interface LibraryItem {
   key: string
@@ -40,7 +47,7 @@ export interface LibrarySnapshot {
 export async function loadLibrary(): Promise<LibrarySnapshot> {
   const [local, root, cached] = await Promise.all([
     listRecordings(),
-    handles.get(),
+    currentRoot(),
     index.read().catch(() => undefined),
   ])
   let entries: MeetingEntry[] = []
@@ -107,7 +114,7 @@ export async function loadResult(id: string): Promise<ResultDocument> {
   const item = library.items.find((r) => r.id === id)
   const job = await jobs.get(id)
   if (item?.folder || job?.folderCommitted || job?.state === 'done') {
-    const root = item?.root ?? (await handles.get())
+    const root = item?.root ?? (await currentRoot())
     if (!root) throw new Error('folderUnavailable')
     const folder = LocalFolderStorageAdapter.forHandle(root)
     if (!(await folder.isReady())) throw new Error('folderUnavailable')

@@ -90,12 +90,20 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
     let url: string | undefined
     void resultMedia(doc, previewKind)
       .then((blob) => {
-        if (cancelled || !blob) return
+        if (cancelled) return
+        if (!blob) {
+          setMedia(undefined)
+          return
+        }
+        setMediaError(false)
         url = URL.createObjectURL(blob)
         setMedia({ url, kind: previewKind })
       })
       .catch(() => {
-        if (!cancelled) setMediaError(true)
+        if (!cancelled) {
+          setMedia(undefined)
+          setMediaError(true)
+        }
       })
     return () => {
       cancelled = true
@@ -103,7 +111,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
     }
     // Metadata edits do not reload the media or reset the playhead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.dir, doc.source, previewKind])
+  }, [doc.dir, doc.source, doc.root, previewKind])
   const save = async (edit: MeetingEdit) => {
     if ((edit.type === 'title' || edit.type === 'rename') && !edit.value.trim()) {
       setSaveState('empty')

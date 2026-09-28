@@ -64,7 +64,12 @@ export function MeetingPlayer({
     onEnded: () => setPlaying(false),
     onError: () => setError(true),
     onLoadedMetadata: () => {
-      if (element.current) element.current.playbackRate = Number(rate)
+      if (element.current) {
+        element.current.playbackRate = Number(rate)
+        const ms = element.current.currentTime * 1000
+        setTime(ms)
+        onTime(ms)
+      }
     },
   }
   return (

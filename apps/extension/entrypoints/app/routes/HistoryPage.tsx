@@ -179,7 +179,11 @@ function Thumbnail({ item }: { item: LibraryItem }) {
               'video',
             )
           : (await openRecordingMedia(item.local!))?.blob
-        if (!blob || cancelled) return
+        if (cancelled) return
+        if (!blob) {
+          setSrc(undefined)
+          return
+        }
         objectUrl = URL.createObjectURL(blob)
         setSrc(objectUrl)
       })().catch(() => {})
@@ -192,7 +196,7 @@ function Thumbnail({ item }: { item: LibraryItem }) {
     }
     // Only replace the preview when its source changes, not on each index refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.id, item.available, item.folder?.dir, video])
+  }, [item.id, item.available, item.folder?.dir, item.root, video])
   return (
     <div
       ref={host}
