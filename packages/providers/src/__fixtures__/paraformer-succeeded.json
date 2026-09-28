@@ -1,0 +1,19 @@
+{
+  "request_id": "0b0b0b0b-0000-0000-0000-000000000004",
+  "output": {
+    "task_id": "task-0001",
+    "task_status": "SUCCEEDED",
+    "submit_time": "2026-09-28 10:00:00.000",
+    "scheduled_time": "2026-09-28 10:00:00.100",
+    "end_time": "2026-09-28 10:00:20.000",
+    "results": [
+      {
+        "file_url": "oss://dashscope-instant/abc123/2026-09-28/xyz/audio.webm",
+        "transcription_url": "https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/prod/paraformer-v2/task-0001.json?Expires=1&Signature=x",
+        "subtask_status": "SUCCEEDED"
+      }
+    ],
+    "task_metrics": { "TOTAL": 1, "SUCCEEDED": 1, "FAILED": 0 }
+  },
+  "usage": { "duration": 45 }
+}

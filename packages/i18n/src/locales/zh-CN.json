@@ -295,6 +295,8 @@
       "timeout": "连接超时：请检查网络或代理",
       "aborted": "已取消",
       "badResponse": "返回的内容无法识别：请检查 Base URL 是否指向正确的接口",
+      "fileTooLarge": "音频文件超过服务商的单文件上限",
+      "taskFailed": "服务商未能完成识别",
       "notImplemented": "功能尚未实现"
     }
   },

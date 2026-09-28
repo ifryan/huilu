@@ -1,0 +1,39 @@
+{
+  "file_url": "oss://dashscope-instant/abc123/2026-09-28/xyz/audio.webm",
+  "properties": {
+    "audio_format": "opus",
+    "channels": [0],
+    "original_sampling_rate": 48000,
+    "original_duration_in_milliseconds": 45000
+  },
+  "transcripts": [
+    {
+      "channel_id": 0,
+      "content_duration_in_milliseconds": 42000,
+      "text": "我们开始今天的需求评审。好的，先看登录页。登录页下周三前出设计稿。",
+      "sentences": [
+        {
+          "begin_time": 760,
+          "end_time": 3240,
+          "text": "我们开始今天的需求评审。",
+          "sentence_id": 1,
+          "speaker_id": 0
+        },
+        {
+          "begin_time": 3900,
+          "end_time": 6120,
+          "text": "好的，先看登录页。",
+          "sentence_id": 2,
+          "speaker_id": 1
+        },
+        {
+          "begin_time": 30000,
+          "end_time": 34500,
+          "text": "登录页下周三前出设计稿。",
+          "sentence_id": 3,
+          "speaker_id": 0
+        }
+      ]
+    }
+  ]
+}

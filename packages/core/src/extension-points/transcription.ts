@@ -7,6 +7,19 @@ export interface TaskContext {
   onProgress?: (progress: number) => void
 }
 
+/**
+ * 断点：服务商把「已上传的文件地址、已提交的任务号」等中间状态交给处理管线持久化，
+ * 重试 / 浏览器重启后从这里继续，避免重复上传、重复计费。值必须能 JSON 序列化
+ */
+export interface Checkpoint {
+  get(): unknown
+  set(value: unknown): Promise<void>
+}
+
+export interface TranscriptionContext extends TaskContext {
+  checkpoint?: Checkpoint
+}
+
 export interface AudioInput {
   blob: Blob
   mimeType: string
@@ -27,5 +40,5 @@ export interface TranscriptionProvider<Config = unknown> {
     languages: string[]
   }
   testConnection(config: Config, ctx: TaskContext): Promise<void>
-  transcribe(input: AudioInput, config: Config, ctx: TaskContext): Promise<Transcript>
+  transcribe(input: AudioInput, config: Config, ctx: TranscriptionContext): Promise<Transcript>
 }

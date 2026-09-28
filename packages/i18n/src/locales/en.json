@@ -295,6 +295,8 @@
       "timeout": "Connection timed out: check your network or proxy",
       "aborted": "Cancelled",
       "badResponse": "Unrecognized response: check that the Base URL points to the right API",
+      "fileTooLarge": "The audio file exceeds the provider's single-file limit",
+      "taskFailed": "The provider could not finish the job",
       "notImplemented": "Not implemented yet"
     }
   },
