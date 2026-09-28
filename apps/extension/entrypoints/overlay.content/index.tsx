@@ -23,7 +23,8 @@ export default defineContentScript({
       // 面板内的输入不要触发网页的快捷键
       isolateEvents: true,
       onMount: (container) => mountInto(container, <RecordingPanel />),
-      onRemove: (root) => void root?.then((r) => r.unmount()),
+      // 移除面板（关闭或被重新注入替换）时一并释放语言监听
+      onRemove: (mounted) => void mounted?.then((m) => m.unmount()),
     })
     ui.mount()
   },

@@ -15,14 +15,22 @@ export async function mount(node: ReactNode) {
   localeSetting.watch((next) => next && (document.documentElement.lang = next))
 }
 
-/** 挂载到任意容器（页面内悬浮面板挂在 Shadow DOM 里，不改网页的 html lang） */
-export async function mountInto(container: HTMLElement, node: ReactNode) {
+export interface MountedApp {
+  /** 卸载 React 并释放语言设置的监听 */
+  unmount(): void
+}
+
+/**
+ * 挂载到任意容器（页面内悬浮面板挂在 Shadow DOM 里，不改网页的 html lang）。
+ * 面板会被反复移除 / 重新注入：移除时要调用 unmount，否则每次注入都多留一个语言监听（PR #6 审查 r4118276868）
+ */
+export async function mountInto(container: HTMLElement, node: ReactNode): Promise<MountedApp> {
   const saved = await localeSetting.getValue()
   const locale = saved ?? detectLocale(navigator.languages ?? [DEFAULT_LOCALE])
   const i18n = await initI18n(locale)
   container.lang = locale
 
-  localeSetting.watch((next) => {
+  const unwatch = localeSetting.watch((next) => {
     if (next) {
       void i18n.changeLanguage(next)
       container.lang = next
@@ -37,5 +45,10 @@ export async function mountInto(container: HTMLElement, node: ReactNode) {
       </I18nextProvider>
     </StrictMode>,
   )
-  return root
+  return {
+    unmount() {
+      unwatch()
+      root.unmount()
+    },
+  }
 }
