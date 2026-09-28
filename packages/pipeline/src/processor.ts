@@ -8,7 +8,13 @@ import {
   type StorageAdapter,
   type TranscriptionProvider,
 } from '@huilu/core'
-import { ProviderError, isRetryable } from '@huilu/providers'
+import {
+  ProviderError,
+  describeErrorBody,
+  isQuotaExceededDetail,
+  isRetryable,
+  redactSecrets,
+} from '@huilu/providers'
 import { FolderNotReadyError, WriteVerificationError } from '@huilu/storage'
 import { fingerprint } from './fingerprint'
 import { meetingFolderName } from './folder'
@@ -92,6 +98,22 @@ const WORK = {
   transcript: (id: string) => `${id}/transcript.json`,
   summary: (id: string) => `${id}/summary.json`,
   piece: (id: string, i: number) => `${id}/pieces/${String(i).padStart(3, '0')}.json`,
+}
+
+/** 旧版本持久化为 rateLimited、实际是结构化余额 / 欠费错误码的任务（排队重试中或已失败） */
+function isLegacyQuotaError(job: ProcessingJob): boolean {
+  return (
+    (job.state === 'queued' || job.state === 'failed') &&
+    job.error?.code === 'rateLimited' &&
+    isQuotaExceededDetail(job.error.detail)
+  )
+}
+
+/** 旧版本保存的原始响应 JSON → 「码: 说明」，并去掉可能的凭据 */
+function readableDetail(detail: string | undefined): string | undefined {
+  if (!detail) return undefined
+  const { code, message } = describeErrorBody(detail.trim())
+  return redactSecrets(code && message ? `${code}: ${message}` : detail).slice(0, 300)
 }
 
 /** 路径上某一段的类型不对：期望目录却是文件，或反过来 */
@@ -181,6 +203,14 @@ export class ProcessingQueue {
           await this.#save({ ...job, state: 'queued', attempts: Math.max(0, job.attempts - 1) })
         } else if (job?.state === 'waitingFolder' && (await this.deps.folder.isReady())) {
           await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })
+        } else if (job && isLegacyQuotaError(job)) {
+          // 旧版本把余额不足 / 欠费（如智谱 1113）当作限流排了自动重试：改为需要用户处理的失败，
+          // 取消重试计划；逐字稿等中间结果保留，处理好账户后手动重试从出错的步骤继续
+          await this.#markFailed(job, {
+            ...job.error!,
+            code: 'quotaExceeded',
+            detail: readableDetail(job.error!.detail),
+          })
         }
       }
     } catch (e) {
@@ -794,16 +824,24 @@ export class ProcessingQueue {
     if (error.retryable && job.attempts < MAX_AUTO_ATTEMPTS) {
       job.state = 'queued'
       job.nextAttemptAt = this.#now() + retryDelayMs(job.attempts, retryAfterMs)
+      await this.#save(job)
     } else {
-      job.state = 'failed'
-      job.error = { ...error, retryable: false }
-      job.finishedAt = this.#now()
-      const meeting = await this.deps.source.readMeeting(job.meetingId).catch(() => undefined)
-      if (meeting && meeting.status === 'processing') {
-        await this.deps.source
-          .writeMeeting(job.meetingId, { ...meeting, status: 'failed' })
-          .catch(() => {})
-      }
+      await this.#markFailed(job, error)
+    }
+  }
+
+  /** 停在 failed 等用户处理：不再自动重试，会议标记为失败 */
+  async #markFailed(job: ProcessingJob, error: JobError): Promise<void> {
+    job.state = 'failed'
+    job.error = { ...error, retryable: false }
+    job.progress = undefined
+    job.nextAttemptAt = undefined
+    job.finishedAt = this.#now()
+    const meeting = await this.deps.source.readMeeting(job.meetingId).catch(() => undefined)
+    if (meeting && meeting.status === 'processing') {
+      await this.deps.source
+        .writeMeeting(job.meetingId, { ...meeting, status: 'failed' })
+        .catch(() => {})
     }
     await this.#save(job)
   }

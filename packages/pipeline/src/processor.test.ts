@@ -385,6 +385,120 @@ describe('ProcessingQueue', () => {
     expect(await t.job()).toMatchObject({ state: 'done', attempts: 2, error: undefined })
   })
 
+  /** 用户手测时智谱返回的原始响应体（HTTP 429 + 业务码 1113） */
+  const ZHIPU_1113 = '{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}'
+
+  it('stops at a balance error in the summary step and resumes there after a manual retry', async () => {
+    let broke = true
+    const t = setup({
+      generate: async () => {
+        if (broke)
+          throw new ProviderError(
+            'quotaExceeded',
+            '1113: 余额不足或无可用资源包,请充值。',
+            429,
+            30_000,
+          )
+        return summary
+      },
+    })
+    let idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({
+      state: 'failed',
+      attempts: 1,
+      nextAttemptAt: undefined,
+      error: { step: 'summarize', code: 'quotaExceeded', retryable: false },
+    })
+    expect(t.source.meeting()?.status).toBe('failed')
+    expect(await t.queue.isBusy()).toBe(false)
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+
+    // 用户充值 / 换了服务后手动重试：从纪要继续，不重新转写
+    broke = false
+    idle = t.onIdle()
+    await t.queue.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', summary: { state: 'done' } })
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+    expect(t.llm.generateObject).toHaveBeenCalledTimes(2)
+  })
+
+  it('reclassifies a persisted legacy 1113 rate-limit retry on startup and cancels the timer', async () => {
+    // 旧版本：1113 被当作限流，任务排队等待自动重试（逐字稿已在 OPFS）
+    let legacy = true
+    const t = setup({
+      generate: async () => {
+        if (legacy) throw new ProviderError('rateLimited', ZHIPU_1113, 429)
+        return summary
+      },
+    })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    t.queue.stop()
+    expect(await t.job()).toMatchObject({
+      state: 'queued',
+      nextAttemptAt: expect.any(Number),
+      error: { step: 'summarize', code: 'rateLimited', detail: ZHIPU_1113, retryable: true },
+    })
+    legacy = false
+
+    // 升级后离屏文档启动：改为需要用户处理的失败，不再调用大模型
+    t.advance(24 * 3600_000)
+    const upgraded = new ProcessingQueue(t.deps)
+    await upgraded.start()
+    await t.settle()
+    expect(await t.job()).toMatchObject({
+      state: 'failed',
+      nextAttemptAt: undefined,
+      error: {
+        step: 'summarize',
+        code: 'quotaExceeded',
+        detail: '1113: 余额不足或无可用资源包,请充值。',
+        retryable: false,
+      },
+    })
+    expect(t.source.meeting()?.status).toBe('failed')
+    expect(t.llm.generateObject).toHaveBeenCalledTimes(1)
+    expect(await upgraded.isBusy()).toBe(false)
+
+    // 手动重试：从纪要继续
+    const idle = t.onIdle()
+    await upgraded.enqueue(MEETING_ID)
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done', summary: { state: 'done' } })
+    expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+    upgraded.stop()
+  })
+
+  it.each([
+    ['a genuine rate limit', 'Rate limit reached'],
+    ['a Zhipu 1302 rate limit', '{"error":{"code":"1302","message":"您的账户已达到速率限制"}}'],
+    ['an unrecognized detail', '余额不足'],
+  ])('leaves %s persisted by an older version scheduled for retry', async (_name, detail) => {
+    const t = setup()
+    const job = {
+      meetingId: MEETING_ID,
+      state: 'queued' as const,
+      step: 'summarize' as const,
+      attempts: 1,
+      nextAttemptAt: 2_000_000,
+      error: { step: 'summarize' as const, code: 'rateLimited', detail, retryable: true },
+      checkpoints: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    await t.jobs.put(job)
+    vi.spyOn(t.queue, 'kick').mockImplementation(() => {})
+    await t.queue.start()
+    expect(await t.job()).toMatchObject({
+      state: 'queued',
+      nextAttemptAt: 2_000_000,
+      error: { code: 'rateLimited', detail },
+    })
+  })
+
   it('stops after the automatic attempts are used up and allows a manual retry', async () => {
     let fail = true
     const t = setup({
