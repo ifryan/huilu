@@ -10,17 +10,22 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "typecheck": "wxt prepare && tsc -p tsconfig.json",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "test": "vitest run"
   },
   "dependencies": {
     "@huilu/core": "workspace:*",
     "@huilu/i18n": "workspace:*",
+    "@huilu/recorder": "workspace:*",
+    "@huilu/providers": "workspace:*",
+    "@huilu/storage": "workspace:*",
     "@huilu/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-router": "^1.170.39",
     "@webext-core/messaging": "^4.0.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "zod": "^4.6.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -30,6 +35,7 @@
     "@wxt-dev/module-react": "^1.2.2",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
+    "vitest": "^5.0.1",
     "wxt": "^0.21.4"
   }
 }

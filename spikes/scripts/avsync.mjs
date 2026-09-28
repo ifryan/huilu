@@ -25,18 +25,98 @@ export function ffprobe(file) {
   }
 }
 
+const probeStderr = (args) => spawnSync('ffprobe', args, { maxBuffer: 1 << 28, encoding: 'utf8' })
+
 /**
- * 解码全文件检查错误（只输出错误行数）。
+ * FFmpeg（本机 8.0.1）的 Opus 解析器（parser，不是解码器）在 WebM 文件末尾刷新时，
+ * 会打印一次「Error parsing Opus packet header.」。它与录制数据无关：ffmpeg 自己用 libopus
+ * 编码出的 WebM 也会出现；只做解封装（-count_packets，不解码）同样出现；
+ * 把同一文件无损转封装成 Ogg（不经过该解析器）后解码无报错、包数不变；
+ * GStreamer（matroskademux + libopus）解码同一文件无告警。
+ * 因此只有同时满足「每条 Opus 流恰好一次」「只解封装也恰好一次」「每条流解码帧数 = 包数」
+ * 时才把它当作工具噪声。
+ */
+const OPUS_PARSER_EOF = 'Error parsing Opus packet header'
+
+/**
+ * 每条流的包数（只解封装）与解码出的帧数。
+ * 编码器前置延迟（initial_padding，Opus 的 pre-skip）大于一帧时，解码器会整帧丢弃开头的包
+ * （Chrome 的 MP4 里是 3840 = 一个 60ms 包 + 960），这部分不算丢帧。
+ */
+function streamCounts(file) {
+  const entries = 'stream=index,codec_name,initial_padding,nb_read_packets'
+  const packets = probeStderr([
+    '-v',
+    'repeat+error',
+    '-count_packets',
+    '-show_entries',
+    entries,
+    '-of',
+    'json',
+    file,
+  ])
+  const frames = probeStderr([
+    '-v',
+    'error',
+    '-show_entries',
+    'frame=stream_index,nb_samples',
+    '-of',
+    'csv=p=0',
+    file,
+  ])
+  const decoded = new Map()
+  for (const line of frames.stdout.split('\n').filter(Boolean)) {
+    const [index, samples] = line.split(',').map(Number)
+    const d = decoded.get(index) ?? { frames: 0, maxSamples: 0 }
+    d.frames++
+    d.maxSamples = Math.max(d.maxSamples, samples || 0)
+    decoded.set(index, d)
+  }
+  return {
+    demuxStderr: packets.stderr ?? '',
+    streams: JSON.parse(packets.stdout).streams.map((s) => {
+      const d = decoded.get(s.index) ?? { frames: 0, maxSamples: 0 }
+      const padding = Number(s.initial_padding) || 0
+      return {
+        index: s.index,
+        codec: s.codec_name,
+        packets: Number(s.nb_read_packets),
+        frames: d.frames,
+        preskipFrames: d.maxSamples ? Math.floor(padding / d.maxSamples) : 0,
+      }
+    }),
+  }
+}
+
+/**
+ * 解码全文件检查错误。count 只计真实错误：解码器 / 解封装报错，或某条流解码帧数少于包数（扣除 pre-skip 整帧）。
  * 忽略 null 封装器的「non monotonically increasing dts」：MediaRecorder 输出可变帧率、毫秒时间基，
  * 相邻帧取整后 DTS 相同，只影响再封装时的时间戳，不是解码错误。
+ * Opus 解析器的文件末尾误报见 OPUS_PARSER_EOF，被忽略的行放在 ignored 里，不会静默丢弃。
  */
 export function decodeErrors(file) {
-  const err = runStderr(['-v', 'error', '-i', file, '-f', 'null', '-'])
+  const err = runStderr(['-v', 'repeat+error', '-i', file, '-f', 'null', '-'])
   const lines = err
     .split('\n')
     .filter(Boolean)
     .filter((l) => !l.includes('non monotonically increasing dts'))
-  return { count: lines.length, sample: lines.slice(0, 5) }
+  const { demuxStderr, streams } = streamCounts(file)
+  const lostFrames = streams.filter((s) => s.frames + s.preskipFrames < s.packets)
+  // 末尾误报每条 Opus 流恰好一次；中途有坏包时解析器会多报并直接丢包（解封装的包数也跟着少），
+  // 所以用 repeat 日志逐条计数，次数多于 Opus 流数就全部算作错误
+  const opusStreams = streams.filter((s) => s.codec === 'opus').length
+  const countOpus = (text) => text.split('\n').filter((l) => l.includes(OPUS_PARSER_EOF)).length
+  const opusParserNoise =
+    opusStreams > 0 &&
+    lostFrames.length === 0 &&
+    countOpus(err) === opusStreams &&
+    countOpus(demuxStderr) === opusStreams
+  const ignored = opusParserNoise ? lines.filter((l) => l.includes(OPUS_PARSER_EOF)) : []
+  const errors = lines.filter((l) => !ignored.includes(l))
+  for (const s of lostFrames) {
+    errors.push(`stream ${s.index} (${s.codec}): decoded ${s.frames} of ${s.packets} packets`)
+  }
+  return { count: errors.length, sample: errors.slice(0, 5), ignored, streams }
 }
 
 function flashOnsets(file, start, dur) {
@@ -92,30 +172,119 @@ function beepOnsets(file, start, dur) {
   return [...err.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]))
 }
 
-/** 每个窗口内把闪白起点和最近的哔声起点配对，offset = 音频 - 视频（毫秒，正数表示声音晚于画面） */
+/**
+ * 非周期标记序列：闪白 + 哔声（各 100ms）的起点，相邻间隔从 MARKER_INTERVALS_S 中伪随机选取且不与上一个相同。
+ * 周期信号无法区分整周期的偏移：每秒一次的标记下，音频晚 850ms 与早 150ms 完全一样（PR #6 审查 r4092377794）。
+ * 间隔两两相差 250ms，远大于 15fps 的画面分辨率（约 67ms），错一位对齐时偏移不可能保持一致。
+ * spikes/extension/lib/recorder.js 的合成来源用同样的规则生成。
+ */
+export const MARKER_INTERVALS_S = [0.75, 1, 1.25, 1.5]
+
+export function markerTimes(durationS, seed = 1) {
+  const times = []
+  let state = seed >>> 0 || 1
+  let prev = -1
+  for (let t = 0; t < durationS;) {
+    times.push(+t.toFixed(3))
+    let i
+    do {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      i = (state >>> 16) % MARKER_INTERVALS_S.length
+    } while (i === prev)
+    prev = i
+    t += MARKER_INTERVALS_S[i]
+  }
+  return times
+}
+
+/** 同一次对齐里偏移与中位数相差在此范围内算作一致（覆盖一帧的画面起点误差） */
+const CONSISTENT_MS = 100
+
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+
+/**
+ * 按序号对齐闪白与哔声：第 i 个闪白对应第 i + k 个哔声，k 取让偏移最一致的那个（窗口边缘可能多 / 少一个哔声）。
+ * 不按「最近的哔声」配对：那样偏移超过半个标记间隔时会被配到相邻的哔声上，测出一个小偏移。
+ * 另一个 k 也几乎同样一致时（周期标记，或非周期性不足）无法确定对应关系，标记为 ambiguous，不能据此判定通过。
+ */
+export function alignPulses(flashes, beeps) {
+  const candidates = []
+  for (let k = -(flashes.length - 1); k < beeps.length; k++) {
+    const offsets = []
+    for (let i = 0; i < flashes.length; i++) {
+      const b = beeps[i + k]
+      if (b !== undefined) offsets.push(Math.round((b - flashes[i]) * 1000))
+    }
+    if (offsets.length === 0) continue
+    const m = median(offsets)
+    const consistent = offsets.filter((o) => Math.abs(o - m) <= CONSISTENT_MS).length
+    candidates.push({ k, offsets, consistent, medianMs: m })
+  }
+  // 最一致的优先；同样一致时取配对更多、再取偏移更小的
+  candidates.sort(
+    (a, b) =>
+      b.consistent - a.consistent ||
+      b.offsets.length - a.offsets.length ||
+      Math.abs(a.medianMs) - Math.abs(b.medianMs),
+  )
+  const [best, second] = candidates
+  if (!best) return { offsetsMs: [], ambiguous: false }
+  const ambiguous =
+    best.consistent < 3 ||
+    (second !== undefined && second.consistent >= Math.max(3, best.consistent - 1))
+  return { offsetsMs: best.offsets, ambiguous }
+}
+
+/** 每个窗口内按序号对齐闪白起点与哔声起点，offset = 音频 - 视频（毫秒，正数表示声音晚于画面） */
 export function avSync(file, windows) {
   return windows.map(([start, dur]) => {
     const flashes = flashOnsets(file, start, dur)
     const beeps = beepOnsets(file, start, dur)
-    const offsets = flashes
-      .map(
-        (f) =>
-          beeps.reduce((best, b) => (Math.abs(b - f) < Math.abs(best - f) ? b : best), Infinity) -
-          f,
-      )
-      .filter((o) => Math.abs(o) < 0.5)
-      .map((o) => Math.round(o * 1000))
+    const { offsetsMs: offsets, ambiguous } = alignPulses(flashes, beeps)
     const sorted = [...offsets].sort((a, b) => a - b)
     return {
       window: `${start}s+${dur}s`,
+      offsetsMs: offsets,
       pairs: offsets.length,
       flashes: flashes.length,
       beeps: beeps.length,
+      ambiguous,
       medianMs: sorted[Math.floor(sorted.length / 2)] ?? null,
       minMs: sorted[0] ?? null,
       maxMs: sorted.at(-1) ?? null,
     }
   })
+}
+
+/** PRD：音画偏移 ≤ 200ms（F1.x 录制验收）。按每一个配对点判定，不用中位数代替 */
+export const AV_SYNC_LIMIT_MS = 200
+
+/**
+ * 汇总 avSync 各窗口的全部配对点并按阈值判定：任一点 |offset| 超过 limitMs 即不通过；
+ * 某个窗口没有配对点（闪白 / 哔声检测失败）也不通过，避免把测不到当成同步。
+ * 闪白与哔声的对应关系不确定（ambiguous，例如周期标记）的窗口不通过：偏移可能差整数个周期。
+ * 窗口边缘的闪白可能没有对应的哔声：最多允许 1 个，否则不通过。
+ */
+export function syncVerdict(windows, limitMs = AV_SYNC_LIMIT_MS) {
+  const all = windows.flatMap((w) => w.offsetsMs)
+  const sorted = [...all].sort((a, b) => a - b)
+  const over = all.filter((o) => Math.abs(o) > limitMs)
+  return {
+    limitMs,
+    samples: all.length,
+    medianMs: sorted[Math.floor(sorted.length / 2)] ?? null,
+    minMs: sorted[0] ?? null,
+    maxMs: sorted.at(-1) ?? null,
+    maxAbsMs: all.length ? Math.max(...all.map(Math.abs)) : null,
+    over: over.length,
+    emptyWindows: windows.filter((w) => w.pairs === 0).map((w) => w.window),
+    ambiguousWindows: windows.filter((w) => w.ambiguous !== false).map((w) => w.window),
+    unpaired: windows.map((w) => w.flashes - w.pairs),
+    pass:
+      all.length > 0 &&
+      over.length === 0 &&
+      windows.every((w) => w.ambiguous === false && w.pairs > 0 && w.flashes - w.pairs <= 1),
+  }
 }
 
 export function beepTimes(file, start, dur) {

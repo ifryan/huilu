@@ -37,9 +37,9 @@ huilu/
 │       │   ├── background.ts     # 后台：调度、消息中心、任务队列唤醒
 │       │   ├── offscreen/        # 离屏文档：采集、混音、录制、写盘、执行处理任务
 │       │   ├── popup/            # 弹窗：录制设置
-│       │   ├── sidepanel/        # 侧边栏：计时、控制、打点、笔记
+│       │   ├── recorder/         # 录制窗口：承载窗口 / 屏幕采集（选源后最小化）
 │       │   ├── app/              # 插件内网页：历史、结果页、设置、首次引导
-│       │   └── overlay.content/  # 页面内悬浮条
+│       │   └── overlay.content/  # 页面内悬浮录制面板：计时、暂停 / 继续、结束、错误提示
 │       ├── platform/             # Chrome 平台适配：把 chrome.* 注入到下面各包
 │       └── wxt.config.ts
 ├── packages/
@@ -65,7 +65,7 @@ huilu/
 ## 4. 运行时结构
 
 ```
- 弹窗 / 侧边栏 / 插件网页 ──(类型安全消息)──▶ 后台 Service Worker（调度中心，随时可能被浏览器回收，不做重活）
+ 弹窗 / 悬浮面板 / 插件网页 ──(类型安全消息)──▶ 后台 Service Worker（调度中心，随时可能被浏览器回收，不做重活）
                                                   │ 创建 / 唤醒
                                                   ▼
                                     离屏文档（长时间运行）
@@ -78,6 +78,18 @@ huilu/
 
 - Service Worker 会被浏览器随时回收，所以**所有耗时工作都放在离屏文档里**，任务状态持久化在 IndexedDB，被打断后可以从上次完成的步骤继续
 - 写入用户文件夹需要授权；如果授权失效，任务会停在「待写入」状态，等用户打开插件网页重新授权后自动补写
+- **录制宿主**：标签页录制在离屏文档；窗口 / 屏幕录制在一个可见的小「录制窗口」（`entrypoints/recorder`）里进行。`desktopCapture` 选择框不能从 Service Worker 或离屏文档弹出，得到的 streamId 也只能在请求它的页面里取流。后台把暂停 / 继续 / 结束转给实际宿主，快捷键同理
+- **录制界面分工**：弹窗只负责开始前的设置，开始成功后自动关闭；录制中再打开只显示简短状态和「显示录制面板」。页面内悬浮录制面板是唯一的计时、暂停 / 继续、结束和错误提示入口，悬浮在网页之上、不改变网页布局，可拖动、收起、关闭。录制窗口选好来源后自动最小化、不显示进度，结束后自动关闭；它不能被关闭，关闭会中断录制（数据可在「未完成的录制」中恢复）
+- **悬浮面板的注入**：不在 manifest 声明 content script、不申请「所有网站」权限，由后台在用户点击弹窗 / 按快捷键后借 `activeTab` 用 `scripting.executeScript` 注入当前标签页；样式编译进脚本放入 Shadow DOM（不设 web_accessible_resources）。`chrome://` 等不允许注入的页面，弹窗保留并直接提供控制。最近一次结果（已保存 / 部分保存 / 未能保存）和开始失败原因存在后台 session 存储里，悬浮面板和空闲时的弹窗都显示，直到用户关掉（弹窗「知道了」、空闲时关闭面板）或开始新的录制。标签页「音频 + 视频」录制会录下网页画面，展开的面板也会出现在视频里
+
+### 录制 → 处理管线的衔接（阶段 2 集成后的现状，供「转写与纪要」使用）
+
+- **输入**：录制结束后 OPFS 中有 `recordings/<id>/`，含 `manifest.json`（分片数 / 各片大小 / 实际 MIME）、`meeting.json`（`status: 'processing'`）、`audio/` 与 `video/` 分片。用 `RecordingStore.open(id)` → `readTrack('audio', manifest.tracks.audio.chunks, mimeType)` 得到惰性拼接的 Blob，可直接作为 `AudioInput.blob`；`opfs.listMeetingDirs()`（`apps/extension/platform/storage.ts`，根目录即 `recordings/`）列出所有已结束的录制
+- **媒体格式**：`meeting.media.audio.mimeType` 是 MediaRecorder 实际输出的类型（当前 Chrome 为 `audio/webm;codecs=opus`，约 10 MB/小时）；视频轨按平台探测，Linux 为 `video/mp4;codecs=avc1…,opus`，Windows / macOS 预期为 AAC。转写只用纯音频轨
+- **本地解码验证**：`spikes/scripts/avsync.mjs` 的 `decodeErrors` 统计每条流的包数 / 解码帧数，本机已验证的 FFmpeg 8.0.1 Opus 解析器在 WebM 文件末尾的误报（其他版本未验证）单独列在 `ignored`，不计为错误（`npm run test:decode` 回归）。这只证明文件能被本地解码，**服务商能否接受要用真实 Key 实测**
+- **服务配置**：`transcriptionSetting` / `llmSetting`（`chrome.storage.local`，含 API Key）。离屏文档没有 `chrome.storage`，需由后台读取后随消息传入，或由后台转发 `storage.watch` 的变化；`dataFolderAuthorizedSetting` 同理
+- **数据文件夹**：`dataFolder`（句柄在 IndexedDB，离屏文档同源可读）。离屏文档只能在 `isReady()` 为 true 时写入，不能申请授权；未授权时停在「待写入」，由插件网页重新授权后（`dataFolderAuthorizedSetting` 变化）补写
+- **离屏文档生命周期**：后台在 `recordingFinished` 后调用 `closeOffscreenIfIdle`，目前只看录制状态。处理任务放进离屏文档时，必须让「空闲」同时包含「没有进行中的处理任务」，否则录制一结束文档就会被关掉；`chrome.offscreen` 的 reasons 也需补上处理任务对应的理由
 
 ## 5. 扩展点设计
 
@@ -125,13 +137,16 @@ registry.transcription.register(openaiCompatible) // 内置 Groq / OpenAI 预设
 
 ## 8. 当前进度
 
-| 包                                                               | 状态                                                                                                                                  |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/extension`                                                 | ✅ 框架已搭好：弹窗、侧边栏、插件网页（历史 / 设置 / 首次引导，hash 路由）、后台、离屏文档占位、类型安全消息、中英文切换、固定插件 ID |
-| `packages/core`                                                  | ✅ 数据格式（Meeting / Transcript / Summary）、版本迁移、全部扩展点接口、注册中心                                                     |
-| `packages/i18n`                                                  | ✅ 中英文文案、语言检测、key 一致性测试                                                                                               |
-| `packages/ui`                                                    | ✅ Tailwind 4 主题（含深色模式）、Button 组件                                                                                         |
-| `packages/recorder` `storage` `providers` `pipeline` `exporters` | ⏳ 在对应子任务中创建                                                                                                                 |
+| 包                              | 状态                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/extension`                | ✅ 框架已搭好：弹窗、侧边栏、插件网页（历史 / 设置 / 首次引导，hash 路由）、后台、离屏文档录制、类型安全消息、中英文切换、固定插件 ID |
+| `packages/core`                 | ✅ 数据格式（Meeting / Transcript / Summary）、版本迁移、全部扩展点接口、注册中心                                                     |
+| `packages/i18n`                 | ✅ 中英文文案、语言检测、key 一致性测试                                                                                               |
+| `packages/ui`                   | ✅ Tailwind 4 主题（含深色模式）、Button 组件                                                                                         |
+| `packages/recorder`             | ✅ 两路录制 → OPFS 分片：写后校验、失败即停、开始互斥、崩溃恢复（见包内 README）                                                      |
+| `packages/storage`              | ✅ 本地文件夹（File System Access，句柄存 IndexedDB，读写前检查授权）、OPFS；每次写入回读校验大小                                     |
+| `packages/providers`            | 🚧 百炼 Paraformer、OpenAI 兼容转写 / 大模型：配置 schema、预设、测试连接已完成；实际转写与生成在「转写与纪要」子任务中实现           |
+| `packages/pipeline` `exporters` | ⏳ 在对应子任务中创建                                                                                                                 |
 
 ## 9. 已确认的决策（2026-09-24）
 

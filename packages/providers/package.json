@@ -1,0 +1,23 @@
+{
+  "name": "@huilu/providers",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@huilu/core": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@huilu/i18n": "workspace:*",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}
