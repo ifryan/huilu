@@ -6,7 +6,7 @@ import {
   type ProcessingJob,
 } from '@huilu/pipeline/jobs'
 import { describe, expect, it } from 'vitest'
-import { errorKey, processingView } from './processing-view'
+import { errorKey, processingReadiness, processingView } from './processing-view'
 
 const recording = {
   state: 'saved' as const,
@@ -80,6 +80,13 @@ describe('processingView', () => {
       canRetry: false,
     })
     expect(processingView(recording, failed, ready)).toMatchObject({ canRetry: true })
+  })
+
+  it('derives the per-row readiness the history page passes to every row', () => {
+    expect(processingReadiness(undefined)).toBeUndefined()
+    expect(
+      processingReadiness({ transcription: true, llm: false, folder: { permission: 'prompt' } }),
+    ).toEqual({ transcription: true, llm: false, folder: 'prompt' })
   })
 
   it('offers a manual retry for a balance error in the summary step without auto-retry', () => {

@@ -1,10 +1,14 @@
 import { useTranslation } from '@huilu/i18n'
+import type { ProcessingJob } from '@huilu/pipeline/jobs'
 import type { LocalRecording } from '@huilu/recorder'
 import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { ProcessingStatus } from '@/components/ProcessingStatus'
 import { StatusPill } from '@/components/Section'
 import { openRecordingMedia, useLocalRecordings } from '@/lib/library'
+import { useProcessingJobs } from '@/lib/processing-jobs'
+import { processingReadiness, type ProcessingReadiness } from '@/lib/processing-view'
+import { useReadiness } from '@/lib/readiness'
 import { formatBytes, formatDuration } from '@/lib/recording'
 
 /**
@@ -15,6 +19,9 @@ import { formatBytes, formatDuration } from '@/lib/recording'
 export function HistoryPage() {
   const { t } = useTranslation()
   const { data: recordings, isLoading, error, refetch } = useLocalRecordings()
+  // 整页只轮询一次任务、订阅一次就绪状态（录制再多也只有一组轮询和设置监听），按行分发
+  const { data: jobs } = useProcessingJobs()
+  const readiness = processingReadiness(useReadiness().data)
 
   return (
     <section className="flex flex-col gap-4">
@@ -31,14 +38,22 @@ export function HistoryPage() {
       )}
       <ul className="flex flex-col gap-3">
         {recordings?.map((r) => (
-          <RecordingItem key={r.id} recording={r} />
+          <RecordingItem key={r.id} recording={r} job={jobs?.get(r.id)} readiness={readiness} />
         ))}
       </ul>
     </section>
   )
 }
 
-function RecordingItem({ recording: r }: { recording: LocalRecording }) {
+function RecordingItem({
+  recording: r,
+  job,
+  readiness,
+}: {
+  recording: LocalRecording
+  job: ProcessingJob | undefined
+  readiness: ProcessingReadiness | undefined
+}) {
   const { t } = useTranslation()
   const [media, setMedia] = useState<{ url: string; kind: 'video' | 'audio' }>()
   const [failed, setFailed] = useState<string>()
@@ -84,7 +99,7 @@ function RecordingItem({ recording: r }: { recording: LocalRecording }) {
         {r.mode && <span>{r.mode === 'video' ? t('popup.modeVideo') : t('popup.modeAudio')}</span>}
         <span>{t('history.location')}</span>
       </div>
-      <ProcessingStatus recording={r} />
+      <ProcessingStatus recording={r} job={job} readiness={readiness} />
       {r.state === 'unfinished' && <p className="text-xs">{t('history.unfinishedHint')}</p>}
       {r.error && <p className="text-danger text-xs break-all">{r.error}</p>}
       {r.state !== 'damaged' && (

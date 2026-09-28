@@ -1,4 +1,5 @@
 import { useTranslation } from '@huilu/i18n'
+import type { ProcessingJob } from '@huilu/pipeline/jobs'
 import type { LocalRecording } from '@huilu/recorder'
 import { Button } from '@huilu/ui'
 import { useQueryClient } from '@tanstack/react-query'
@@ -7,33 +8,37 @@ import { useState } from 'react'
 import { useDynamicT } from '@/lib/i18n'
 import { libraryKey } from '@/lib/library'
 import { sendMessage } from '@/lib/messaging'
-import { processingJobsKey, useProcessingJobs } from '@/lib/processing-jobs'
-import { errorKey, processingView, type ProcessingView } from '@/lib/processing-view'
-import { useFolderActions, useReadiness } from '@/lib/readiness'
+import { processingJobsKey } from '@/lib/processing-jobs'
+import {
+  errorKey,
+  processingView,
+  type ProcessingReadiness,
+  type ProcessingView,
+} from '@/lib/processing-view'
+import { useFolderActions } from '@/lib/readiness'
 
 /**
  * 历史记录中一场录制的会后处理状态与操作：补转写、重试、生成纪要、授权数据文件夹后补写。
- * 录制、预览不依赖这里：没有配置 API、没有数据文件夹时照常可用
+ * 录制、预览不依赖这里：没有配置 API、没有数据文件夹时照常可用。
+ * 任务列表与就绪状态由历史页统一查询 / 订阅一次后传入，每行不再各自轮询和监听设置
  */
-export function ProcessingStatus({ recording }: { recording: LocalRecording }) {
+export function ProcessingStatus({
+  recording,
+  job,
+  readiness,
+}: {
+  recording: LocalRecording
+  job: ProcessingJob | undefined
+  readiness: ProcessingReadiness | undefined
+}) {
   const { t } = useTranslation()
   const dt = useDynamicT()
   const queryClient = useQueryClient()
-  const { data: readiness } = useReadiness()
-  const { data: jobs } = useProcessingJobs()
   const { pick, reauthorize } = useFolderActions()
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string>()
 
-  const view = processingView(
-    recording,
-    jobs?.get(recording.id),
-    readiness && {
-      transcription: readiness.transcription,
-      llm: readiness.llm,
-      folder: readiness.folder.permission,
-    },
-  )
+  const view = processingView(recording, job, readiness)
   if (view.kind === 'none') return null
 
   const refresh = () =>
@@ -59,7 +64,7 @@ export function ProcessingStatus({ recording }: { recording: LocalRecording }) {
   // 授权必须在点击事件里直接调用（用户激活），离屏文档自己无法申请
   const authorize = () => {
     setActionError(undefined)
-    const action = readiness?.folder.permission === 'prompt' ? reauthorize : pick
+    const action = readiness?.folder === 'prompt' ? reauthorize : pick
     action()
       .then(refresh)
       .catch((e: unknown) => setActionError(e instanceof Error ? e.message : String(e)))

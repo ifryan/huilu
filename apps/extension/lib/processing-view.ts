@@ -32,6 +32,20 @@ export interface ProcessingReadiness {
   folder: FolderPermission
 }
 
+/** 就绪状态 → 历史行需要的部分；由历史页统一查询一次后传给每一行 */
+export function processingReadiness(
+  readiness:
+    { transcription: boolean; llm: boolean; folder: { permission: FolderPermission } } | undefined,
+): ProcessingReadiness | undefined {
+  return (
+    readiness && {
+      transcription: readiness.transcription,
+      llm: readiness.llm,
+      folder: readiness.folder.permission,
+    }
+  )
+}
+
 export function processingView(
   recording: Pick<LocalRecording, 'state' | 'transcribable' | 'processing'>,
   job: ProcessingJob | undefined,
