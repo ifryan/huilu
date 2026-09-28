@@ -29,6 +29,43 @@ async function fixture() {
   return store
 }
 describe('folder authority and atomic metadata editing', () => {
+  it('scans, reads, and edits legacy meetings without schemaVersion', async () => {
+    const store = await fixture()
+    const legacy: Record<string, unknown> = { ...meeting, futureField: 'preserve' }
+    delete legacy.schemaVersion
+    await store.writeFile('a/meeting.json', JSON.stringify(legacy))
+    expect((await scanMeetings(store))[0]).toMatchObject({ meeting: { id: 'a', schemaVersion: 1 } })
+    expect((await readMeetingDocument(store, 'a', 'a')).meeting.title).toBe('Original')
+    await editMeeting(store, 'a', 'a', { type: 'title', previous: 'Original', value: 'Migrated' })
+    expect(JSON.parse(await (await store.readFile('a/meeting.json'))!.text())).toMatchObject({
+      schemaVersion: 1,
+      title: 'Migrated',
+      futureField: 'preserve',
+      editRevision: 1,
+    })
+    expect((await readMeetingDocument(store, 'a', 'a')).meeting.title).toBe('Migrated')
+  })
+  it.each([null, 0, '1', 2])(
+    'rejects unsupported or invalid schemaVersion %s without writing',
+    async (schemaVersion) => {
+      const store = await fixture()
+      const before = JSON.stringify({ ...meeting, schemaVersion })
+      await store.writeFile('a/meeting.json', before)
+      expect((await scanMeetings(store))[0]?.issue).toBe('damaged')
+      await expect(readMeetingDocument(store, 'a', 'a')).rejects.toThrow()
+      await expect(
+        editMeeting(store, 'a', 'a', { type: 'title', previous: 'Original', value: 'Invalid' }),
+      ).rejects.toThrow()
+      expect(await (await store.readFile('a/meeting.json'))!.text()).toBe(before)
+    },
+  )
+  it('rejects malformed legacy data rather than repairing missing required fields', async () => {
+    const store = await fixture()
+    await store.writeFile('a/meeting.json', JSON.stringify({ id: 'a' }))
+    expect((await scanMeetings(store))[0]?.issue).toBe('damaged')
+    await expect(readMeetingDocument(store, 'a', 'a')).rejects.toThrow()
+    await expect(editMeeting(store, 'a', 'a', { type: 'favorite', value: true })).rejects.toThrow()
+  })
   it('isolates damaged records and rebuilds the disposable index from current files', async () => {
     const store = await fixture()
     await store.writeFile('bad/meeting.json', '{')

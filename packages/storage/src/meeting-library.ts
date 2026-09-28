@@ -1,4 +1,11 @@
-import { Meeting, Transcript, Summary, resolveSpeaker, type StorageAdapter } from '@huilu/core'
+import {
+  Meeting,
+  migrateMeeting,
+  Transcript,
+  Summary,
+  resolveSpeaker,
+  type StorageAdapter,
+} from '@huilu/core'
 
 export interface MeetingEntry {
   key: string
@@ -19,7 +26,7 @@ export async function scanMeetings(adapter: StorageAdapter): Promise<MeetingEntr
   for (const dir of await adapter.listMeetingDirs()) {
     try {
       const blob = await adapter.readFile(`${dir}/meeting.json`)
-      const meeting = Meeting.parse(JSON.parse(await blob!.text()))
+      const meeting = migrateMeeting(JSON.parse(await blob!.text()))
       const duplicate = ids.has(meeting.id)
       if (duplicate) {
         const previous = entries.find((entry) => entry.meeting?.id === meeting.id)
@@ -50,7 +57,7 @@ export async function readMeetingDocument(
 ): Promise<MeetingDocument> {
   const blob = await adapter.readFile(`${dir}/meeting.json`)
   if (!blob) throw new Error('missingMeeting')
-  const meeting = Meeting.parse(JSON.parse(await blob.text()))
+  const meeting = migrateMeeting(JSON.parse(await blob.text()))
   if (meeting.id !== id) throw new Error('foreignMeeting')
   const result: MeetingDocument = { meeting, warnings: [] }
   for (const kind of ['transcript', 'summary'] as const) {
@@ -115,7 +122,7 @@ export async function editMeeting(
     if (!file) throw new Error('missingMeeting')
     const before = await file.text()
     const raw = JSON.parse(before) as Record<string, unknown>
-    const meeting = Meeting.parse(raw)
+    const meeting = migrateMeeting(raw)
     if (meeting.id !== id) throw new Error('foreignMeeting')
     if (edit.type === 'title') {
       if (meeting.title !== edit.previous) throw new EditConflictError()
