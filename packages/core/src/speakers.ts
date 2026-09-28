@@ -5,7 +5,12 @@ import type { Summary } from './schema/summary'
 /** Original segment IDs stay intact; one atomic metadata edit controls every consumer. */
 export function resolveSpeaker(meeting: Meeting, id: string): string {
   const seen = new Set<string>()
-  while (meeting.speakerAliases?.[id] && !seen.has(id)) {
+  while (
+    meeting.speakerAliases &&
+    Object.hasOwn(meeting.speakerAliases, id) &&
+    meeting.speakerAliases[id] &&
+    !seen.has(id)
+  ) {
     seen.add(id)
     id = meeting.speakerAliases[id]!
   }
