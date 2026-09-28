@@ -435,6 +435,56 @@ describe('ProcessingQueue', () => {
     expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
   })
 
+  it('does not spend the retry budget on repeated interrupted executions', async () => {
+    const t = setup({
+      transcribe: async () => {
+        throw new ProviderError('timeout')
+      },
+    })
+    // Persist the state that a process killed after #run's increment leaves behind.
+    await t.jobs.put({
+      meetingId: MEETING_ID,
+      state: 'running',
+      attempts: 1,
+      checkpoints: {},
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    for (let i = 0; i < 6; i++) {
+      const q = new ProcessingQueue(t.deps)
+      vi.spyOn(q, 'kick').mockImplementation(() => {})
+      await q.start()
+      expect(await t.job()).toMatchObject({ state: 'queued', attempts: 0 })
+      await t.jobs.put({ ...(await t.job())!, state: 'running', attempts: 1 })
+    }
+    await t.queue.start()
+    await t.settle()
+    expect(await t.job()).toMatchObject({
+      state: 'queued',
+      attempts: 1,
+      error: { code: 'timeout', retryable: true },
+    })
+    t.queue.stop()
+  })
+
+  it.each([true, false])(
+    'reconciles waiting jobs against actual folder permission (%s)',
+    async (ready) => {
+      const t = setup()
+      t.folder.ready = false
+      await t.queue.enqueue(MEETING_ID)
+      await t.settle()
+      t.queue.stop()
+      t.folder.ready = ready
+      const q = new ProcessingQueue(t.deps)
+      await q.start()
+      await t.settle()
+      expect(await t.job()).toMatchObject({ state: ready ? 'done' : 'waitingFolder' })
+      expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+      q.stop()
+    },
+  )
+
   it('returns to the queue without counting an attempt when stopped', async () => {
     let release!: () => void
     const t = setup({

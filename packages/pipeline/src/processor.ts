@@ -148,7 +148,11 @@ export class ProcessingQueue {
     if (this.#started) return this.kick()
     this.#started = true
     for (const job of await this.deps.jobs.list()) {
-      if (job.state === 'running') await this.#save({ ...job, state: 'queued' })
+      if (job.state === 'running') {
+        await this.#save({ ...job, state: 'queued', attempts: Math.max(0, job.attempts - 1) })
+      } else if (job.state === 'waitingFolder' && (await this.deps.folder.isReady())) {
+        await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })
+      }
     }
     this.kick()
   }
@@ -208,6 +212,7 @@ export class ProcessingQueue {
 
   /** 数据文件夹重新授权后：等待写入的任务重新排队 */
   async onFolderAuthorized(): Promise<void> {
+    if (!(await this.deps.folder.isReady())) return
     for (const job of await this.deps.jobs.list()) {
       if (job.state === 'waitingFolder') {
         await this.#save({ ...job, state: 'queued', nextAttemptAt: undefined })

@@ -283,13 +283,17 @@ describe('background processing lifecycle', () => {
   })
 
   it('stays idle on start when there is nothing to process', async () => {
-    h.jobs = [
-      { meetingId: 'a', state: 'done' },
-      { meetingId: 'b', state: 'waitingFolder' },
-    ]
+    h.jobs = [{ meetingId: 'a', state: 'done' }]
     background.main()
     await settle()
     expect(h.offscreenOpen).toBe(false)
+  })
+
+  it('wakes waiting jobs on worker startup even without an authorization event', async () => {
+    h.jobs = [{ meetingId: 'waiting', state: 'waitingFolder' }]
+    background.main()
+    await settle()
+    expect(h.processRequests).toContainEqual({})
   })
 
   it('rewrites waiting results after the data folder is re-authorized', async () => {

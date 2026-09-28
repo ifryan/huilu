@@ -335,11 +335,11 @@ function processMeeting(meetingId: string, auto = false) {
 }
 
 /**
- * 有排队 / 中断的处理任务时打开离屏文档，队列会自行恢复（浏览器重启后「任务继续」）。
+ * 有排队 / 中断 / 等待授权的处理任务时打开离屏文档，队列会查询实际文件夹权限并恢复（不会弹出授权）。
  * Service Worker 每次启动、浏览器启动时都检查一次；没有任务时什么都不做
  */
 async function resumeProcessing() {
-  if (!(await hasJobs(isActive))) return
+  if (!(await hasJobs((j) => isActive(j) || j.state === 'waitingFolder'))) return
   await withOffscreen(() => sendMessage('offscreen:process', {}))
 }
 
