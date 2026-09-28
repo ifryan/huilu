@@ -226,6 +226,46 @@ describe('paraformer.transcribe', () => {
     expect(checkpoint.value).toMatchObject({ taskId: 'task-0001', fileUrl: expect.any(String) })
   })
 
+  it('resubmits a terminally failed task on explicit retry without re-uploading', async () => {
+    noWait()
+    const calls = paraformerRoutes([
+      { output: { task_status: 'FAILED', code: 'InternalError', message: 'failed' } },
+      succeeded,
+    ])
+    const checkpoint = memoryCheckpoint()
+    const ctx = { signal: new AbortController().signal, checkpoint }
+    await expect(paraformer.transcribe(audio(), config, ctx)).rejects.toMatchObject({
+      code: 'taskFailed',
+    })
+    expect(checkpoint.value).toMatchObject({ fileUrl: expect.any(String) })
+    expect((checkpoint.value as ParaformerCheckpoint).taskId).toBeUndefined()
+    await expect(paraformer.transcribe(audio(), config, ctx)).resolves.toMatchObject({
+      segments: expect.any(Array),
+    })
+    expect(calls.filter((c) => c.url.includes('/uploads?'))).toHaveLength(1)
+    expect(calls.filter((c) => c.url.endsWith('/asr/transcription'))).toHaveLength(2)
+  })
+
+  it('omits language_hints for models other than paraformer-v2', async () => {
+    noWait()
+    const calls = replay([
+      [/getPolicy/, () => json(policy)],
+      [/POST https:\/\/dashscope-file-mgr\./, () => new Response('', { status: 200 })],
+      [/POST .*\/asr\/transcription$/, () => json(submitted)],
+      [/GET .*\/tasks\//, () => json(succeeded)],
+      [/GET https:\/\/dashscope-result-bj\./, () => json(result)],
+    ])
+    await paraformer.transcribe(
+      audio(),
+      { ...config, model: 'paraformer-8k-v2' },
+      {
+        signal: new AbortController().signal,
+      },
+    )
+    const call = calls.find((c) => c.url.endsWith('/asr/transcription'))!
+    expect(JSON.parse(String(call.body)).parameters).not.toHaveProperty('language_hints')
+  })
+
   it('reports failed tasks with the provider code', async () => {
     noWait()
     paraformerRoutes([

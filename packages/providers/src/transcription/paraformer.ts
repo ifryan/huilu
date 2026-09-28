@@ -155,7 +155,7 @@ async function submit(
   { region, apiKey, model }: ParaformerConfig,
   ctx: TranscriptionContext,
 ): Promise<string> {
-  const hints = paraformerLanguageHints(language)
+  const hints = model === 'paraformer-v2' ? paraformerLanguageHints(language) : undefined
   const body = await fetchJson<{ output?: TaskOutput }>(
     `${DASHSCOPE_ENDPOINTS[region]}/api/v1/services/audio/asr/transcription`,
     {
@@ -259,9 +259,23 @@ async function transcribe(
     await save({ ...cp, taskId: undefined, submittedAt: undefined })
   }
 
+  // A terminally failed task cannot recover by polling it again. Keep the
+  // uploaded file, but let an explicit retry submit a new task. Transient
+  // polling failures retain the task ID to avoid duplicate submissions.
+  const poll = async (taskId: string) => {
+    try {
+      return await wait(taskId, config, ctx)
+    } catch (e) {
+      if (e instanceof ProviderError && e.code === 'taskFailed') {
+        await save({ ...cp, taskId: undefined, submittedAt: undefined })
+      }
+      throw e
+    }
+  }
+
   ctx.onProgress?.(0)
   if (cp.taskId) {
-    const result = await wait(cp.taskId, config, ctx)
+    const result = await poll(cp.taskId)
     if (result) return paraformerToTranscript(result, input.language)
     // 任务已查不到：保留上传地址，重新提交
     await save({ ...cp, taskId: undefined, submittedAt: undefined })
@@ -273,7 +287,7 @@ async function transcribe(
   const taskId = await submit(cp.fileUrl!, input.language, config, ctx)
   await save({ ...cp, taskId, submittedAt: now() })
   ctx.onProgress?.(0.4)
-  const result = await wait(taskId, config, ctx)
+  const result = await poll(taskId)
   if (!result) throw new ProviderError('taskFailed', `task ${taskId} not found`)
   return paraformerToTranscript(result, input.language)
 }
