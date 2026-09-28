@@ -4,6 +4,8 @@ import type { VideoQuality } from './quality'
 export type RecorderWarning =
   /** 麦克风打开了但拿不到（未授权 / 设备被占用 / 已拔出），录制继续但不含麦克风 */
   | 'mic-unavailable'
+  /** 用户希望录制来源音频，但浏览器未提供该音轨（麦克风可能仍可用） */
+  | 'source-audio-unavailable'
   /** 既没有来源声音也没有麦克风：视频可以录，但没有可转写的内容 */
   | 'no-audio'
   /** 剩余空间不足以录满 1 小时 */
@@ -14,8 +16,10 @@ export interface CaptureRequest {
   source: VideoSource
   /** 平台层拿到的采集凭证：标签页为 tabCapture streamId，窗口 / 屏幕为 desktopCapture streamId */
   streamId: string
-  /** 窗口 / 屏幕共享时用户是否勾选了「分享音频」；标签页始终为 true */
+  /** 用户选择与浏览器授权都允许采集来源音频时才为 true */
   sourceAudio: boolean
+  /** 选源之前的用户意图，区分主动关闭与浏览器未授权音频 */
+  sourceAudioRequested?: boolean
   quality: VideoQuality
   microphone: { enabled: boolean; deviceId?: string }
 }
@@ -31,6 +35,8 @@ export interface CapturedMedia {
    */
   transcriptAudioTrack?: MediaStreamTrack
   videoSettings?: { width?: number; height?: number; fps?: number }
+  /** 从实际混音读取 0…1 的 RMS 电平，不额外打开采集设备 */
+  audioLevel?(): number
   warnings: RecorderWarning[]
   /** 来源结束（标签页关闭、用户点了「停止共享」）时回调 */
   onEnded(callback: () => void): void

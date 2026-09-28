@@ -39,6 +39,8 @@ export interface SessionStatus {
   elapsedMs: number
   /** 已写入并校验通过的字节数 */
   bytes: number
+  /** 暂停、收尾和结束时归零 */
+  audioLevel?: number
   warnings: RecorderWarning[]
   error?: string
 }
@@ -443,6 +445,7 @@ export class RecordingSession {
       startedAt: this.#startedAt,
       elapsedMs: this.#elapsedMs(),
       bytes: this.#bytes(),
+      audioLevel: this.state === 'recording' ? (this.#media?.audioLevel?.() ?? 0) : 0,
       warnings: [...this.#warnings],
       error: this.#error,
     }

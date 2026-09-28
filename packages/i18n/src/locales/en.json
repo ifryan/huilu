@@ -20,7 +20,7 @@
     "sourceTab": "Current tab",
     "sourceWindow": "A window",
     "sourceScreen": "Entire screen",
-    "sourceDesktopHint": "A picker will open. Tick “Share audio” to record sound",
+    "sourceDesktopHint": "The browser source picker opens after you start.",
     "quality": "Quality",
     "estimate": "Up to about {{size}} per hour",
     "microphone": "Also record microphone",
@@ -45,7 +45,10 @@
     "controlsInSidePanel": "Pause, resume and stop from the floating recording panel on the page",
     "showPanel": "Show recording panel",
     "panelUnavailable": "This page does not allow the floating recording panel (e.g. chrome:// pages). You can control the recording here",
-    "dismissNotice": "Dismiss"
+    "dismissNotice": "Dismiss",
+    "sourceAudio": "Record source / system audio",
+    "sourceAudioTabHint": "Captures sound from this tab only, separately from the microphone.",
+    "sourceAudioDesktopHint": "Availability depends on the selected window / screen, OS, and browser. Enable Share audio in the native picker when offered."
   },
   "sidepanel": {
     "recording": "Recording",
@@ -70,7 +73,9 @@
     "notSaved": "The recording could not be saved: {{error}}",
     "startFailed": "Could not start recording: {{error}}",
     "openHistory": "Open history",
-    "hint": "Click “Start recording” in the popup, or press Alt+Shift+R to record the current tab"
+    "hint": "Click “Start recording” in the popup, or press Alt+Shift+R to record the current tab",
+    "audioLevel": "Captured audio level",
+    "audioSilent": "No sound detected right now"
   },
   "history": {
     "empty": "No recordings yet",
@@ -257,7 +262,8 @@
     "warning": {
       "micUnavailable": "The microphone could not be opened; this recording has no microphone audio",
       "noAudio": "No audio is being captured; this recording cannot be transcribed",
-      "lowStorage": "Less than one hour of storage left"
+      "lowStorage": "Less than one hour of storage left",
+      "sourceAudioUnavailable": "Source audio was requested, but the browser provided no audio track. Source sound is not included; check Share audio and system support."
     },
     "error": {
       "busy": "A recording is already in progress",

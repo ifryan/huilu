@@ -2,6 +2,7 @@ import { useTranslation } from '@huilu/i18n'
 import { Button, cn } from '@huilu/ui'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { checkMessageError } from '@/lib/extension-context'
 import { sendMessage, type LastRecording, type RecorderStatus } from '@/lib/messaging'
 import { formatBytes, formatDuration, startErrorText, warningText } from '@/lib/recording'
 
@@ -16,6 +17,7 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
       sendMessage(action),
     onSuccess: (next) => queryClient.setQueryData(['recorderStatus'], next),
     onSettled: () => setConfirming(false),
+    onError: checkMessageError,
   })
   if (!session) return null
 
@@ -34,12 +36,7 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
   return (
     <section className="bg-muted flex flex-col gap-3 rounded-xl p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <span
-          className={cn(
-            'size-2.5 rounded-full',
-            live ? 'bg-danger animate-pulse' : 'bg-muted-foreground',
-          )}
-        />
+        <span className={cn('size-2.5 rounded-full', live ? 'bg-danger' : 'bg-muted-foreground')} />
         {label}
       </div>
       <div className="truncate text-sm" title={session.title}>
@@ -51,6 +48,8 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
           {t('sidepanel.recorded', { size: formatBytes(session.bytes) })}
         </span>
       </div>
+
+      <RecordingAudioLevel status={status} />
 
       {session.warnings.map((w) => (
         <p key={w} className="rounded-md bg-amber-500/10 px-2 py-1 text-xs">
@@ -89,8 +88,31 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
             </Button>
           </div>
         ))}
-      {control.error && <p className="text-danger text-xs">{String(control.error)}</p>}
+      {control.error != null && <p className="text-danger text-xs">{String(control.error)}</p>}
     </section>
+  )
+}
+
+/** 悬浮面板和再次打开的弹窗都显示同一条实际混音电平。 */
+function RecordingAudioLevel({ status }: { status: RecorderStatus }) {
+  const { t } = useTranslation()
+  const session = status.session
+  const live = status.state === 'recording'
+  if (!session) return null
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-muted-foreground text-xs">{t('sidepanel.audioLevel')}</span>
+      <meter
+        className="h-3 w-full"
+        min={0}
+        max={1}
+        value={live ? (session.audioLevel ?? 0) : 0}
+        aria-label={t('sidepanel.audioLevel')}
+      />
+      {live && !(session.audioLevel && session.audioLevel > 0) && (
+        <span className="text-muted-foreground text-xs">{t('sidepanel.audioSilent')}</span>
+      )}
+    </div>
   )
 }
 
@@ -116,6 +138,7 @@ export function RecordingBrief({ status }: { status: RecorderStatus }) {
         {label} · {formatDuration(session.elapsedMs)}
       </div>
       <div className="text-muted-foreground truncate text-xs">{session.title}</div>
+      <RecordingAudioLevel status={status} />
       <p className="text-muted-foreground text-xs">{t('popup.controlsInSidePanel')}</p>
     </section>
   )

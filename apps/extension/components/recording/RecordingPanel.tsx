@@ -1,6 +1,7 @@
 import { useTranslation } from '@huilu/i18n'
 import { Button, cn } from '@huilu/ui'
-import { useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { reportPanelError } from '@/lib/extension-context'
 import { sendMessage } from '@/lib/messaging'
 import { formatDuration, useRecorderStatus } from '@/lib/recording'
 import { LastRecordingNotice, RecordingStatusCard, StartErrorNotice } from './RecordingStatusCard'
@@ -12,15 +13,35 @@ import { LastRecordingNotice, RecordingStatusCard, StartErrorNotice } from './Re
  */
 export function RecordingPanel() {
   const { t } = useTranslation()
-  const { data: status } = useRecorderStatus()
   // 关闭时记下当时的录制（或「空闲」）；换了一场录制就重新显示
   const [hiddenFor, setHiddenFor] = useState<string>()
   const [collapsed, setCollapsed] = useState(false)
+  const { data: status } = useRecorderStatus({ meterVisible: !collapsed, hiddenFor })
   const [pos, setPos] = useState<{ right: number; bottom: number }>({ right: 16, bottom: 16 })
+  const panel = useRef<HTMLElement | null>(null)
   const drag = useRef<{ x: number; y: number; right: number; bottom: number }>(undefined)
   const busy = status !== undefined && status.state !== 'idle'
   const key = busy ? (status.session?.id ?? 'busy') : 'idle'
   const hidden = hiddenFor === key
+  const hasStatus = status !== undefined
+
+  useEffect(() => {
+    const clamp = () => {
+      const rect = panel.current?.getBoundingClientRect()
+      setPos((p) => ({
+        right: Math.max(0, Math.min(p.right, window.innerWidth - (rect?.width ?? 288))),
+        bottom: Math.max(0, Math.min(p.bottom, window.innerHeight - (rect?.height ?? 40))),
+      }))
+    }
+    const observer = new ResizeObserver(clamp)
+    if (panel.current) observer.observe(panel.current)
+    window.addEventListener('resize', clamp)
+    clamp()
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', clamp)
+    }
+  }, [collapsed, hidden, hasStatus])
 
   if (!status || hidden) return null
   const startError = status.startError
@@ -30,15 +51,28 @@ export function RecordingPanel() {
   if (!busy && !startError && !lastResult) return null
 
   const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return
     drag.current = { x: e.clientX, y: e.clientY, ...pos }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
   const onPointerMove = (e: PointerEvent) => {
     const d = drag.current
     if (!d) return
     setPos({
-      right: Math.max(0, Math.min(window.innerWidth - 80, d.right - (e.clientX - d.x))),
-      bottom: Math.max(0, Math.min(window.innerHeight - 40, d.bottom - (e.clientY - d.y))),
+      right: Math.max(
+        0,
+        Math.min(
+          window.innerWidth - (panel.current?.getBoundingClientRect().width ?? 288),
+          d.right - (e.clientX - d.x),
+        ),
+      ),
+      bottom: Math.max(
+        0,
+        Math.min(
+          window.innerHeight - (panel.current?.getBoundingClientRect().height ?? 40),
+          d.bottom - (e.clientY - d.y),
+        ),
+      ),
     })
   }
   const onPointerUp = () => (drag.current = undefined)
@@ -47,16 +81,19 @@ export function RecordingPanel() {
   if (collapsed && busy && status.session) {
     return (
       <button
+        ref={(node) => {
+          panel.current = node
+        }}
         type="button"
         style={style}
-        className="bg-background text-foreground border-border fixed flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm shadow-lg"
+        className="huilu-panel bg-background text-foreground border-border fixed flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm shadow-lg"
         onClick={() => setCollapsed(false)}
         title={t('panel.expand')}
       >
         <span
           className={cn(
             'size-2 rounded-full',
-            status.state === 'recording' ? 'bg-danger animate-pulse' : 'bg-muted-foreground',
+            status.state === 'recording' ? 'bg-danger' : 'bg-muted-foreground',
           )}
         />
         <span className="font-mono tabular-nums">{formatDuration(status.session.elapsedMs)}</span>
@@ -66,16 +103,21 @@ export function RecordingPanel() {
 
   return (
     <section
+      ref={(node) => {
+        panel.current = node
+      }}
       style={style}
-      className="bg-background text-foreground border-border fixed flex w-72 flex-col gap-3 rounded-2xl border p-3 text-sm shadow-xl"
+      className="huilu-panel bg-background text-foreground border-border fixed flex w-72 flex-col gap-3 rounded-2xl border p-3 text-sm shadow-xl"
       role="dialog"
       aria-label={t('panel.title')}
     >
       <header
-        className="flex cursor-move items-center justify-between gap-2 select-none"
+        className="flex cursor-move touch-none items-center justify-between gap-2 select-none"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
       >
         <span className="font-semibold">{t('app.name')}</span>
         <span className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
@@ -91,7 +133,7 @@ export function RecordingPanel() {
             onClick={() => {
               setHiddenFor(key)
               // 空闲时关掉面板 = 看过了结果，弹窗里也不再提示
-              if (!busy) void sendMessage('dismissRecordingNotice')
+              if (!busy) void sendMessage('dismissRecordingNotice').catch(reportPanelError)
             }}
           >
             ✕
@@ -104,7 +146,11 @@ export function RecordingPanel() {
         <>
           {startError && <StartErrorNotice error={startError} />}
           {lastResult && <LastRecordingNotice result={lastResult} />}
-          <Button variant="outline" size="sm" onClick={() => void sendMessage('openApp', '/')}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void sendMessage('openApp', '/').catch(reportPanelError)}
+          >
             {t('sidepanel.openHistory')}
           </Button>
         </>

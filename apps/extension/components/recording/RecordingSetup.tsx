@@ -153,6 +153,24 @@ export function RecordingSetup({
         {t('popup.estimate', { size: formatBytes(perHour) })}
       </span>
 
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={prefs.sourceAudio !== false}
+            onChange={(e) => updatePrefs({ sourceAudio: e.target.checked })}
+          />
+          {t('popup.sourceAudio')}
+        </span>
+        <span className="text-muted-foreground text-xs">
+          {t(
+            prefs.videoSource === 'tab'
+              ? 'popup.sourceAudioTabHint'
+              : 'popup.sourceAudioDesktopHint',
+          )}
+        </span>
+      </label>
+
       <MicrophoneField
         enabled={prefs.microphone}
         deviceId={prefs.microphoneDeviceId}

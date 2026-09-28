@@ -1,16 +1,43 @@
 import type { useTranslation } from '@huilu/i18n'
-import type { RecorderWarning } from '@huilu/recorder'
+import type { RecorderStatus, RecorderWarning } from '@huilu/recorder'
 import { useQuery } from '@tanstack/react-query'
+import { checkMessageError, isExtensionContextInvalidated } from './extension-context'
 import { sendMessage } from './messaging'
 
 type T = ReturnType<typeof useTranslation>['t']
 
-/** 录制状态以离屏文档为准，界面每秒轮询一次（计时、已录大小随之刷新） */
-export function useRecorderStatus() {
+interface RecorderPollingOptions {
+  meterVisible?: boolean
+  hiddenFor?: string
+}
+
+/** 隐藏 / 收起时只刷新计时和会话变化，展示电平时才加快采样。 */
+export function recorderPollInterval(
+  status: RecorderStatus | undefined,
+  options: RecorderPollingOptions = {},
+): number {
+  const key = status?.state !== 'idle' ? (status?.session?.id ?? 'busy') : 'idle'
+  return status?.state === 'recording' &&
+    options.meterVisible !== false &&
+    options.hiddenFor !== key
+    ? 200
+    : 1000
+}
+
+/** 录制状态以离屏文档为准；计时每秒刷新，只有可见电平需要更高频率。 */
+export function useRecorderStatus(options: RecorderPollingOptions = {}) {
   return useQuery({
     queryKey: ['recorderStatus'],
-    queryFn: () => sendMessage('getRecorderStatus'),
-    refetchInterval: 1000,
+    queryFn: async () => {
+      try {
+        return await sendMessage('getRecorderStatus')
+      } catch (error) {
+        checkMessageError(error)
+        throw error
+      }
+    },
+    retry: (count, error) => !isExtensionContextInvalidated(error) && count < 2,
+    refetchInterval: (query) => recorderPollInterval(query.state.data, options),
   })
 }
 
@@ -31,6 +58,8 @@ export function formatBytes(bytes: number): string {
 
 export function warningText(t: T, warning: RecorderWarning): string {
   switch (warning) {
+    case 'source-audio-unavailable':
+      return t('recorder.warning.sourceAudioUnavailable')
     case 'mic-unavailable':
       return t('recorder.warning.micUnavailable')
     case 'no-audio':

@@ -100,6 +100,8 @@ interface ProtocolMap {
 }
 
 /** 录制窗口自己弹选择框取得 streamId，后台只传录制设置 */
-export type WindowRecordingOptions = Omit<RecordingOptions, 'id' | 'streamId' | 'sourceAudio'>
+export type WindowRecordingOptions = Omit<RecordingOptions, 'id' | 'streamId' | 'sourceAudio'> & {
+  sourceAudio: boolean
+}
 
 export const { sendMessage, onMessage } = defineExtensionMessaging<ProtocolMap>()

@@ -10,6 +10,7 @@ import { ProcessingQueue } from '@huilu/pipeline'
 import { IdbJobStore } from '@huilu/pipeline/jobs'
 import { createMediabunnySplitter } from '@huilu/pipeline/mediabunny'
 import { RecorderController, RecordingStore, browserMediaBackend } from '@huilu/recorder'
+import { sendResultNotification } from '@/lib/result-notification'
 import { onMessage, sendMessage } from '@/lib/messaging'
 import { recordingSource, resolveServices } from '@/lib/processing'
 import { dataFolder, opfs } from '@/platform/storage'
@@ -41,12 +42,14 @@ const queue = new ProcessingQueue({
   splitter: createMediabunnySplitter(),
   onChange: async (job) => {
     if (job.state === 'done')
-      await sendMessage('processingCompleted', job.meetingId).catch((e: unknown) =>
-        console.error('[huilu] result notification failed', e),
+      await sendResultNotification(() => sendMessage('processingCompleted', job.meetingId)).catch(
+        (e: unknown) => console.error('[huilu] result notification failed', e),
       )
   },
   onIdle: () => {
-    void sendMessage('processingIdle').catch(() => {})
+    void sendMessage('processingIdle').catch((error: unknown) =>
+      console.error('[huilu] idle notification failed', error),
+    )
   },
 })
 

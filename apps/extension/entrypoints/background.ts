@@ -1,4 +1,4 @@
-import { claimResultNotification } from '@huilu/storage'
+import { claimResultNotification, releaseResultNotification } from '@huilu/storage'
 import { browser, defineBackground, storage, type Browser } from '#imports'
 import type { RecordingMode } from '@huilu/core'
 import { IdbJobStore, isActive } from '@huilu/pipeline/jobs'
@@ -221,13 +221,15 @@ async function startRecording({
       title,
       mode,
       source: prefs.videoSource,
+      sourceAudio: prefs.sourceAudio !== false,
+      sourceAudioRequested: prefs.sourceAudio !== false,
       quality: prefs.quality,
       microphone: { enabled: prefs.microphone, deviceId: prefs.microphoneDeviceId },
       language: prefs.language,
     }
     let status: RecorderStatus
     if (prefs.videoSource === 'tab') {
-      const grant = await requestTabCapture(tabId)
+      const grant = await requestTabCapture(tabId, options.sourceAudio)
       status = await exclusive(async () => {
         await ensureOffscreenDocument()
         try {
@@ -292,10 +294,17 @@ async function closeIdleOffscreen() {
   if (offscreenTasks > 0 || !(await hasOffscreenDocument())) return
   if ((await sendMessage('offscreen:status')).state !== 'idle') return
   if (await sendMessage('offscreen:processingBusy')) return
+  // 上面的异步查询期间可能刚收到结果通知。
+  if (offscreenTasks > 0) return
   await closeOffscreenDocument()
 }
 
 /** 没有在录制、也没有正在开始的录制时关闭离屏文档，释放采集设备和内存 */
+function scheduleOffscreenCleanup() {
+  // 消息响应先交回 Chrome；不能在 processingIdle / recordingFinished 的响应内关闭发送方。
+  setTimeout(() => void closeOffscreenIfIdle().catch(logProcessingError), 0)
+}
+
 function closeOffscreenIfIdle() {
   return exclusive(async () => {
     if (!startPending) await closeIdleOffscreen()
@@ -312,7 +321,7 @@ async function withOffscreen<T>(task: () => Promise<T>): Promise<T> {
     return await task()
   } finally {
     offscreenTasks--
-    void closeOffscreenIfIdle()
+    scheduleOffscreenCleanup()
   }
 }
 
@@ -362,6 +371,43 @@ async function toggleRecording(tab: Browser.tabs.Tab | undefined) {
   }
   if (tab?.id === undefined) return
   await startRecording({ tabId: tab.id, title: tab.title ?? '' })
+}
+
+/** 同一会议的并发通知共用一次投递；丢失响应后重试仍由持久 claim 去重。 */
+const resultNotifications = new Map<string, Promise<void>>()
+function notifyProcessingCompleted(id: string): Promise<void> {
+  const pending = resultNotifications.get(id)
+  if (pending) return pending
+  // 从收到消息到页面打开完成，所有空闲清理都必须保留发送方。
+  offscreenTasks++
+  const task = (async () => {
+    if ((await jobs.get(id))?.state !== 'done') return
+    if (!(await claimResultNotification(id))) return
+    try {
+      const route = `/meeting/${encodeURIComponent(id)}`
+      const url = browser.runtime.getURL(`/app.html#${route}`)
+      const existing = (await browser.tabs.query({})).find((tab) => tab.url === url)
+      if (existing?.id !== undefined) {
+        try {
+          await browser.tabs.update(existing.id, { active: true })
+        } catch (error) {
+          // 用户刚关掉结果页：重新打开；其他更新失败保留诊断并允许重试。
+          if (!/No tab with id/i.test(String(error))) throw error
+          await openAppPage(route)
+        }
+      } else await openAppPage(route)
+    } catch (error) {
+      // 页面尚未成功打开就失败，不能永久消耗通知名额。
+      await releaseResultNotification(id)
+      throw error
+    }
+  })().finally(() => {
+    offscreenTasks--
+    resultNotifications.delete(id)
+    scheduleOffscreenCleanup()
+  })
+  resultNotifications.set(id, task)
+  return task
 }
 
 /**
@@ -420,16 +466,8 @@ export default defineBackground(() => {
     }
   })
   onMessage('processingHasHostPermission', ({ data: url }) => hasHostPermission(url))
-  onMessage('processingIdle', () => closeOffscreenIfIdle())
-  onMessage('processingCompleted', async ({ data: id }) => {
-    if ((await jobs.get(id))?.state !== 'done') return
-    if (!(await claimResultNotification(id))) return
-    const route = `/meeting/${encodeURIComponent(id)}`
-    const url = browser.runtime.getURL(`/app.html#${route}`)
-    const existing = (await browser.tabs.query({})).find((tab) => tab.url === url)
-    if (existing?.id !== undefined) await browser.tabs.update(existing.id, { active: true })
-    else await openAppPage(route)
-  })
+  onMessage('processingIdle', () => scheduleOffscreenCleanup())
+  onMessage('processingCompleted', ({ data: id }) => notifyProcessingCompleted(id))
 
   onMessage('recordingFinished', async ({ data, sender }) => {
     await lastRecording.setValue(data)
@@ -445,7 +483,7 @@ export default defineBackground(() => {
       setTimeout(() => void closeRetiredWindow(), 1500)
       return
     }
-    await closeOffscreenIfIdle()
+    scheduleOffscreenCleanup()
   })
 
   // GLM Coding Plan 请求头规则（实验）：启动 / 安装升级 / 设置变化时按已保存的设置同步
