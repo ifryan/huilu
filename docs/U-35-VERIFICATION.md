@@ -1,5 +1,30 @@
 # U-35 results, history, and export — local verification
 
+## Linux 集成到 main（2026-09-28）
+
+PR #7 已合并。PR #8 现以 `main` 为 base，本次合入的远端基线为
+`dc8f112cca752812920db307026e6b642e8423f2`，其文件内容与 PR #7 最终 HEAD
+`3149f6e40d826273137362b023a4bbf8317565d8` 一致。U-35 原五提交历史完整保留，
+使用 merge commit 集成，不变基或强制推送。
+
+唯一文本冲突在 `apps/extension/tests/background.test.ts`：任务存储替身同时保留
+读取失败模拟与完成通知依赖的 `get()`。生产代码自动合并后与原 U-35 HEAD 一致。
+合并双方回归测试并删除重复用例，保留 main 的 manifest 缺失/损坏/不可读、
+转写与 LLM 未注册服务商、授权恢复读取/保存/部分保存失败覆盖，以及 U-35
+队列尚未启动时的授权恢复覆盖。新增三项测试验证缺失、运行中和已完成任务的结果通知门控。
+
+本轮完整 `pnpm check` 直接退出码为 **0**，八套测试共 **389 项通过**，测试均实际重跑；
+类型检查中仅未变化的 UI 包复用缓存。冲突相关定向测试 **115 项通过**。
+首次完整检查因新增测试的类型导入写法不符合 ESLint 失败，修正后完整重跑通过。
+本轮 `pnpm build` 直接退出码为 **0**，无缓存构建成功；保留既有非致命 chunk-size 警告。
+CI 结果见 [PR #8](https://github.com/ifryan/huilu/pull/8) 和 U-35 最终交付评论。
+
+本轮未重跑浏览器或真实 API 验证；下文为原 MBP 合成数据验证记录，不能视为 Linux 实测。
+Linux 构建位于 `/root/org-projects/huilu-worktrees/U-35/apps/extension/.output/chrome-mv3`，
+不会更新 MBP 原插件目录。真实用户全流程、系统目录授权持久性、跨平台 AAC 与长会议性能仍待验收。
+
+## MBP 原始交付记录（历史）
+
 Implemented on MBP from the exact pushed U-34 baseline
 `22af1ba2b8a9d917da79f0dd804411c00c804654`. PR #7 remains an unmerged dependency;
 this branch is `feat/U-35-results-history-export`, with no push, merge, tag, or

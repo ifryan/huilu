@@ -5,7 +5,29 @@ and locally exercised. This is ready for code review, **not full product accepta
 real service compatibility and the 60-minute Chinese meeting / three-minute
 processing target remain unverified. U-35 has not been started.
 
-## PR #7 第三轮三项审查修复（2026-09-28，MBP 本地，当前增量）
+## PR #7 第四轮：从 U-35 回移五项修复（2026-09-28，MBP）
+
+在旁侧 `pr7-followup` 工作树从 PR #7 的 `22af1ba` 提取 U-35 已验证的五项最小行为修复，
+不包含 U-35 结果页、导出、通知或存储新功能。以下为本轮证据，旧章节中的未推送状态仅为历史记录。
+
+| 评论 ID    | 提交      | 修复与针对性回归                                                                                           |
+| ---------- | --------- | ---------------------------------------------------------------------------------------------------------- |
+| 4120256397 | `9ce2ac7` | job 保存后更新源会议状态即使失败，finally 仍 kick；验证错误传播后任务能执行至 done。                       |
+| 4120256410 | `f79c687` | 后台任务发现读取失败时唤醒 offscreen 恢复，不当作空队列；验证启动读取失败仍发送恢复请求。                  |
+| 4120256419 | `d60ecd5` | 文件夹授权走可重试的 start/reconcile；覆盖 list 失败、save 失败和部分任务已排队后另一任务保存失败。        |
+| 4120256430 | `92b2311` | 源录制或 manifest 不可用、声明轨道缺失时返回 sourceDataUnavailable；覆盖目录/manifest 缺失、损坏和不可读。 |
+| 4120256439 | `9c4fcf3` | isConfigured 先要求 provider 已注册，readiness 不再接受 fallback 配置；分别覆盖转写与 LLM。                |
+
+新增 12 项回归均先在修复前失败，再在回移后通过。最终 `pnpm check` 与 `pnpm build` 直接退出码均为 **0**；
+共 **374 项测试通过**：providers 130、pipeline 72、extension 97、storage 26、recorder 32、core 14、i18n 3。
+未变更的五套测试使用有效缓存，pipeline 与 extension 重跑；扩展构建无缓存。首次 check 仅因一处测试文件格式
+失败，格式修正后完整重跑通过。构建仍有既有非致命 chunk-size 警告。本轮没有浏览器或真实 API 测试。
+
+U-35 原工作树 `pr-6` 保持干净的 `feat/U-35-results-history-export@3aef4839c9e0837cdb60351ff0624e8de05c6a96`，
+基线仍为 `22af1ba`，五个功能提交保留且不推送。原构建 23 个文件的 SHA-256 与修改时间均未改变，仍对应 U-35；
+PR #7 构建只生成于新工作树。U-35 已含这五项行为修复，本轮不向 U-35 合入回移提交；后续获准 U-35 push 时再处理分支依赖。
+
+## PR #7 第三轮三项审查修复（2026-09-28，MBP 本地，历史增量）
 
 基线为 RH 本地手测通过的版本（含 U-40 GLM Coding Plan 三个提交，HEAD `254f82b`）。RH 的确认仅指本地手测无问题，
 不代表已核实后台套餐扣费或全部真实 API 验收。三条意见（07:30:19 UTC，针对 `554783c`）均核实有效：
