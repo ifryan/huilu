@@ -34,6 +34,19 @@ export class LocalFolderStorageAdapter extends DirectoryStorageAdapter {
     super()
   }
 
+  /** Bind one operation to its original root even if settings change in another tab. */
+  static forHandle(handle: FolderHandle): LocalFolderStorageAdapter {
+    return new LocalFolderStorageAdapter({
+      get: async () => handle,
+      set: async () => {
+        throw new Error('Fixed folder handle')
+      },
+      clear: async () => {
+        throw new Error('Fixed folder handle')
+      },
+    })
+  }
+
   async status(): Promise<FolderStatus> {
     const handle = await this.store.get()
     if (!handle) return { permission: 'unset' }

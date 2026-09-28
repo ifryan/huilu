@@ -10,3 +10,6 @@ export * from './extension-points/pipeline'
 export * from './extension-points/exporter'
 export * from './summary-templates/general'
 export { registries } from './registries'
+
+export * from './speakers'
+export { summaryLocale } from './summary-locale'

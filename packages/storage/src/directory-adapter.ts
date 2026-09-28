@@ -26,7 +26,7 @@ export abstract class DirectoryStorageAdapter implements StorageAdapter {
         await (entry as FileSystemDirectoryHandle).getFileHandle(MEETING_FILE)
         dirs.push(entry.name)
       } catch (e) {
-        if (!isNotFound(e)) throw e
+        if (!isNotFound(e)) dirs.push(entry.name)
       }
     }
     // 文件夹名以「日期_时间」开头，倒序即最新在前

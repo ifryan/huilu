@@ -56,6 +56,10 @@ export const Meeting = z.object({
   language: z.string(),
   speakers: z.array(Speaker).default([]),
   markers: z.array(Marker).default([]),
+  /** Atomic user edits; aliases preserve original transcript speaker IDs. */
+  speakerAliases: z.record(z.string(), z.string()).optional(),
+  favorite: z.boolean().optional(),
+  editRevision: z.number().int().nonnegative().optional(),
   status: ProcessingStatus,
   /** 录制产物的编码信息；导入的外部文件可能没有 */
   media: MeetingMedia.optional(),

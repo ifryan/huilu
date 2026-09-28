@@ -1,3 +1,5 @@
+import { mappedTranscript } from '@huilu/core'
+import { withMeetingLock } from '@huilu/storage'
 import {
   Meeting,
   Summary,
@@ -82,7 +84,7 @@ export interface ProcessingDeps {
   /** 队列读写任务存储（IndexedDB）失败后重新执行的起始间隔，按次数翻倍，上限 1 分钟；默认 1 秒 */
   storageRetryMs?: number
   /** 任务有变化（状态、进度）时回调，用于通知界面刷新 */
-  onChange?: (job: ProcessingJob) => void
+  onChange?: (job: ProcessingJob) => void | Promise<void>
   /** 队列里没有待执行的任务了：后台据此关闭空闲的离屏文档 */
   onIdle?: () => void
 }
@@ -361,7 +363,7 @@ export class ProcessingQueue {
   async #save(job: ProcessingJob): Promise<void> {
     job.updatedAt = this.#now()
     await this.deps.jobs.put(job)
-    this.deps.onChange?.(structuredClone(job))
+    await this.deps.onChange?.(structuredClone(job))
   }
 
   #checkpoint(job: ProcessingJob, key: string): Checkpoint {
@@ -492,13 +494,15 @@ export class ProcessingQueue {
         ...(job.summary.state === 'done' && job.llmProviderId ? { llm: job.llmProviderId } : {}),
       },
     }
-    if (authoritative) {
-      const current = await this.#authoritative(job)
-      if ((await fingerprint(current)) !== (await fingerprint(authoritative))) {
-        throw new PipelineError('sourceDataUnavailable')
+    await withMeetingLock(id, async () => {
+      if (authoritative) {
+        const current = await this.#authoritative(job)
+        if ((await fingerprint(current)) !== (await fingerprint(authoritative))) {
+          throw new PipelineError('sourceDataUnavailable')
+        }
       }
-    }
-    await this.#write(job, done, transcript, summary, locale)
+      await this.#write(job, done, transcript, summary, locale)
+    })
     await this.deps.source.writeMeeting(id, done)
 
     job.folderCommitted = true
@@ -543,7 +547,7 @@ export class ProcessingQueue {
     ) {
       throw new PipelineError('sourceDataUnavailable')
     }
-    return { meeting, transcript }
+    return { meeting, transcript: mappedTranscript(meeting, transcript) }
   }
 
   async #transcribe(

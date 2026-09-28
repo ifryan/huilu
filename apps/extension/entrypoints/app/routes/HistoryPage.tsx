@@ -1,122 +1,222 @@
 import { useTranslation } from '@huilu/i18n'
-import type { ProcessingJob } from '@huilu/pipeline/jobs'
-import type { LocalRecording } from '@huilu/recorder'
 import { Button } from '@huilu/ui'
-import { useEffect, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
 import { ProcessingStatus } from '@/components/ProcessingStatus'
-import { StatusPill } from '@/components/Section'
-import { openRecordingMedia, useLocalRecordings } from '@/lib/library'
+import { resultMedia, useMeetingLibrary, type LibraryItem } from '@/lib/meeting-library'
+import { openRecordingMedia } from '@/lib/library'
 import { useProcessingJobs } from '@/lib/processing-jobs'
-import { processingReadiness, type ProcessingReadiness } from '@/lib/processing-view'
+import { processingReadiness } from '@/lib/processing-view'
 import { useReadiness } from '@/lib/readiness'
-import { formatBytes, formatDuration } from '@/lib/recording'
+import { formatDuration } from '@/lib/recording'
 
-/**
- * 最小历史列表：直接读 OPFS 中的录制（不依赖转写服务或数据文件夹），可本地预览和下载，
- * 并显示会后处理（转写 → 纪要 → 写入数据文件夹）的状态，未处理的可以「补转写」。
- * 不删除任何录制。完整的结果页、搜索、导出属于后续任务。
- */
 export function HistoryPage() {
   const { t } = useTranslation()
-  const { data: recordings, isLoading, error, refetch } = useLocalRecordings()
-  // 整页只轮询一次任务、订阅一次就绪状态（录制再多也只有一组轮询和设置监听），按行分发
+  const { data, isLoading, error, refetch, isFetching } = useMeetingLibrary()
   const { data: jobs } = useProcessingJobs()
   const readiness = processingReadiness(useReadiness().data)
-
+  const [search, setSearch] = useState('')
+  const items = data?.items.filter((r) =>
+    r.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+  )
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">{t('nav.history')}</h1>
-        <Button variant="outline" size="sm" onClick={() => void refetch()}>
-          {t('history.refresh')}
+    <section className="mx-auto flex max-w-5xl flex-col gap-5">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{t('nav.history')}</h1>
+          <p className="text-muted-foreground mt-2 text-sm">{t('library.note')}</p>
+        </div>
+        <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
+          {t('library.rebuild')}
         </Button>
       </header>
-      <p className="text-muted-foreground text-sm">{t('history.localNote')}</p>
-      {error && <p className="text-danger text-sm">{String(error)}</p>}
-      {!isLoading && recordings?.length === 0 && (
-        <p className="text-muted-foreground">{t('history.empty')}</p>
+      <input
+        type="search"
+        aria-label={t('library.search')}
+        placeholder={t('library.search')}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="border-border bg-background w-full max-w-md rounded-lg border px-3 py-2 text-sm"
+      />
+      {(data?.folderUnavailable || data?.scanFailed) && (
+        <p role="status" className="border-border rounded-lg border p-3 text-sm">
+          {t('library.folderUnavailable')}{' '}
+          <Link to="/settings" className="text-primary underline">
+            {t('nav.settings')}
+          </Link>
+        </p>
       )}
-      <ul className="flex flex-col gap-3">
-        {recordings?.map((r) => (
-          <RecordingItem key={r.id} recording={r} job={jobs?.get(r.id)} readiness={readiness} />
-        ))}
+      {error && (
+        <p role="alert" className="text-danger text-sm">
+          {t('library.loadError')}
+        </p>
+      )}
+      {isLoading && <p className="text-muted-foreground">{t('result.loading')}</p>}
+      {!isLoading && items?.length === 0 && (
+        <div className="bg-muted text-muted-foreground rounded-xl p-8 text-center text-sm">
+          {search ? t('result.noMatches') : t('history.empty')}
+        </div>
+      )}
+      <ul className="space-y-3">
+        {items?.map((item) => {
+          const meeting = item.meeting
+          const local = item.local
+          const playable =
+            item.available &&
+            !!item.id &&
+            !item.folder?.issue &&
+            (!!item.folder || (local?.state !== 'unfinished' && local?.state !== 'damaged'))
+          return (
+            <li
+              key={item.key}
+              className="border-border flex items-start gap-4 rounded-xl border p-4"
+            >
+              <Thumbnail item={item} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {playable ? (
+                    <Link
+                      to="/meeting/$meetingId"
+                      params={{ meetingId: item.id! }}
+                      className="hover:text-primary text-base font-medium break-words"
+                    >
+                      {meeting?.favorite && '★ '}
+                      {item.title}
+                    </Link>
+                  ) : (
+                    <h2 className="font-medium break-words">{item.title}</h2>
+                  )}
+                  {playable && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/meeting/$meetingId" params={{ meetingId: item.id! }}>
+                        {t('library.open')}
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+                <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <span>
+                    {meeting
+                      ? new Date(meeting.createdAt).toLocaleString()
+                      : local?.startedAt
+                        ? new Date(local.startedAt).toLocaleString()
+                        : ''}
+                  </span>
+                  <span>{formatDuration(meeting?.durationMs ?? local?.durationMs ?? 0)}</span>
+                  <span>
+                    {(meeting?.mode ?? local?.mode) === 'video'
+                      ? t('popup.modeVideo')
+                      : t('popup.modeAudio')}
+                  </span>
+                  <span>{item.folder ? t('library.inFolder') : t('library.onDevice')}</span>
+                </div>
+                {item.folder?.issue && (
+                  <p className="text-danger text-xs">
+                    {item.folder.issue === 'duplicate'
+                      ? t('library.duplicate')
+                      : t('library.damaged')}
+                  </p>
+                )}
+                {!item.available && (
+                  <p className="text-muted-foreground text-xs">{t('library.accessNeeded')}</p>
+                )}
+                {local ? (
+                  <ProcessingStatus
+                    recording={{
+                      ...local,
+                      title: item.title,
+                      processing: meeting?.status ?? local.processing,
+                    }}
+                    job={jobs?.get(local.id)}
+                    readiness={readiness}
+                  />
+                ) : (
+                  meeting && (
+                    <p className="text-muted-foreground text-xs">
+                      {meeting.status === 'ready' ? t('library.ready') : t('library.incomplete')}
+                    </p>
+                  )
+                )}
+                {local?.state === 'unfinished' && (
+                  <p className="text-muted-foreground text-xs">{t('history.unfinishedHint')}</p>
+                )}
+                {local?.state === 'damaged' && (
+                  <p className="text-danger text-xs">{t('library.damaged')}</p>
+                )}
+                {local?.state === 'partial' && (
+                  <p className="text-muted-foreground text-xs">{t('history.state.partial')}</p>
+                )}
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
 }
 
-function RecordingItem({
-  recording: r,
-  job,
-  readiness,
-}: {
-  recording: LocalRecording
-  job: ProcessingJob | undefined
-  readiness: ProcessingReadiness | undefined
-}) {
-  const { t } = useTranslation()
-  const [media, setMedia] = useState<{ url: string; kind: 'video' | 'audio' }>()
-  const [failed, setFailed] = useState<string>()
-  useEffect(() => () => media && URL.revokeObjectURL(media.url), [media])
-
-  const stateText = {
-    saved: t('history.state.saved'),
-    partial: t('history.state.partial'),
-    unfinished: t('history.state.unfinished'),
-    damaged: t('history.state.damaged'),
-  }[r.state]
-
-  const preview = async () => {
-    setFailed(undefined)
-    const opened = await openRecordingMedia(r).catch((e: unknown) => {
-      setFailed(String(e))
-      return undefined
+function Thumbnail({ item }: { item: LibraryItem }) {
+  const host = useRef<HTMLDivElement>(null)
+  const [src, setSrc] = useState<string>()
+  const video = (item.meeting?.mode ?? item.local?.mode) === 'video'
+  useEffect(() => {
+    if (!video || !item.available || !item.id) return
+    let cancelled = false
+    let objectUrl: string | undefined
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return
+      observer.disconnect()
+      void (async () => {
+        const blob = item.folder
+          ? await resultMedia(
+              {
+                meeting: item.meeting!,
+                dir: item.folder.dir,
+                source: 'folder',
+                root: item.root,
+                readOnly: false,
+                warnings: [],
+              },
+              'video',
+            )
+          : (await openRecordingMedia(item.local!))?.blob
+        if (cancelled) return
+        if (!blob) {
+          setSrc(undefined)
+          return
+        }
+        objectUrl = URL.createObjectURL(blob)
+        setSrc(objectUrl)
+      })().catch(() => {})
     })
-    if (opened) setMedia({ url: URL.createObjectURL(opened.blob), kind: opened.kind })
-    else setFailed((f) => f ?? t('history.noMedia'))
-  }
-  const download = async () => {
-    const opened = await openRecordingMedia(r)
-    if (!opened) return setFailed(t('history.noMedia'))
-    const url = URL.createObjectURL(opened.blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = opened.fileName
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  }
-
+    if (host.current) observer.observe(host.current)
+    return () => {
+      cancelled = true
+      observer.disconnect()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+    // Only replace the preview when its source changes, not on each index refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, item.available, item.folder?.dir, item.root, video])
   return (
-    <li className="border-border flex flex-col gap-2 rounded-xl border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-medium">{r.title}</div>
-        <StatusPill ok={r.state === 'saved'}>{stateText}</StatusPill>
-      </div>
-      <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
-        {r.startedAt !== undefined && <span>{new Date(r.startedAt).toLocaleString()}</span>}
-        <span>{formatDuration(r.durationMs)}</span>
-        <span>{formatBytes(r.bytes)}</span>
-        {r.mode && <span>{r.mode === 'video' ? t('popup.modeVideo') : t('popup.modeAudio')}</span>}
-        <span>{t('history.location')}</span>
-      </div>
-      <ProcessingStatus recording={r} job={job} readiness={readiness} />
-      {r.state === 'unfinished' && <p className="text-xs">{t('history.unfinishedHint')}</p>}
-      {r.error && <p className="text-danger text-xs break-all">{r.error}</p>}
-      {r.state !== 'damaged' && (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => void preview()}>
-            {t('history.preview')}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => void download()}>
-            {t('history.download')}
-          </Button>
-        </div>
+    <div
+      ref={host}
+      className="bg-muted text-primary hidden h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:flex"
+      aria-hidden="true"
+    >
+      {src ? (
+        <video
+          src={src}
+          muted
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            e.currentTarget.currentTime = 0.1
+          }}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-2xl">{video ? '▷' : '▂▅▃▆▂'}</span>
       )}
-      {failed && <p className="text-danger text-xs">{failed}</p>}
-      {media?.kind === 'video' && (
-        <video src={media.url} controls className="max-h-80 w-full rounded-lg bg-black" />
-      )}
-      {media?.kind === 'audio' && <audio src={media.url} controls className="w-full" />}
-    </li>
+    </div>
   )
 }

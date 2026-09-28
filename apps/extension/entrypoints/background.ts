@@ -1,3 +1,4 @@
+import { claimResultNotification } from '@huilu/storage'
 import { browser, defineBackground, storage, type Browser } from '#imports'
 import type { RecordingMode } from '@huilu/core'
 import { IdbJobStore, isActive } from '@huilu/pipeline/jobs'
@@ -420,6 +421,15 @@ export default defineBackground(() => {
   })
   onMessage('processingHasHostPermission', ({ data: url }) => hasHostPermission(url))
   onMessage('processingIdle', () => closeOffscreenIfIdle())
+  onMessage('processingCompleted', async ({ data: id }) => {
+    if ((await jobs.get(id))?.state !== 'done') return
+    if (!(await claimResultNotification(id))) return
+    const route = `/meeting/${encodeURIComponent(id)}`
+    const url = browser.runtime.getURL(`/app.html#${route}`)
+    const existing = (await browser.tabs.query({})).find((tab) => tab.url === url)
+    if (existing?.id !== undefined) await browser.tabs.update(existing.id, { active: true })
+    else await openAppPage(route)
+  })
 
   onMessage('recordingFinished', async ({ data, sender }) => {
     await lastRecording.setValue(data)

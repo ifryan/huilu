@@ -50,6 +50,9 @@ importers:
       '@huilu/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@huilu/exporters':
+        specifier: workspace:*
+        version: link:../../packages/exporters
       '@huilu/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -120,6 +123,22 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(vite@8.3.0(jiti@2.7.0))
+
+  packages/exporters:
+    dependencies:
+      '@huilu/core':
+        specifier: workspace:*
+        version: link:../core
+      mediabunny:
+        specifier: ^1.60.0
+        version: 1.60.0
     devDependencies:
       typescript:
         specifier: ~6.0.3

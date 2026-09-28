@@ -8,6 +8,8 @@ import {
 import { useQuery } from '@tanstack/react-query'
 
 /** 插件页面与离屏文档、录制窗口同源，读到的是同一个 OPFS */
+export const listRecordings = () => listLocalRecordings(store)
+
 const store = new RecordingStore(() => navigator.storage.getDirectory())
 
 export const libraryKey = ['localRecordings'] as const
@@ -37,4 +39,14 @@ export async function openRecordingMedia(
     fileName: `${safeTitle}.${extensionForMime(info.mimeType)}`,
     kind: track === 'video' ? 'video' : 'audio',
   }
+}
+
+export async function openRecordingTrack(
+  recording: LocalRecording,
+  track: 'audio' | 'video',
+): Promise<Blob | undefined> {
+  const info = recording.tracks[track]
+  const dir = await store.open(recording.id)
+  if (!info?.chunks || !dir) return undefined
+  return dir.readTrack(track, info.chunks, info.mimeType.split(';')[0]!)
 }

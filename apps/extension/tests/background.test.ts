@@ -1,5 +1,6 @@
 // 后台调度的回归测试：fakeBrowser 模拟 chrome.*，离屏文档 / 录制窗口的消息处理用内存里的假实现代替
 import type { RecorderStatus } from '@huilu/recorder'
+import type * as StorageModule from '@huilu/storage'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RecordingSettingsSnapshot } from '@/lib/messaging'
@@ -21,6 +22,8 @@ const h = vi.hoisted(() => ({
   processingBusy: false,
   processRequests: [] as unknown[],
   folderAuthorizedCalls: 0,
+  resultNotificationClaims: [] as string[],
+  openedAppRoutes: [] as string[],
   /** IndexedDB 中的处理任务（后台只读） */
   jobsReadFailures: 0,
   jobs: [] as { meetingId: string; state: string }[],
@@ -74,7 +77,18 @@ vi.mock('@/platform/capture', () => ({
   requestTabCapture: async () => ({ streamId: 'tab-stream', sourceAudio: true }),
 }))
 
-vi.mock('@/platform', () => ({ openAppPage: async () => {}, hasHostPermission: async () => true }))
+vi.mock('@/platform', () => ({
+  openAppPage: async (route: string) => void h.openedAppRoutes.push(route),
+  hasHostPermission: async () => true,
+}))
+
+vi.mock('@huilu/storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof StorageModule>()),
+  claimResultNotification: async (id: string) => {
+    h.resultNotificationClaims.push(id)
+    return true
+  },
+}))
 
 vi.mock('@huilu/pipeline/jobs', () => ({
   IdbJobStore: class {
@@ -85,6 +99,7 @@ vi.mock('@huilu/pipeline/jobs', () => ({
       }
       return h.jobs
     }
+    get = async (id: string) => h.jobs.find((j) => j.meetingId === id)
   },
   isActive: (j: { state: string }) => j.state === 'queued' || j.state === 'running',
 }))
@@ -127,6 +142,8 @@ beforeEach(() => {
     processingBusy: false,
     processRequests: [],
     folderAuthorizedCalls: 0,
+    resultNotificationClaims: [],
+    openedAppRoutes: [],
     jobs: [],
     jobsReadFailures: 0,
     sessionRules: [],
@@ -253,6 +270,17 @@ const finished = (id: string, saved = true) => ({
 })
 
 describe('background processing lifecycle', () => {
+  it.each(['missing', 'running', 'done'])(
+    'checks the stored %s job before claiming and opening its result',
+    async (state) => {
+      await settle()
+      h.jobs = state === 'missing' ? [] : [{ meetingId: 'r1', state }]
+      await call('processingCompleted', 'r1')
+      expect(h.resultNotificationClaims).toEqual(state === 'done' ? ['r1'] : [])
+      expect(h.openedAppRoutes).toEqual(state === 'done' ? ['/meeting/r1'] : [])
+    },
+  )
+
   it('queues a finished tab recording and keeps the offscreen document while processing', async () => {
     await start('tab')
     h.offscreenState = 'idle'
