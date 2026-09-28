@@ -322,8 +322,8 @@ async function hasJobs(filter: (job: Awaited<ReturnType<typeof jobs.list>>[numbe
   try {
     return (await jobs.list()).some(filter)
   } catch (e) {
-    console.warn('[huilu] cannot read processing jobs', e)
-    return false
+    console.warn('[huilu] cannot read processing jobs; waking recovery', e)
+    return true
   }
 }
 
