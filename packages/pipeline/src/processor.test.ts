@@ -69,6 +69,10 @@ class Files {
   readonly files = new Map<string, Blob>()
   ready = true
   writes: string[] = []
+  directories = new Set<string>()
+  async isDirectoryEmpty(path: string) {
+    return ![...this.files.keys(), ...this.directories].some((p) => p.startsWith(`${path}/`))
+  }
   async isReady() {
     return this.ready
   }
@@ -197,8 +201,7 @@ describe('ProcessingQueue', () => {
       transcriptionProviderId: 'fake-asr',
       llmProviderId: 'fake-llm',
     })
-    expect(t.folder.writes).toEqual([
-      `${DIR}/.huilu-owner.json`,
+    expect(t.folder.writes.filter((p) => !p.endsWith('/.huilu-owner.json'))).toEqual([
       `${DIR}/video.mp4`,
       `${DIR}/audio.webm`,
       `${DIR}/transcript.json`,
@@ -292,7 +295,17 @@ describe('ProcessingQueue', () => {
     })
 
     // 用户在结果页改了逐字稿（数据文件夹是唯一的真实数据）
-    await t.folder.writeFile(`${DIR}/transcript.json`, '{"edited":true}')
+    const editedTranscript = {
+      ...transcript,
+      segments: [{ ...transcript.segments[0]!, text: '用户修改后的逐字稿' }],
+    }
+    await t.folder.writeFile(`${DIR}/transcript.json`, JSON.stringify(editedTranscript))
+    const editedMeeting = {
+      ...(await t.folder.json(`${DIR}/meeting.json`)),
+      title: '用户新标题',
+      speakers: [{ id: '0', name: '自定义名字' }],
+    }
+    await t.folder.writeFile(`${DIR}/meeting.json`, JSON.stringify(editedMeeting))
     t.services.llm = { ok: true, provider: t.llm, config: {} }
     t.folder.writes = []
     idle = t.onIdle()
@@ -301,12 +314,17 @@ describe('ProcessingQueue', () => {
     expect(await t.job()).toMatchObject({ state: 'done', summary: { state: 'done' } })
     expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
     // 音视频大小没变不重写，已存在的逐字稿不覆盖
-    expect(t.folder.writes).toEqual([
+    expect(t.folder.writes.filter((p) => !p.endsWith('/.huilu-owner.json'))).toEqual([
       `${DIR}/summary.json`,
       `${DIR}/summary.md`,
       `${DIR}/meeting.json`,
     ])
-    expect(await t.folder.text(`${DIR}/transcript.json`)).toBe('{"edited":true}')
+    expect(await t.folder.json(`${DIR}/transcript.json`)).toEqual(editedTranscript)
+    const request = vi.mocked(t.llm.generateObject).mock.calls[0]![0]
+    expect(request.prompt).toContain('用户修改后的逐字稿')
+    expect(request.prompt).toContain('用户新标题')
+    expect(request.prompt).toContain('自定义名字')
+    expect(request.prompt).not.toContain('我们开始今天的需求评审')
   })
 
   it('waits for folder authorization without losing results, then writes them', async () => {
@@ -666,7 +684,10 @@ describe('ProcessingQueue', () => {
     idle = t.onIdle()
     await t.queue.enqueue(MEETING_ID)
     await idle
-    expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
+    expect(await t.job()).toMatchObject({
+      state: 'failed',
+      error: { code: 'sourceDataUnavailable' },
+    })
     expect(await t.folder.json(`${DIR}/meeting.json`)).toEqual(other)
     expect(await t.folder.text(`${DIR}/audio.webm`)).toBe('unrelated audio')
     expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
@@ -683,7 +704,7 @@ describe('ProcessingQueue', () => {
     await first.settle()
     first.queue.stop()
     expect(first.folder.files.has(`${DIR}/meeting.json`)).toBe(false)
-    expect(await first.folder.json(`${DIR}/.huilu-owner.json`)).toEqual({ id: MEETING_ID })
+    expect(await first.folder.json(`${DIR}/.huilu-owner.json`)).toMatchObject({ id: MEETING_ID })
     vi.mocked(first.folder.writeFile).mockImplementation(write)
     const second = setup({ meeting: meeting({ id: 'second' }) })
     second.deps.folder = first.folder
@@ -694,7 +715,7 @@ describe('ProcessingQueue', () => {
       state: 'done',
       folderDir: `${DIR} (2)`,
     })
-    expect(await first.folder.json(`${DIR}/.huilu-owner.json`)).toEqual({ id: MEETING_ID })
+    expect(await first.folder.json(`${DIR}/.huilu-owner.json`)).toMatchObject({ id: MEETING_ID })
   })
 
   it('preserves unowned partial artifacts instead of mixing them into a new meeting', async () => {
@@ -705,6 +726,173 @@ describe('ProcessingQueue', () => {
     await idle
     expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
     expect(await t.folder.text(`${DIR}/transcript.json`)).toBe('unrelated partial transcript')
+  })
+
+  it.each(['notes.md', 'video.webm', 'audio.m4a', 'empty-subdirectory/'])(
+    'does not claim a directory containing unrelated %s',
+    async (name) => {
+      const t = setup()
+      if (name.endsWith('/')) t.folder.directories.add(`${DIR}/${name}`)
+      else await t.folder.writeFile(`${DIR}/${name}`, 'untouched')
+      await t.queue.enqueue(MEETING_ID)
+      await t.settle()
+      expect(await t.job()).toMatchObject({ state: 'done', folderDir: `${DIR} (2)` })
+      expect(t.folder.files.has(`${DIR}/.huilu-owner.json`)).toBe(false)
+      if (!name.endsWith('/')) expect(await t.folder.text(`${DIR}/${name}`)).toBe('untouched')
+    },
+  )
+
+  it.each(['transcript.json', 'summary.json', 'summary.md'])(
+    'repairs empty and partial %s after a failed or silently incomplete write',
+    async (name) => {
+      for (const partial of ['', '{"partial":', '# cut off']) {
+        const t = setup()
+        const write = t.folder.writeFile.bind(t.folder)
+        let failed = false
+        vi.spyOn(t.folder, 'writeFile').mockImplementation(async (path, data) => {
+          if (path === `${DIR}/${name}` && !failed) {
+            failed = true
+            await write(path, partial)
+            if (partial !== '# cut off') throw new Error('disk full')
+            return
+          }
+          await write(path, data)
+        })
+        await t.queue.enqueue(MEETING_ID)
+        await t.settle()
+        expect(await t.job()).toMatchObject({ state: 'queued', error: { code: 'writeFailed' } })
+        expect(t.folder.files.has(`${DIR}/meeting.json`)).toBe(false)
+        t.advance(60000)
+        t.queue.kick()
+        await t.settle()
+        expect(await t.job()).toMatchObject({ state: 'done' })
+        expect(Transcript.parse(await t.folder.json(`${DIR}/transcript.json`))).toEqual(transcript)
+        expect(Summary.safeParse(await t.folder.json(`${DIR}/summary.json`)).success).toBe(true)
+        expect(await t.folder.text(`${DIR}/summary.md`)).toContain('## 待办事项')
+        expect(t.transcription.transcribe).toHaveBeenCalledTimes(1)
+        expect(t.llm.generateObject).toHaveBeenCalledTimes(1)
+      }
+    },
+  )
+
+  it('repairs a partial summary backfill even with an existing ready meeting.json', async () => {
+    const t = setup({ services: { llm: { ok: false, issue: 'notConfigured' } } })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    t.services.llm = { ok: true, provider: t.llm, config: {} }
+    const write = t.folder.writeFile.bind(t.folder)
+    let failed = false
+    vi.spyOn(t.folder, 'writeFile').mockImplementation(async (path, data) => {
+      if (path.endsWith('/summary.md') && !failed) {
+        failed = true
+        await write(path, '# truncated')
+        throw new Error('disk full')
+      }
+      await write(path, data)
+    })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    expect(await t.job()).toMatchObject({ state: 'queued' })
+    t.advance(60000)
+    t.queue.kick()
+    await t.settle()
+    expect(await t.job()).toMatchObject({ state: 'done' })
+    expect(await t.folder.text(`${DIR}/summary.md`)).toContain('## 待办事项')
+    expect(t.llm.generateObject).toHaveBeenCalledTimes(1)
+
+    const editedSummary = { ...summary, overview: '用户修改的概要' }
+    await write(`${DIR}/summary.json`, JSON.stringify(editedSummary))
+    await write(`${DIR}/summary.md`, '# 用户自行整理的纪要')
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    expect(await t.folder.json(`${DIR}/summary.json`)).toEqual(editedSummary)
+    expect(await t.folder.text(`${DIR}/summary.md`)).toBe('# 用户自行整理的纪要')
+    expect(t.llm.generateObject).toHaveBeenCalledTimes(1)
+  })
+
+  it('regenerates an uncommitted summary when the authoritative transcript changes before retry', async () => {
+    const t = setup({ services: { llm: { ok: false, issue: 'notConfigured' } } })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    t.services.llm = { ok: true, provider: t.llm, config: {} }
+    const write = t.folder.writeFile.bind(t.folder)
+    let fail = true
+    vi.spyOn(t.folder, 'writeFile').mockImplementation(async (path, data) => {
+      if (path.endsWith('/meeting.json') && fail) throw new Error('disk full')
+      await write(path, data)
+    })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    expect(await t.job()).toMatchObject({ state: 'queued' })
+    await write(
+      `${DIR}/transcript.json`,
+      JSON.stringify({ ...transcript, segments: [{ ...transcript.segments[0]!, text: '新输入' }] }),
+    )
+    vi.mocked(t.llm.generateObject).mockImplementation(async (request) => {
+      expect(request.prompt).toContain('新输入')
+      return request.schema.parse({ ...summary, overview: '新输入的概要' })
+    })
+    fail = false
+    t.advance(60000)
+    t.queue.kick()
+    await t.settle()
+    expect(await t.job()).toMatchObject({ state: 'done' })
+    expect((await t.folder.json(`${DIR}/summary.json`)).overview).toBe('新输入的概要')
+    expect(await t.folder.text(`${DIR}/summary.md`)).toContain('新输入的概要')
+    expect(t.llm.generateObject).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['permission', 'missing', 'corruptTranscript', 'corruptMetadata', 'wrongOwner'])(
+    'never falls back to cached data for an unavailable completed source: %s',
+    async (reason) => {
+      const t = setup({ services: { llm: { ok: false, issue: 'notConfigured' } } })
+      await t.queue.enqueue(MEETING_ID)
+      await t.settle()
+      t.services.llm = { ok: true, provider: t.llm, config: {} }
+      if (reason === 'permission') t.folder.ready = false
+      if (reason === 'missing') t.folder.files.clear()
+      if (reason === 'corruptTranscript') await t.folder.writeFile(`${DIR}/transcript.json`, '{bad')
+      if (reason === 'corruptMetadata') await t.folder.writeFile(`${DIR}/meeting.json`, '{bad')
+      if (reason === 'wrongOwner')
+        await t.folder.writeFile(`${DIR}/.huilu-owner.json`, '{"id":"other"}')
+      t.folder.writes = []
+      await t.queue.enqueue(MEETING_ID)
+      await t.settle()
+      expect(await t.job()).toMatchObject(
+        reason === 'permission'
+          ? { state: 'waitingFolder' }
+          : { state: 'failed', error: { code: 'sourceDataUnavailable', retryable: false } },
+      )
+      expect(t.llm.generateObject).not.toHaveBeenCalled()
+      expect(t.folder.writes).toEqual([])
+      if (reason === 'permission') {
+        t.folder.ready = true
+        await t.queue.onFolderAuthorized()
+        await t.settle()
+        expect(await t.job()).toMatchObject({ state: 'done' })
+      }
+    },
+  )
+
+  it('detects edits made while generating a follow-up summary before writing anything', async () => {
+    const t = setup({ services: { llm: { ok: false, issue: 'notConfigured' } } })
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    vi.mocked(t.llm.generateObject).mockImplementation(async (request) => {
+      await t.folder.writeFile(
+        `${DIR}/transcript.json`,
+        JSON.stringify({ ...transcript, segments: [] }),
+      )
+      return request.schema.parse(summary)
+    })
+    t.services.llm = { ok: true, provider: t.llm, config: {} }
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    expect(await t.job()).toMatchObject({
+      state: 'failed',
+      error: { code: 'sourceDataUnavailable' },
+    })
+    expect(t.folder.files.has(`${DIR}/summary.json`)).toBe(false)
   })
 
   it('keeps speaker names and titles the user edited in the folder', async () => {

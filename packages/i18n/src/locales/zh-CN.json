@@ -134,6 +134,7 @@
       "noAudio": "没有录到转写音频",
       "meetingNotFound": "找不到这场录制",
       "splitFailed": "音频切片失败",
+      "sourceDataUnavailable": "已完成会议的数据不可用，请重新授权原文件夹或检查 meeting.json 与 transcript.json",
       "writeFailed": "写入失败",
       "unknown": "未知错误"
     }

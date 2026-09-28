@@ -67,7 +67,7 @@ export interface ProcessingDeps {
   /** 中间结果（OPFS，路径以会议 id 开头）：逐字稿、纪要、切片结果。数据文件夹未授权时也不会丢 */
   work: Files
   /** 用户的数据文件夹 */
-  folder: Files & Pick<StorageAdapter, 'isReady'>
+  folder: Files & Pick<StorageAdapter, 'isReady' | 'isDirectoryEmpty'>
   services(): Promise<ResolvedServices>
   splitter?: AudioSplitter
   now?: () => number
@@ -194,6 +194,7 @@ export class ProcessingQueue {
       checkpoints: {},
       createdAt: now,
       ...existing,
+      folderCommitted: existing?.folderCommitted || existing?.state === 'done',
       meetingId,
       state: 'queued',
       attempts: 0,
@@ -318,22 +319,45 @@ export class ProcessingQueue {
 
   async #process(job: ProcessingJob, signal: AbortSignal): Promise<void> {
     const id = job.meetingId
-    const meeting = await this.deps.source.readMeeting(id)
+    let meeting = await this.deps.source.readMeeting(id)
     if (!meeting) throw new PipelineError('meetingNotFound')
     if (!meeting.media?.audio) throw new PipelineError('noAudio')
 
+    // 完成目录中的用户修改是权威来源；不能悄悄回退到旧 OPFS。
+    let authoritative: { meeting: Meeting; transcript: Transcript } | undefined
+    if (job.folderCommitted) {
+      await this.#step(job, 'summarize')
+      authoritative = await this.#authoritative(job)
+      meeting = authoritative.meeting
+    }
+
     // 1. 转写
-    let transcript = await readJson(this.deps.work, WORK.transcript(id), (v) => Transcript.parse(v))
+    let transcript =
+      authoritative?.transcript ??
+      (await readJson(this.deps.work, WORK.transcript(id), (v) => Transcript.parse(v)))
     if (!transcript) {
       await this.#step(job, 'transcribe')
       transcript = await this.#transcribe(job, meeting, signal)
       await this.deps.work.writeFile(WORK.transcript(id), toJson(transcript))
     }
     const locale = summaryLocale(meeting.language, transcript)
-    const speakers = speakersFromTranscript(transcript, locale)
+    const speakers = speakersFromTranscript(transcript, locale).map(
+      (speaker) => meeting.speakers.find((s) => s.id === speaker.id) ?? speaker,
+    )
+    const summaryInput = await fingerprint({
+      prompt: buildSummaryPrompt(meeting, transcript, speakers, locale),
+      locale,
+    })
 
     // 2. 纪要（大模型未配置时跳过，只保存逐字稿；配置后可再次处理补上纪要）
     let summary = await readJson(this.deps.work, WORK.summary(id), (v) => Summary.parse(v))
+    if (authoritative) {
+      // 已提交的纪要保留；失败补写留下的 OPFS 纪要仅在输入未变时复用。
+      const saved = meeting.providers?.llm
+        ? await readJson(this.deps.folder, `${job.folderDir}/summary.json`, (v) => Summary.parse(v))
+        : undefined
+      summary = saved ?? (job.checkpoints.summaryInput === summaryInput ? summary : undefined)
+    }
     if (summary) {
       job.summary = { state: 'done' }
     } else {
@@ -344,6 +368,8 @@ export class ProcessingQueue {
       } else {
         summary = result.summary
         await this.deps.work.writeFile(WORK.summary(id), toJson(summary))
+        job.checkpoints.summaryInput = summaryInput
+        await this.#save(job)
         job.summary = { state: 'done' }
       }
     }
@@ -361,14 +387,58 @@ export class ProcessingQueue {
         ...(job.summary.state === 'done' && job.llmProviderId ? { llm: job.llmProviderId } : {}),
       },
     }
+    if (authoritative) {
+      const current = await this.#authoritative(job)
+      if ((await fingerprint(current)) !== (await fingerprint(authoritative))) {
+        throw new PipelineError('sourceDataUnavailable')
+      }
+    }
     await this.#write(job, done, transcript, summary, locale)
     await this.deps.source.writeMeeting(id, done)
 
+    job.folderCommitted = true
     job.state = 'done'
     job.error = undefined
     job.progress = undefined
     job.finishedAt = this.#now()
     await this.#save(job)
+  }
+
+  async #authoritative(job: ProcessingJob): Promise<{ meeting: Meeting; transcript: Transcript }> {
+    const folder = this.deps.folder
+    if (!(await folder.isReady())) throw new FolderNotReadyError('prompt')
+    if (!job.folderDir) throw new PipelineError('sourceDataUnavailable')
+    const meeting = await readJson(folder, `${job.folderDir}/meeting.json`, (v) => Meeting.parse(v))
+    const transcript = await readJson(folder, `${job.folderDir}/transcript.json`, (v) => {
+      const parsed = Transcript.parse(v)
+      if (
+        parsed.segments.some(
+          (s, i, all) => s.endMs < s.startMs || (i > 0 && s.startMs < all[i - 1]!.startMs),
+        )
+      ) {
+        throw new Error('invalid transcript timeline')
+      }
+      return parsed
+    })
+    const owner = await folder.readFile(`${job.folderDir}/.huilu-owner.json`)
+    let owned = true
+    if (owner) {
+      try {
+        owned = JSON.parse(await owner.text()).id === job.meetingId
+      } catch {
+        owned = false
+      }
+    }
+    if (
+      !owned ||
+      !meeting ||
+      meeting.id !== job.meetingId ||
+      meeting.status !== 'ready' ||
+      !transcript
+    ) {
+      throw new PipelineError('sourceDataUnavailable')
+    }
+    return { meeting, transcript }
   }
 
   async #transcribe(
@@ -510,7 +580,7 @@ export class ProcessingQueue {
   }
 
   /** Verify ownership on every write, including after the user changes folders. */
-  async #folderDir(job: ProcessingJob, meeting: Meeting, mediaNames: string[]): Promise<string> {
+  async #folderDir(job: ProcessingJob, meeting: Meeting): Promise<string> {
     const base = meetingFolderName(meeting)
     const candidates = [
       ...(job.folderDir ? [job.folderDir] : []),
@@ -529,12 +599,8 @@ export class ProcessingQueue {
       if (metadata && !(await ownedByMeeting(metadata))) continue
       if (reservation && !(await ownedByMeeting(reservation))) continue
       if (!metadata && !reservation) {
-        // A partial directory without an ownership record is not safe to reuse.
-        const names = [...mediaNames, 'transcript.json', 'summary.json', 'summary.md']
-        const files = await Promise.all(
-          names.map((name) => this.deps.folder.readFile(`${dir}/${name}`)),
-        )
-        if (files.some(Boolean)) continue
+        // 必须枚举目录：任意文件名、其他媒体后缀和空子目录都属于已有内容。
+        if (!(await this.deps.folder.isDirectoryEmpty(dir))) continue
       }
       // Reserve before writing artifacts: another job must not adopt this
       // directory if writing fails before the final meeting.json commit.
@@ -550,7 +616,7 @@ export class ProcessingQueue {
 
   /**
    * 写入顺序：音视频 → 逐字稿 → 纪要 → meeting.json（最后写，有它才算一场完整的会议）。
-   * 可重复执行：大小相同的音视频不再重写；已存在的 transcript / summary 文件不覆盖
+   * 可重复执行：大小相同的音视频不再重写；合法 JSON 与已提交的 Markdown 编辑保留
    * （数据文件夹是唯一的真实数据，用户以后在结果页的修改不能被重新处理冲掉）
    */
   async #write(
@@ -562,11 +628,26 @@ export class ProcessingQueue {
   ): Promise<void> {
     const folder = this.deps.folder
     const media = await this.deps.source.readMedia(meeting.id)
-    const dir = await this.#folderDir(
-      job,
-      meeting,
-      media.map((m) => m.name),
-    )
+    const dir = await this.#folderDir(job, meeting)
+    const existing = await readJson(folder, `${dir}/meeting.json`, (v) => Meeting.parse(v))
+    const ownerPath = `${dir}/.huilu-owner.json`
+    const owner = (await readJson(folder, ownerPath, (v) => v)) as {
+      id: string
+      pending?: string
+      markdownComplete?: boolean
+    }
+    const writeVerified = async (name: string, content: string) => {
+      // 先持久化意图，避免已完成会议补纪要失败后把半截 Markdown 当成用户编辑。
+      owner.pending = name
+      await folder.writeFile(ownerPath, toJson(owner))
+      await folder.writeFile(`${dir}/${name}`, content)
+      if ((await (await folder.readFile(`${dir}/${name}`))?.text()) !== content) {
+        throw new PipelineError('writeFailed', true, `incomplete ${name}`)
+      }
+      delete owner.pending
+      if (name === 'summary.md') owner.markdownComplete = true
+      await folder.writeFile(ownerPath, toJson(owner))
+    }
     const total = media.reduce((sum, m) => sum + m.blob.size, 0) || 1
     let written = 0
     for (const { name, blob } of media) {
@@ -575,20 +656,30 @@ export class ProcessingQueue {
       written += blob.size
       this.#progress(job, 0, 0.9)(written / total)
     }
-    const writeIfMissing = async (name: string, content: () => string) => {
-      if (!(await folder.readFile(`${dir}/${name}`))) {
-        await folder.writeFile(`${dir}/${name}`, content())
+    if (
+      owner.pending === 'transcript.json' ||
+      !(await readJson(folder, `${dir}/transcript.json`, (v) => Transcript.parse(v)))
+    ) {
+      await writeVerified('transcript.json', toJson(transcript))
+    }
+    if (summary) {
+      const saved =
+        owner.pending === 'summary.json' || (job.folderCommitted && !existing?.providers?.llm)
+          ? undefined
+          : await readJson(folder, `${dir}/summary.json`, (v) => Summary.parse(v))
+      if (!saved) await writeVerified('summary.json', toJson(summary))
+      const markdown = await (await folder.readFile(`${dir}/summary.md`))?.text()
+      const committed =
+        !(job.folderCommitted && !existing?.providers?.llm) &&
+        (owner.markdownComplete || (existing?.status === 'ready' && existing.providers?.llm))
+      if (owner.pending === 'summary.md' || !markdown?.trim() || !committed) {
+        await writeVerified(
+          'summary.md',
+          renderSummaryMarkdown(meeting, saved ?? summary, meeting.speakers, locale),
+        )
       }
     }
-    await writeIfMissing('transcript.json', () => toJson(transcript))
-    if (summary) {
-      await writeIfMissing('summary.json', () => toJson(summary))
-      await writeIfMissing('summary.md', () =>
-        renderSummaryMarkdown(meeting, summary, meeting.speakers, locale),
-      )
-    }
-    // meeting.json：已存在（同一场会议）时保留用户改过的标题、发言人名、打点，只更新状态与服务商
-    const existing = await readJson(folder, `${dir}/meeting.json`, (v) => Meeting.parse(v))
+    // 最后提交元数据；保留同一场会议合法的标题、发言人名和打点编辑。
     const merged: Meeting = existing
       ? {
           ...existing,
@@ -613,7 +704,7 @@ export class ProcessingQueue {
     }
     // 写入途中授权被收回：浏览器抛 NotAllowedError，同样等待重新授权
     const permissionLost =
-      step === 'write' &&
+      (step === 'write' || job.folderCommitted) &&
       e instanceof DOMException &&
       (e.name === 'NotAllowedError' || e.name === 'SecurityError')
     if (e instanceof FolderNotReadyError || permissionLost) {

@@ -134,6 +134,7 @@
       "noAudio": "No transcription audio was recorded",
       "meetingNotFound": "The recording was not found",
       "splitFailed": "Could not split the audio",
+      "sourceDataUnavailable": "Completed meeting data is unavailable. Authorize the original folder or check meeting.json and transcript.json",
       "writeFailed": "Could not write the files",
       "unknown": "Unknown error"
     }

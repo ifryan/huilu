@@ -33,6 +33,19 @@ export abstract class DirectoryStorageAdapter implements StorageAdapter {
     return dirs.sort((a, b) => b.localeCompare(a))
   }
 
+  async isDirectoryEmpty(path: string): Promise<boolean> {
+    try {
+      const dir = await this.#dir(splitPath(path), false)
+      const first = await dir.values().next()
+      if (!first.done) return false
+      return true
+    } catch (e) {
+      if (isNotFound(e)) return true
+      if (e instanceof DOMException && e.name === 'TypeMismatchError') return false
+      throw e
+    }
+  }
+
   async readFile(path: string): Promise<Blob | undefined> {
     try {
       const file = await this.#fileHandle(path, false)

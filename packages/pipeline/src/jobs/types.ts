@@ -24,6 +24,7 @@ export const PIPELINE_ERROR_CODES = [
   'meetingNotFound',
   'splitFailed',
   'writeFailed',
+  'sourceDataUnavailable',
   'unknown',
 ] as const
 export type PipelineErrorCode = (typeof PIPELINE_ERROR_CODES)[number]
@@ -62,6 +63,8 @@ export interface ProcessingJob {
   summary?: { state: 'done' } | { state: 'skipped'; reason: SummarySkipReason }
   /** 写入数据文件夹时使用的子文件夹名，第一次写入时确定，重试沿用 */
   folderDir?: string
+  /** 曾完成最终目录提交；后续补处理必须从该目录读取权威数据。兼容旧 done 任务。 */
+  folderCommitted?: boolean
   transcriptionProviderId?: string
   llmProviderId?: string
   /** 服务商断点（上传地址、任务号、切片位置……），键为 `<步骤>:<服务商>[:<切片>]` */
