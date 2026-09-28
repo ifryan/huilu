@@ -1,8 +1,8 @@
-import type {
-  AudioInput,
+import {
   Transcript,
-  TranscriptionContext,
-  TranscriptionProvider,
+  type AudioInput,
+  type TranscriptionContext,
+  type TranscriptionProvider,
 } from '@huilu/core'
 import { z } from 'zod'
 import { ProviderError } from '../errors'
@@ -77,11 +77,30 @@ interface TaskOutput {
   }[]
 }
 
-interface RecognitionResult {
-  transcripts?: {
-    sentences?: { begin_time: number; end_time: number; text: string; speaker_id?: number }[]
-  }[]
-}
+/**
+ * 下载的识别结果只校验用到的字段：时间戳必须是有限的非负数且不倒序，
+ * 否则换算出 NaN / null 的逐字稿会被当成成功写入
+ */
+const RecognitionResult = z.object({
+  transcripts: z
+    .array(
+      z.object({
+        sentences: z
+          .array(
+            z
+              .object({
+                begin_time: z.number().nonnegative(),
+                end_time: z.number().nonnegative(),
+                text: z.string(),
+                speaker_id: z.number().int().nonnegative().nullish(),
+              })
+              .refine((s) => s.end_time >= s.begin_time),
+          )
+          .optional(),
+      }),
+    )
+    .optional(),
+})
 
 /** 会议语言 → language_hints；自动识别时不传，由服务端判断 */
 export function paraformerLanguageHints(language: string): string[] | undefined {
@@ -91,10 +110,15 @@ export function paraformerLanguageHints(language: string): string[] | undefined 
   return supported.includes(language) ? [language] : undefined
 }
 
-/** 百炼识别结果 → core 的 Transcript；speaker_id 从 0 开始 */
-export function paraformerToTranscript(result: RecognitionResult, language: string): Transcript {
-  const sentences = (result.transcripts ?? []).flatMap((t) => t.sentences ?? [])
-  return {
+/**
+ * 百炼识别结果 → core 的 Transcript；speaker_id 从 0 开始。
+ * 结果缺失或时间戳无效（缺失、非数字、非有限、负数、结束早于开始）时抛 badResponse
+ */
+export function paraformerToTranscript(raw: unknown, language: string): Transcript {
+  const parsed = RecognitionResult.safeParse(raw)
+  if (!parsed.success) throw new ProviderError('badResponse', 'invalid recognition result')
+  const sentences = (parsed.data.transcripts ?? []).flatMap((t) => t.sentences ?? [])
+  const transcript = Transcript.safeParse({
     language,
     segments: sentences
       .filter((s) => typeof s.text === 'string' && s.text.trim() !== '')
@@ -105,7 +129,9 @@ export function paraformerToTranscript(result: RecognitionResult, language: stri
         text: s.text.trim(),
       }))
       .sort((a, b) => a.startMs - b.startMs),
-  }
+  })
+  if (!transcript.success) throw new ProviderError('badResponse', 'invalid transcript')
+  return transcript.data
 }
 
 async function upload(
@@ -189,7 +215,7 @@ async function wait(
   taskId: string,
   { region, apiKey }: ParaformerConfig,
   ctx: TranscriptionContext,
-): Promise<RecognitionResult | undefined> {
+): Promise<{ raw: unknown } | undefined> {
   const deadline = Date.now() + PARAFORMER_LIMITS.maxWaitMs
   for (;;) {
     let output: TaskOutput | undefined
@@ -215,7 +241,7 @@ async function wait(
       const url = output?.results?.[0]?.transcription_url
       if (!url) throw new ProviderError('badResponse', 'no transcription_url')
       // 结果文件在 OSS 上，地址自带签名，不能带百炼的 Key
-      return fetchJson<RecognitionResult>(url, {}, ctx, 60_000)
+      return { raw: await fetchJson<unknown>(url, {}, ctx, 60_000) }
     }
     if (status === 'FAILED') {
       throw new ProviderError(
@@ -276,7 +302,7 @@ async function transcribe(
   ctx.onProgress?.(0)
   if (cp.taskId) {
     const result = await poll(cp.taskId)
-    if (result) return paraformerToTranscript(result, input.language)
+    if (result) return paraformerToTranscript(result.raw, input.language)
     // 任务已查不到：保留上传地址，重新提交
     await save({ ...cp, taskId: undefined, submittedAt: undefined })
   }
@@ -289,7 +315,7 @@ async function transcribe(
   ctx.onProgress?.(0.4)
   const result = await poll(taskId)
   if (!result) throw new ProviderError('taskFailed', `task ${taskId} not found`)
-  return paraformerToTranscript(result, input.language)
+  return paraformerToTranscript(result.raw, input.language)
 }
 
 /** 阿里云百炼 Paraformer 录音文件识别（默认推荐，支持区分发言人） */

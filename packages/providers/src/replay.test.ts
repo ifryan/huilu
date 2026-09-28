@@ -292,6 +292,78 @@ describe('paraformer.transcribe', () => {
     })
   })
 
+  function resultRoutes(body: string) {
+    return replay([
+      [/GET .*\/api\/v1\/tasks\/task-0001$/, () => json(succeeded)],
+      [/GET https:\/\/dashscope-result-bj\./, () => new Response(body)],
+    ])
+  }
+  const resumed = () =>
+    memoryCheckpoint({
+      region: 'cn',
+      model: 'paraformer-v2',
+      fileUrl: 'oss://dashscope-instant/abc123/old.webm',
+      uploadedAt: Date.now() - 60_000,
+      taskId: 'task-0001',
+      submittedAt: Date.now() - 30_000,
+    } satisfies ParaformerCheckpoint)
+  const sentence = (fields: Record<string, unknown>) =>
+    JSON.stringify({ transcripts: [{ sentences: [{ text: '你好', speaker_id: 0, ...fields }] }] })
+
+  it.each([
+    ['missing begin_time', sentence({ end_time: 100 })],
+    ['missing end_time', sentence({ begin_time: 100 })],
+    ['string timestamp', sentence({ begin_time: '100', end_time: 200 })],
+    ['null timestamp', sentence({ begin_time: null, end_time: 200 })],
+    ['non-finite timestamp', '{"transcripts":[{"sentences":[{"text":"x","begin_time":0,"end_time":1e400}]}]}'],
+    ['negative timestamp', sentence({ begin_time: -5, end_time: 200 })],
+    ['reversed timestamps', sentence({ begin_time: 300, end_time: 200 })],
+    ['malformed speaker', sentence({ begin_time: 0, end_time: 200, speaker_id: 'a' })],
+    ['non-object result', 'null'],
+    ['non-array transcripts', JSON.stringify({ transcripts: {} })],
+  ])('rejects a downloaded result with %s as badResponse', async (_name, body) => {
+    noWait()
+    resultRoutes(body)
+    await expect(
+      paraformer.transcribe(audio(), config, {
+        signal: new AbortController().signal,
+        checkpoint: resumed(),
+      }),
+    ).rejects.toMatchObject({ code: 'badResponse' })
+  })
+
+  it('accepts zero-length, overlapping and empty Paraformer results', async () => {
+    noWait()
+    resultRoutes(
+      JSON.stringify({
+        transcripts: [
+          {
+            sentences: [
+              { begin_time: 500, end_time: 900, text: '重叠', speaker_id: 1 },
+              { begin_time: 100, end_time: 100, text: '零长', speaker_id: 0 },
+              { begin_time: 400, end_time: 600.4, text: '  ' },
+            ],
+          },
+        ],
+      }),
+    )
+    const transcript = await paraformer.transcribe(audio(), config, {
+      signal: new AbortController().signal,
+      checkpoint: resumed(),
+    })
+    expect(transcript.segments).toEqual([
+      { startMs: 100, endMs: 100, speakerId: '0', text: '零长' },
+      { startMs: 500, endMs: 900, speakerId: '1', text: '重叠' },
+    ])
+    resultRoutes(JSON.stringify({ transcripts: [] }))
+    await expect(
+      paraformer.transcribe(audio(), config, {
+        signal: new AbortController().signal,
+        checkpoint: resumed(),
+      }),
+    ).resolves.toEqual({ language: 'zh', segments: [] })
+  })
+
   it('rejects files over the upload policy limit before uploading', async () => {
     const calls = paraformerRoutes()
     const err = await paraformer
