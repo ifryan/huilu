@@ -187,6 +187,16 @@ function setup(
 const DIR = '2026-09-28_1030_需求评审'
 
 describe('ProcessingQueue', () => {
+  it('runs a persisted job even when the initial source status update fails', async () => {
+    const t = setup({ meeting: meeting({ status: 'failed' }) })
+    vi.spyOn(t.source, 'writeMeeting').mockRejectedValueOnce(new Error('source write failed'))
+    const idle = t.onIdle()
+    await expect(t.queue.enqueue(MEETING_ID)).rejects.toThrow('source write failed')
+    await idle
+    expect(await t.job()).toMatchObject({ state: 'done' })
+    t.queue.stop()
+  })
+
   it('transcribes, summarizes and writes everything into the data folder', async () => {
     const t = setup()
     const idle = t.onIdle()

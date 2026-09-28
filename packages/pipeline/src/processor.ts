@@ -279,10 +279,13 @@ export class ProcessingQueue {
       updatedAt: now,
     }
     await this.#save(job)
-    if (meeting.status !== 'processing') {
-      await this.deps.source.writeMeeting(meetingId, { ...meeting, status: 'processing' })
+    try {
+      if (meeting.status !== 'processing') {
+        await this.deps.source.writeMeeting(meetingId, { ...meeting, status: 'processing' })
+      }
+    } finally {
+      this.kick()
     }
-    this.kick()
     return { queued: true, job }
   }
 
