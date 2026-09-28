@@ -1,3 +1,5 @@
+import { mappedTranscript } from '@huilu/core'
+import { withMeetingLock } from '@huilu/storage'
 import {
   Meeting,
   Summary,
@@ -494,13 +496,15 @@ export class ProcessingQueue {
         ...(job.summary.state === 'done' && job.llmProviderId ? { llm: job.llmProviderId } : {}),
       },
     }
-    if (authoritative) {
-      const current = await this.#authoritative(job)
-      if ((await fingerprint(current)) !== (await fingerprint(authoritative))) {
-        throw new PipelineError('sourceDataUnavailable')
+    await withMeetingLock(id, async () => {
+      if (authoritative) {
+        const current = await this.#authoritative(job)
+        if ((await fingerprint(current)) !== (await fingerprint(authoritative))) {
+          throw new PipelineError('sourceDataUnavailable')
+        }
       }
-    }
-    await this.#write(job, done, transcript, summary, locale)
+      await this.#write(job, done, transcript, summary, locale)
+    })
     await this.deps.source.writeMeeting(id, done)
 
     job.folderCommitted = true
@@ -545,7 +549,7 @@ export class ProcessingQueue {
     ) {
       throw new PipelineError('sourceDataUnavailable')
     }
-    return { meeting, transcript }
+    return { meeting, transcript: mappedTranscript(meeting, transcript) }
   }
 
   async #transcribe(
