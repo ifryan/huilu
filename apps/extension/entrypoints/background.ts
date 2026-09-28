@@ -57,7 +57,52 @@ const windowHost = storage.defineItem<WindowHost | null>('session:recorderWindow
   fallback: null,
 })
 
-/** 录制窗口还开着时返回它；窗口已不存在则清掉记录 */
+/**
+ * 录制已结束、正在延迟关闭的录制窗口。它的页面仍注册着 window:* 消息处理，
+ * 关掉之前不能开始新的窗口录制，否则广播的 window:start 会被新旧两个窗口同时响应（PR #6 审查 r4118276873）
+ */
+const retiredWindow = storage.defineItem<number | null>('session:retiredRecorderWindow', {
+  fallback: null,
+})
+
+/** 立即关闭已结束的录制窗口（如果还开着） */
+async function closeRetiredWindow() {
+  const windowId = await retiredWindow.getValue()
+  if (windowId === null) return
+  await browser.windows.remove(windowId).catch(() => {})
+  await retiredWindow.setValue(null)
+}
+
+/**
+ * 录制窗口已不存在时的收尾，onRemoved 和状态查询都可能先发现，所以串行执行、按 windowId 比较后再清：
+ * 已开始的录制记为「录制窗口被关闭」中断并清掉 REC 角标；还在选择框阶段的由 startInWindow 自己处理
+ */
+let hostQueue: Promise<unknown> = Promise.resolve()
+function recorderWindowGone(windowId: number): Promise<void> {
+  const run = hostQueue.then(async () => {
+    const host = await windowHost.getValue()
+    if (host?.windowId !== windowId || !host.started) return
+    await windowHost.setValue(null)
+    await lastRecording.setValue({
+      id: '',
+      title: host.title,
+      mode: host.mode,
+      endReason: 'error',
+      durationMs: 0,
+      bytes: 0,
+      error: 'RecorderWindowClosed',
+      saved: false,
+    })
+    await updateBadge({ state: 'idle' })
+  })
+  hostQueue = run.catch(() => {})
+  return run
+}
+
+/**
+ * 录制窗口还开着时返回它。窗口已不存在时不能只清掉记录：状态轮询可能先于 onRemoved 发现，
+ * 直接清掉会让 onRemoved 看不到这次中断（PR #6 审查 r4118276865），所以同样走 recorderWindowGone
+ */
 async function activeWindowHost(): Promise<WindowHost | undefined> {
   const host = await windowHost.getValue()
   if (!host) return undefined
@@ -65,7 +110,7 @@ async function activeWindowHost(): Promise<WindowHost | undefined> {
     await browser.windows.get(host.windowId)
     return host
   } catch {
-    await windowHost.setValue(null)
+    await recorderWindowGone(host.windowId)
     return undefined
   }
 }
@@ -121,6 +166,7 @@ async function openRecorderWindow(): Promise<number> {
 }
 
 async function startInWindow(options: WindowRecordingOptions): Promise<RecorderStatus> {
+  await closeRetiredWindow()
   const windowId = await openRecorderWindow()
   const host = { windowId, title: options.title, mode: options.mode, started: false }
   await windowHost.setValue(host)
@@ -174,7 +220,13 @@ async function startRecording({
       const grant = await requestTabCapture(tabId)
       status = await exclusive(async () => {
         await ensureOffscreenDocument()
-        return sendMessage('offscreen:start', { ...options, ...grant })
+        try {
+          return await sendMessage('offscreen:start', { ...options, ...grant })
+        } catch (e) {
+          // 开始失败不会有 recordingFinished：在同一个串行步骤里关掉刚创建的空闲离屏文档（PR #6 审查 r4118276860）
+          await closeIdleOffscreen().catch(() => {})
+          throw e
+        }
       })
     } else {
       status = await startInWindow(options)
@@ -219,21 +271,33 @@ async function updateBadge(status: RecorderStatus) {
   await browser.action.setBadgeText({ text })
 }
 
+/** 正在离屏文档里执行的一次性操作（恢复 / 丢弃 / 列出未完成的录制）：执行期间不能关闭 */
+let offscreenTasks = 0
+
+/** 离屏文档没有在录制 / 收尾、也没有一次性操作在执行时关闭它；只能在 exclusive 里调用 */
+async function closeIdleOffscreen() {
+  if (offscreenTasks > 0 || !(await hasOffscreenDocument())) return
+  if ((await sendMessage('offscreen:status')).state !== 'idle') return
+  await closeOffscreenDocument()
+}
+
 /** 没有在录制、也没有正在开始的录制时关闭离屏文档，释放采集设备和内存 */
 function closeOffscreenIfIdle() {
   return exclusive(async () => {
-    if (startPending || !(await hasOffscreenDocument())) return
-    if ((await sendMessage('offscreen:status')).state !== 'idle') return
-    await closeOffscreenDocument()
+    if (!startPending) await closeIdleOffscreen()
   })
 }
 
 /** 恢复 / 丢弃未完成录制等一次性操作：需要时临时打开离屏文档，用完后如空闲则关闭 */
 async function withOffscreen<T>(task: () => Promise<T>): Promise<T> {
-  await exclusive(ensureOffscreenDocument)
+  await exclusive(async () => {
+    await ensureOffscreenDocument()
+    offscreenTasks++
+  })
   try {
     return await task()
   } finally {
+    offscreenTasks--
     void closeOffscreenIfIdle()
   }
 }
@@ -296,9 +360,11 @@ export default defineBackground(() => {
     await updateBadge({ state: 'idle' })
     const host = await windowHost.getValue()
     if (host && sender.tab?.windowId === host.windowId) {
-      // 录制窗口的使命完成：先清记录再关窗口，onRemoved 就不会当成「中途被关闭」
+      // 录制窗口的使命完成：先清记录再关窗口，onRemoved 就不会当成「中途被关闭」。
+      // 稍后再关；这期间记为 retiredWindow，新的窗口录制开始前会先把它关掉
+      await retiredWindow.setValue(host.windowId)
       await windowHost.setValue(null)
-      setTimeout(() => void browser.windows.remove(host.windowId).catch(() => {}), 1500)
+      setTimeout(() => void closeRetiredWindow(), 1500)
       return
     }
     await closeOffscreenIfIdle()
@@ -306,22 +372,7 @@ export default defineBackground(() => {
 
   // 录制中用户直接关掉了录制窗口：录制中断，数据留在 OPFS，可在「未完成的录制」里恢复
   browser.windows.onRemoved.addListener((windowId) => {
-    void windowHost.getValue().then(async (host) => {
-      // 还没开始录制（选择框阶段）由 startInWindow 自己处理
-      if (host?.windowId !== windowId || !host.started) return
-      await windowHost.setValue(null)
-      await lastRecording.setValue({
-        id: '',
-        title: host.title,
-        mode: host.mode,
-        endReason: 'error',
-        durationMs: 0,
-        bytes: 0,
-        error: 'RecorderWindowClosed',
-        saved: false,
-      })
-      await updateBadge({ state: 'idle' })
-    })
+    void recorderWindowGone(windowId)
   })
 
   // 快捷键 Alt+Shift+R：没在录就按上次的设置录当前标签页，在录就结束
