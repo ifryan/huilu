@@ -10,6 +10,7 @@ import {
 } from '@huilu/core'
 import { ProviderError, isRetryable } from '@huilu/providers'
 import { FolderNotReadyError, WriteVerificationError } from '@huilu/storage'
+import { fingerprint } from './fingerprint'
 import { meetingFolderName } from './folder'
 import {
   isActive,
@@ -395,6 +396,22 @@ export class ProcessingQueue {
       language: meeting.language,
     }
     const max = provider.capabilities.maxFileBytes
+    const binding = await fingerprint({
+      version: 1,
+      provider: provider.id,
+      config,
+      input,
+      size: audio.blob.size,
+      max,
+    })
+    if (job.checkpoints.transcriptionBinding !== binding) {
+      // Legacy unbound checkpoints cannot prove configuration identity either.
+      for (const key of Object.keys(job.checkpoints)) {
+        if (key.startsWith('transcribe:') || key.startsWith('split:')) delete job.checkpoints[key]
+      }
+      job.checkpoints.transcriptionBinding = binding
+      await this.#save(job)
+    }
     if (!max || audio.blob.size <= max) {
       return provider.transcribe({ ...input, blob: audio.blob }, config, {
         signal,
@@ -408,22 +425,29 @@ export class ProcessingQueue {
     if (!splitter) throw new PipelineError('splitFailed', false, 'no splitter')
     const splitKey = `split:${Math.floor(max * SPLIT_MARGIN)}`
     let cuts = job.checkpoints[splitKey] as number[] | undefined
-    if (!Array.isArray(cuts) || cuts.length < 2) {
+    const validCuts = (value: unknown): value is number[] =>
+      Array.isArray(value) &&
+      value.length >= 2 &&
+      value[0] === 0 &&
+      value.every((cut, i) => Number.isFinite(cut) && (i === 0 || cut > value[i - 1]))
+    if (!validCuts(cuts)) {
       try {
         cuts = await splitter.plan(audio.blob, Math.floor(max * SPLIT_MARGIN))
       } catch (e) {
         throw new PipelineError('splitFailed', false, e instanceof Error ? e.message : String(e))
       }
+      if (!validCuts(cuts)) throw new PipelineError('splitFailed', false, 'invalid split plan')
       await this.#checkpoint(job, splitKey).set(cuts)
     }
+    const pieceBinding = await fingerprint({ binding, cuts })
     const count = cuts.length - 1
     const pieces: { transcript: Transcript; offsetMs: number }[] = []
     for (let i = 0; i < count; i++) {
       const offsetMs = Math.round(cuts[i]! * 1000)
       const path = WORK.piece(meeting.id, i)
       const cached = await readJson(this.deps.work, path, (v) => {
-        const p = v as { providerId?: unknown; transcript?: unknown }
-        if (p.providerId !== provider.id) throw new Error('other provider')
+        const p = v as { binding?: unknown; transcript?: unknown }
+        if (p.binding !== pieceBinding) throw new Error('different transcription input')
         return Transcript.parse(p.transcript)
       })
       if (cached) {
@@ -446,10 +470,13 @@ export class ProcessingQueue {
         {
           signal,
           onProgress: this.#progress(job, i / count, (i + 1) / count),
-          checkpoint: this.#checkpoint(job, `transcribe:${provider.id}:${i}`),
+          checkpoint: this.#checkpoint(job, `transcribe:${provider.id}:${pieceBinding}:${i}`),
         },
       )
-      await this.deps.work.writeFile(path, toJson({ providerId: provider.id, transcript }))
+      await this.deps.work.writeFile(
+        path,
+        toJson({ binding: pieceBinding, transcript: Transcript.parse(transcript) }),
+      )
       pieces.push({ transcript, offsetMs })
     }
     return mergeTranscripts(pieces, meeting.language)

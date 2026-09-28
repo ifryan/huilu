@@ -10,6 +10,7 @@ import { ProviderError } from '@huilu/providers'
 import { FolderNotReadyError } from '@huilu/storage'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { fingerprint } from './fingerprint'
 import { MemoryJobStore } from './jobs'
 import {
   MAX_AUTO_ATTEMPTS,
@@ -424,7 +425,16 @@ describe('ProcessingQueue', () => {
       state: 'running',
       step: 'transcribe',
       attempts: 1,
-      checkpoints: { 'transcribe:fake-asr': { taskId: 'task-1' } },
+      checkpoints: {
+        transcriptionBinding: await fingerprint({
+          version: 1,
+          provider: 'fake-asr',
+          config: { key: 'x' },
+          input: { mimeType: 'audio/webm;codecs=opus', durationMs: 45000, language: 'zh' },
+          size: 200,
+        }),
+        'transcribe:fake-asr': { taskId: 'task-1' },
+      },
       createdAt: 1,
       updatedAt: 1,
     })
@@ -547,6 +557,89 @@ describe('ProcessingQueue', () => {
       [10_500, 11_500, '片段10000'],
       [20_500, 21_500, '片段5000'],
     ])
+  })
+
+  it.each(['model', 'baseUrl', 'apiKey', 'plan', 'invalidPlan', 'unchanged'])(
+    'binds pieces and provider checkpoints to configuration and split plan: %s',
+    async (change) => {
+      let fail = true
+      let calls = 0
+      const plan = vi.fn(async () => [0, 10, 20])
+      const t = setup({
+        maxFileBytes: 100,
+        splitter: {
+          plan,
+          cut: async () => ({ blob: new Blob(['piece']), mimeType: 'audio/webm' }),
+        },
+        transcribe: async (_input, _config, ctx) => {
+          calls++
+          if (calls === 2 && fail) {
+            await ctx.checkpoint?.set({ taskId: 'old-task' })
+            throw new ProviderError('network')
+          }
+          if (!fail)
+            expect(ctx.checkpoint?.get()).toEqual(
+              change === 'unchanged' ? { taskId: 'old-task' } : undefined,
+            )
+          return transcript
+        },
+      })
+      const config = { model: 'old-model', baseUrl: 'https://old.invalid', apiKey: 'secret-old' }
+      t.services.transcription = { ok: true, provider: t.transcription, config }
+      await t.queue.enqueue(MEETING_ID)
+      await t.settle()
+      expect(calls).toBe(2)
+      fail = false
+      if (['model', 'baseUrl', 'apiKey'].includes(change)) {
+        t.services.transcription = {
+          ok: true,
+          provider: t.transcription,
+          config: { ...config, [change]: 'changed-secret' },
+        }
+      } else if (change === 'plan' || change === 'invalidPlan') {
+        const job = (await t.job())!
+        job.checkpoints['split:90'] = change === 'plan' ? [0, 5, 20] : [0, 10, 10]
+        if (change === 'invalidPlan') plan.mockResolvedValue([0, 5, 20])
+        await t.jobs.put(job)
+      } else {
+        t.services.transcription = {
+          ok: true,
+          provider: t.transcription,
+          config: { apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model },
+        }
+      }
+      t.advance(60000)
+      t.queue.kick()
+      await t.settle()
+      expect(await t.job()).toMatchObject({ state: 'done' })
+      expect(calls).toBe(change === 'unchanged' ? 3 : 4)
+      for (const blob of t.work.files.values()) {
+        expect(await blob.text()).not.toContain('secret-old')
+        expect(await blob.text()).not.toContain('changed-secret')
+      }
+      expect(JSON.stringify(await t.job())).not.toContain('secret-old')
+      expect(JSON.stringify(await t.job())).not.toContain('changed-secret')
+    },
+  )
+
+  it('discards legacy unbound checkpoints rather than sending them to a new configuration', async () => {
+    const t = setup({
+      transcribe: async (_input, _config, ctx) => {
+        expect(ctx.checkpoint?.get()).toBeUndefined()
+        return transcript
+      },
+    })
+    await t.jobs.put({
+      meetingId: MEETING_ID,
+      state: 'running',
+      attempts: 1,
+      checkpoints: { 'transcribe:fake-asr': { taskId: 'legacy' } },
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await t.queue.start()
+    await t.settle()
+    expect(await t.job()).toMatchObject({ state: 'done' })
   })
 
   it('does not overwrite another meeting that owns the same folder name', async () => {
