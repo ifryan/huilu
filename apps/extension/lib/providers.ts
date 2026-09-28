@@ -6,6 +6,7 @@ import {
   getPresets,
   paraformer,
   registerBuiltinProviders,
+  type ConfigField,
 } from '@huilu/providers'
 import type { ProviderSettings } from './provider-settings'
 
@@ -39,6 +40,7 @@ export function getProvider(kind: ProviderKind, id: string) {
 export function isConfigured(kind: ProviderKind, settings: ProviderSettings): boolean {
   const saved = settings.configs[settings.providerId]
   return (
+    hasProvider(kind, settings.providerId) &&
     saved !== undefined &&
     getProvider(kind, settings.providerId).configSchema.safeParse(saved).success
   )
@@ -59,6 +61,11 @@ export function initialFormValues(
     Object.assign(values, preset?.values)
   }
   return values
+}
+
+/** 表单中要显示的字段：只对部分预设起作用的字段，在其他预设下隐藏 */
+export function visibleFields(fields: ConfigField[], values: FormValues): ConfigField[] {
+  return fields.filter((f) => !f.presets || f.presets.includes(values.preset ?? ''))
 }
 
 /** 表单 / 已保存配置指向的服务地址的 origin；地址不完整时为 undefined */

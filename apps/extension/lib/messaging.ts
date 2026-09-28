@@ -1,11 +1,13 @@
 import { defineExtensionMessaging } from '@webext-core/messaging'
 import type { Meeting, RecordingMode } from '@huilu/core'
+import type { EnqueueResult } from '@huilu/pipeline/jobs'
 import type {
   FinishedRecording,
   RecorderStatus,
   RecordingOptions,
   UnfinishedRecording,
 } from '@huilu/recorder'
+import type { ProcessingSettings } from './processing-settings'
 import type { RecordingPrefs } from './settings'
 
 export type { RecorderStatus, UnfinishedRecording }
@@ -55,6 +57,8 @@ interface ProtocolMap {
   showRecordingPanel(tabId: number): boolean
   /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」、悬浮面板 ✕） */
   dismissRecordingNotice(): void
+  /** 历史记录中的「补转写」「重试」「生成纪要」：加入处理队列 */
+  processMeeting(meetingId: string): EnqueueResult
 
   // 后台 → 离屏文档（标签页录制）
   'offscreen:start'(options: Omit<RecordingOptions, 'id'>): RecorderStatus
@@ -65,6 +69,15 @@ interface ProtocolMap {
   'offscreen:listUnfinished'(): UnfinishedRecording[]
   'offscreen:recover'(id: string): Meeting | null
   'offscreen:discard'(id: string): void
+  /**
+   * 会后处理：meetingId 为空时只唤醒队列（浏览器重启后继续）；auto 为录制结束后的自动加入。
+   * 离屏文档刚创建时队列会自行恢复中断的任务
+   */
+  'offscreen:process'(request: { meetingId?: string; auto?: boolean }): EnqueueResult | null
+  /** 是否还有排队 / 执行中的处理任务：有就不能关闭离屏文档 */
+  'offscreen:processingBusy'(): boolean
+  /** 数据文件夹重新授权：补写等待写入的任务 */
+  'offscreen:folderAuthorized'(): void
 
   // 后台 → 录制窗口（窗口 / 屏幕录制）：选择框和录制都在这个可见页面里进行
   'window:start'(options: WindowRecordingOptions): RecorderStatus
@@ -77,6 +90,12 @@ interface ProtocolMap {
 
   // 离屏文档 → 后台：录制结束（用户结束 / 来源结束 / 写入失败）
   recordingFinished(result: Omit<FinishedRecording, 'meeting'> & { saved: boolean }): void
+  // 离屏文档 → 后台：处理管线需要的平台能力（离屏文档只有 chrome.runtime）
+  /** 当前的转写 / 大模型设置（含 Key，只在插件内部传递，不写入任何文件） */
+  processingSettings(): ProcessingSettings
+  processingHasHostPermission(url: string): boolean
+  /** 处理队列已空：后台检查后关闭空闲的离屏文档 */
+  processingIdle(): void
 }
 
 /** 录制窗口自己弹选择框取得 streamId，后台只传录制设置 */

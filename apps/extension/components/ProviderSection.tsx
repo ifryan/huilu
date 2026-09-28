@@ -11,6 +11,7 @@ import {
   getProvider,
   initialFormValues,
   isConfigured,
+  visibleFields,
   listProviders,
   parseForm,
   type FormValues,
@@ -246,7 +247,7 @@ function ProviderForm({
           </Field>
         )}
 
-        {fields.map((field) => (
+        {visibleFields(fields, values).map((field) => (
           <Field key={field.key} label={dt(field.titleKey)} required={field.required}>
             <FieldInput
               field={field}
@@ -256,6 +257,9 @@ function ProviderForm({
             />
             {field.kind === 'secret' && keyCleared && (
               <p className="mt-1 text-xs text-amber-600">{t('settings.keyCleared')}</p>
+            )}
+            {field.hintKey && (
+              <p className="text-muted-foreground mt-1 text-xs">{dt(field.hintKey)}</p>
             )}
             {field.key === 'preset' && preset?.hintKey && (
               <p className="text-muted-foreground mt-1 text-xs">{dt(preset.hintKey)}</p>

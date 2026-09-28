@@ -3,6 +3,8 @@ export interface StorageAdapter {
   id: string
   /** 是否可用（例如文件夹授权是否仍有效） */
   isReady(): Promise<boolean>
+  /** 目录不存在或确实没有任何文件 / 子目录时为 true；权限错误不视为空。 */
+  isDirectoryEmpty(path: string): Promise<boolean>
   listMeetingDirs(): Promise<string[]>
   readFile(path: string): Promise<Blob | undefined>
   writeFile(path: string, data: Blob | string): Promise<void>

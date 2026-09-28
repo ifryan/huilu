@@ -75,7 +75,7 @@
   "history": {
     "empty": "No recordings yet",
     "refresh": "Refresh",
-    "localNote": "Recordings are first kept in the browser's internal storage and do not need a transcription service or data folder. This page only previews and downloads; it never deletes a recording.",
+    "localNote": "Recordings are first kept in the browser's internal storage and do not need a transcription service or data folder. Once a transcription service is set up, finished recordings are transcribed, summarized and saved to the data folder automatically. Nothing here deletes a recording.",
     "location": "Browser storage",
     "state": {
       "saved": "Saved",
@@ -91,6 +91,53 @@
     "download": "Download",
     "noMedia": "Nothing to play",
     "noTranscriptAudio": "No transcription audio was recorded, so this cannot be transcribed. The video was kept and can be previewed or downloaded"
+  },
+  "processing": {
+    "start": "Transcribe & summarize",
+    "transcriptOnly": "No LLM service is set up: only the transcript will be created. You can add the summary after setting one up",
+    "goSettings": "Open settings",
+    "queued": "Waiting to be processed…",
+    "step": {
+      "transcribe": "Transcribing…",
+      "summarize": "Writing the summary…",
+      "write": "Saving to the data folder…"
+    },
+    "stepName": {
+      "transcribe": "Transcription",
+      "summarize": "Summary",
+      "write": "Saving to the data folder"
+    },
+    "retrying": "{{step}} failed: {{reason}}. Retrying automatically at {{time}}",
+    "failed": "{{step}} failed: {{reason}}",
+    "retry": "Retry",
+    "waitingFolder": "The transcript and summary are ready and kept in browser storage. They will be saved once the data folder is authorized",
+    "authorizeFolder": "Authorize data folder",
+    "chooseFolder": "Choose data folder",
+    "done": "Done. Saved to “{{folder}}” in the data folder",
+    "summarize": "Create summary",
+    "summarySkipped": {
+      "notConfigured": "No summary: no LLM service is set up",
+      "unknownProvider": "No summary: the selected LLM provider is not recognized. Choose it again in settings",
+      "hostPermission": "No summary: HuiLu is not allowed to reach the LLM address. Save it again in settings",
+      "emptyTranscript": "No summary: no speech was recognized"
+    },
+    "notQueued": {
+      "noAudio": "No transcription audio was recorded, so this cannot be transcribed",
+      "notConfigured": "No transcription service is set up",
+      "meetingNotFound": "The meeting information for this recording is missing",
+      "notProcessing": "This recording does not need processing"
+    },
+    "error": {
+      "transcriptionNotConfigured": "No transcription service is set up",
+      "unknownProvider": "The selected provider is not recognized. Choose it again in settings",
+      "hostPermission": "HuiLu is not allowed to reach this address. Save it again in settings to grant access",
+      "noAudio": "No transcription audio was recorded",
+      "meetingNotFound": "The recording was not found",
+      "splitFailed": "Could not split the audio",
+      "sourceDataUnavailable": "Completed meeting data is unavailable. Authorize the original folder or check meeting.json and transcript.json",
+      "writeFailed": "Could not write the files",
+      "unknown": "Unknown error"
+    }
   },
   "settings": {
     "language": "Language",
@@ -267,10 +314,20 @@
       "baseUrl": "Base URL",
       "apiKey": "API key",
       "model": "Model",
-      "region": "Region"
+      "region": "Region",
+      "clientHeaders": "Tool request headers (experimental)",
+      "clientHeadersHint": "When on, the extension adds User-Agent: claude-cli/2.1.88 (external, cli) and x-app: cli only to its own requests to open.bigmodel.cn/api/coding/paas/v4/ (a Chrome declarativeNetRequest rule, without the API key). Web pages and other providers are not affected. This imitates a coding tool's headers as an experiment; it is not an integration supported by Zhipu."
+    },
+    "clientHeaders": {
+      "claudeCli": "On: Claude Code CLI headers",
+      "off": "Off: leave headers unchanged"
     },
     "preset": {
       "groq": "Groq",
+      "zhipu": "Zhipu BigModel (standard API)",
+      "zhipuHint": "The standard API is billed per use or against resource packs; it does not use GLM Coding Plan quota. Enter the model name from Zhipu's docs.",
+      "glmCodingPlan": "Zhipu GLM Coding Plan (experimental)",
+      "glmCodingPlanHint": "Experimental: uses the Coding Plan endpoint; enter the key and model name from your plan page. Zhipu limits plan quota to officially supported tools, HuiLu is not on that list, and whether the service accepts these requests is unverified. A successful request does not prove plan quota was used; check Zhipu's billing details. Errors never fall back to the standard API; errors such as 1113 may mean insufficient balance or that the plan was not recognized.",
       "openai": "OpenAI",
       "custom": "Custom",
       "qwen": "Qwen (Model Studio)",
@@ -289,12 +346,15 @@
       "notFound": "Endpoint not found: check the Base URL",
       "modelNotFound": "The provider has no such model. Available models include",
       "badRequest": "Request rejected: check the model name and other parameters",
-      "rateLimited": "Too many requests or quota exhausted; try again later",
+      "rateLimited": "Too many requests or a temporary provider usage limit was hit; try again later",
+      "quotaExceeded": "The provider account is out of balance or credits, in arrears, or its plan / spend limit is used up, so waiting will not help. Check the provider account and API settings, or switch to another service in Settings, then retry manually",
       "server": "The provider is temporarily unavailable; try again later",
       "network": "Could not connect: check your network, proxy or Base URL",
       "timeout": "Connection timed out: check your network or proxy",
       "aborted": "Cancelled",
       "badResponse": "Unrecognized response: check that the Base URL points to the right API",
+      "fileTooLarge": "The audio file exceeds the provider's single-file limit",
+      "taskFailed": "The provider could not finish the job",
       "notImplemented": "Not implemented yet"
     }
   },

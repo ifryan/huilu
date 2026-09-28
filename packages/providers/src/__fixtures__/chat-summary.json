@@ -1,0 +1,17 @@
+{
+  "id": "chatcmpl-test",
+  "object": "chat.completion",
+  "created": 1790000000,
+  "model": "qwen-plus",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"keywords\":[\"需求评审\",\"登录页\"],\"overview\":\"会议评审了登录页需求。\",\"chapters\":[{\"startMs\":760,\"title\":\"开场\",\"summary\":\"宣布开始需求评审\"},{\"startMs\":3900,\"title\":\"登录页\",\"summary\":\"讨论登录页设计\"}],\"speakerSummaries\":[{\"speakerId\":\"0\",\"summary\":\"主持评审并安排设计稿\"},{\"speakerId\":\"1\",\"summary\":\"提议先看登录页\"}],\"keyPoints\":[\"先评审登录页\"],\"actionItems\":[{\"text\":\"出登录页设计稿\",\"due\":\"下周三\"}]}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 800, "completion_tokens": 150, "total_tokens": 950 }
+}

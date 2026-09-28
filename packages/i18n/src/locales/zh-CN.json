@@ -75,7 +75,7 @@
   "history": {
     "empty": "还没有录制",
     "refresh": "刷新",
-    "localNote": "录制先保存在浏览器内部存储中，不需要配置转写服务或数据文件夹。这里只做预览和下载，不会删除任何录制。",
+    "localNote": "录制先保存在浏览器内部存储中，不需要配置转写服务或数据文件夹。配置转写服务后，录制结束会自动转写、生成纪要并写入数据文件夹；这里不会删除任何录制。",
     "location": "浏览器内部存储",
     "state": {
       "saved": "已保存",
@@ -91,6 +91,53 @@
     "download": "下载",
     "noMedia": "没有可播放的内容",
     "noTranscriptAudio": "没有录到转写音频，无法转写；视频已保留，可预览或下载"
+  },
+  "processing": {
+    "start": "转写并生成纪要",
+    "transcriptOnly": "尚未配置大模型服务：这次只生成逐字稿，配置后可以再补生成纪要",
+    "goSettings": "去设置",
+    "queued": "排队等待处理…",
+    "step": {
+      "transcribe": "正在转写…",
+      "summarize": "正在生成纪要…",
+      "write": "正在写入数据文件夹…"
+    },
+    "stepName": {
+      "transcribe": "转写",
+      "summarize": "生成纪要",
+      "write": "写入数据文件夹"
+    },
+    "retrying": "{{step}}出错：{{reason}}。将在 {{time}} 自动重试",
+    "failed": "{{step}}失败：{{reason}}",
+    "retry": "重试",
+    "waitingFolder": "逐字稿和纪要已生成，暂存在浏览器内部存储；数据文件夹授权后会自动写入",
+    "authorizeFolder": "授权数据文件夹",
+    "chooseFolder": "选择数据文件夹",
+    "done": "处理完成，已写入数据文件夹「{{folder}}」",
+    "summarize": "生成纪要",
+    "summarySkipped": {
+      "notConfigured": "未生成纪要：尚未配置大模型服务",
+      "unknownProvider": "未生成纪要：无法识别所选的大模型服务商，请在设置中重新选择",
+      "hostPermission": "未生成纪要：没有访问大模型服务地址的权限，请在设置中重新保存",
+      "emptyTranscript": "未生成纪要：录音中没有识别到语音"
+    },
+    "notQueued": {
+      "noAudio": "没有录到转写音频，无法转写",
+      "notConfigured": "尚未配置转写服务",
+      "meetingNotFound": "找不到这场录制的会议信息",
+      "notProcessing": "这场录制不需要处理"
+    },
+    "error": {
+      "transcriptionNotConfigured": "尚未配置转写服务",
+      "unknownProvider": "无法识别所选的服务商，请在设置中重新选择",
+      "hostPermission": "没有访问该服务地址的权限，请在设置中重新保存以授权",
+      "noAudio": "没有录到转写音频",
+      "meetingNotFound": "找不到这场录制",
+      "splitFailed": "音频切片失败",
+      "sourceDataUnavailable": "已完成会议的数据不可用，请重新授权原文件夹或检查 meeting.json 与 transcript.json",
+      "writeFailed": "写入失败",
+      "unknown": "未知错误"
+    }
   },
   "settings": {
     "language": "界面语言",
@@ -267,10 +314,20 @@
       "baseUrl": "Base URL",
       "apiKey": "API Key",
       "model": "模型",
-      "region": "地域"
+      "region": "地域",
+      "clientHeaders": "工具请求头适配（实验）",
+      "clientHeadersHint": "开启后，插件只对自身发往 open.bigmodel.cn/api/coding/paas/v4/ 的请求添加 User-Agent: claude-cli/2.1.88 (external, cli) 与 x-app: cli（Chrome declarativeNetRequest 规则，不含 API Key），不影响网页和其他服务商。这是模仿编程工具请求头的实验，并非智谱官方支持的接入方式。"
+    },
+    "clientHeaders": {
+      "claudeCli": "开启：Claude Code CLI 请求头",
+      "off": "关闭：不修改请求头"
     },
     "preset": {
       "groq": "Groq",
+      "zhipu": "智谱 BigModel（普通 API）",
+      "zhipuHint": "普通 API 按量计费或抵扣资源包，不使用 GLM Coding Plan 额度。模型名请按智谱文档填写。",
+      "glmCodingPlan": "智谱 GLM Coding Plan（实验）",
+      "glmCodingPlanHint": "实验功能：使用 Coding Plan 专用端点，Key 与模型名按套餐页面填写。智谱规定套餐额度仅限官方支持的工具使用，会录不在支持名单内，服务端是否接受尚未验证；请求成功也不代表抵扣了套餐额度，请到智谱「费用明细」确认。出错时不会自动改用普通 API；1113 等错误可能是余额不足，也可能是套餐未被识别。",
       "openai": "OpenAI",
       "custom": "自定义",
       "qwen": "通义千问（百炼）",
@@ -289,12 +346,15 @@
       "notFound": "接口地址不存在：请检查 Base URL",
       "modelNotFound": "服务商没有这个模型，可用的模型包括",
       "badRequest": "请求被拒绝：请检查模型名等参数",
-      "rateLimited": "请求过于频繁或额度已用完，请稍后再试",
+      "rateLimited": "请求过于频繁或暂时超出服务商的调用限额，请稍后再试",
+      "quotaExceeded": "服务商账户余额不足、欠费，或套餐 / 额度已用尽，等待不会自动恢复：请检查服务商账户和 API 配置，或在设置中更换可用的服务，处理后手动重试",
       "server": "服务商暂时不可用，请稍后再试",
       "network": "无法连接：请检查网络、代理或 Base URL",
       "timeout": "连接超时：请检查网络或代理",
       "aborted": "已取消",
       "badResponse": "返回的内容无法识别：请检查 Base URL 是否指向正确的接口",
+      "fileTooLarge": "音频文件超过服务商的单文件上限",
+      "taskFailed": "服务商未能完成识别",
       "notImplemented": "功能尚未实现"
     }
   },

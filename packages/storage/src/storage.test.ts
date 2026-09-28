@@ -73,6 +73,19 @@ describe('DirectoryStorageAdapter (via OPFS)', () => {
     )
   })
 
+  it('proves emptiness by enumerating arbitrary files and even empty subdirectories', async () => {
+    const { adapter, root } = opfs()
+    expect(await adapter.isDirectoryEmpty('missing')).toBe(true)
+    const dir = await root.getDirectoryHandle('candidate', { create: true })
+    expect(await adapter.isDirectoryEmpty('candidate')).toBe(true)
+    await dir.getDirectoryHandle('empty-child', { create: true })
+    expect(await adapter.isDirectoryEmpty('candidate')).toBe(false)
+    await adapter.writeFile('notes-dir/notes.md', '')
+    expect(await adapter.isDirectoryEmpty('notes-dir')).toBe(false)
+    await adapter.writeFile('a-file', '')
+    expect(await adapter.isDirectoryEmpty('a-file')).toBe(false)
+  })
+
   it('returns undefined for missing files', async () => {
     const { adapter } = opfs()
     expect(await adapter.readFile('nope/meeting.json')).toBeUndefined()

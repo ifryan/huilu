@@ -12,7 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.57",
     "@huilu/core": "workspace:*",
+    "ai": "^7.0.118",
     "zod": "^4.6.5"
   },
   "devDependencies": {

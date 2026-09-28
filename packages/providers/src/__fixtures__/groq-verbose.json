@@ -1,0 +1,45 @@
+{
+  "task": "transcribe",
+  "language": "Chinese",
+  "duration": 45.0,
+  "text": "我们开始今天的需求评审。好的,先看登录页。",
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 3.2,
+      "text": " 我们开始今天的需求评审。",
+      "tokens": [1],
+      "temperature": 0,
+      "avg_logprob": -0.2,
+      "compression_ratio": 1.1,
+      "no_speech_prob": 0.01
+    },
+    {
+      "id": 1,
+      "seek": 0,
+      "start": 3.9,
+      "end": 6.1,
+      "text": " 好的,先看登录页。",
+      "tokens": [2],
+      "temperature": 0,
+      "avg_logprob": -0.2,
+      "compression_ratio": 1.1,
+      "no_speech_prob": 0.01
+    },
+    {
+      "id": 2,
+      "seek": 0,
+      "start": 6.1,
+      "end": 7.0,
+      "text": "  ",
+      "tokens": [],
+      "temperature": 0,
+      "avg_logprob": -1,
+      "compression_ratio": 1,
+      "no_speech_prob": 0.9
+    }
+  ],
+  "x_groq": { "id": "req_test" }
+}

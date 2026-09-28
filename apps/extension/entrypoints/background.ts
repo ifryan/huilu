@@ -1,5 +1,6 @@
 import { browser, defineBackground, storage, type Browser } from '#imports'
 import type { RecordingMode } from '@huilu/core'
+import { IdbJobStore, isActive } from '@huilu/pipeline/jobs'
 import { RecorderBusyError } from '@huilu/recorder'
 import {
   onMessage,
@@ -9,9 +10,17 @@ import {
   type StartRecordingRequest,
   type WindowRecordingOptions,
 } from '@/lib/messaging'
-import { onboardedSetting, recordingModeSetting, recordingPrefsSetting } from '@/lib/settings'
-import { openAppPage } from '@/platform'
+import {
+  dataFolderAuthorizedSetting,
+  llmSetting,
+  onboardedSetting,
+  recordingModeSetting,
+  recordingPrefsSetting,
+  transcriptionSetting,
+} from '@/lib/settings'
+import { hasHostPermission, openAppPage } from '@/platform'
 import { CaptureCancelledError, requestTabCapture } from '@/platform/capture'
+import { syncCodingPlanHeaders } from '@/platform/coding-plan-headers'
 import {
   closeOffscreenDocument,
   ensureOffscreenDocument,
@@ -274,10 +283,14 @@ async function updateBadge(status: RecorderStatus) {
 /** 正在离屏文档里执行的一次性操作（恢复 / 丢弃 / 列出未完成的录制）：执行期间不能关闭 */
 let offscreenTasks = 0
 
-/** 离屏文档没有在录制 / 收尾、也没有一次性操作在执行时关闭它；只能在 exclusive 里调用 */
+/**
+ * 离屏文档没有在录制 / 收尾、没有一次性操作在执行、处理队列也空了时关闭它；只能在 exclusive 里调用。
+ * 处理任务（转写 / 纪要 / 写入）在离屏文档里跑，录制结束的清理不能把正在处理的文档关掉
+ */
 async function closeIdleOffscreen() {
   if (offscreenTasks > 0 || !(await hasOffscreenDocument())) return
   if ((await sendMessage('offscreen:status')).state !== 'idle') return
+  if (await sendMessage('offscreen:processingBusy')) return
   await closeOffscreenDocument()
 }
 
@@ -300,6 +313,41 @@ async function withOffscreen<T>(task: () => Promise<T>): Promise<T> {
     offscreenTasks--
     void closeOffscreenIfIdle()
   }
+}
+
+/** 处理任务只读地看一眼（写入只在离屏文档）：判断是否需要唤醒离屏文档 */
+const jobs = new IdbJobStore()
+
+async function hasJobs(filter: (job: Awaited<ReturnType<typeof jobs.list>>[number]) => boolean) {
+  try {
+    return (await jobs.list()).some(filter)
+  } catch (e) {
+    console.warn('[huilu] cannot read processing jobs; waking recovery', e)
+    return true
+  }
+}
+
+/** 把会议交给离屏文档里的处理队列；auto 为录制结束 / 恢复后的自动加入（未配置转写服务时不加入） */
+function processMeeting(meetingId: string, auto = false) {
+  return withOffscreen(async () => {
+    const result = await sendMessage('offscreen:process', { meetingId, auto })
+    return result ?? { queued: false as const, reason: 'meetingNotFound' as const }
+  })
+}
+
+/**
+ * 有排队 / 中断 / 等待授权的处理任务时打开离屏文档，队列会查询实际文件夹权限并恢复（不会弹出授权）。
+ * Service Worker 每次启动、浏览器启动时都检查一次；没有任务时什么都不做
+ */
+async function resumeProcessing() {
+  if (!(await hasJobs((j) => isActive(j) || j.state === 'waitingFolder'))) return
+  await withOffscreen(() => sendMessage('offscreen:process', {}))
+}
+
+/** 数据文件夹在可见页面重新授权后：补写等待写入的任务 */
+async function onFolderAuthorized() {
+  if (!(await hasJobs((j) => j.state === 'waitingFolder'))) return
+  await withOffscreen(() => sendMessage('offscreen:folderAuthorized'))
 }
 
 async function toggleRecording(tab: Browser.tabs.Tab | undefined) {
@@ -345,19 +393,39 @@ export default defineBackground(() => {
   onMessage('listUnfinishedRecordings', async () =>
     (await activeWindowHost()) ? [] : withOffscreen(() => sendMessage('offscreen:listUnfinished')),
   )
-  onMessage('recoverRecording', ({ data: id }) =>
-    withOffscreen(async () => ({ saved: (await sendMessage('offscreen:recover', id)) !== null })),
-  )
+  onMessage('recoverRecording', async ({ data: id }) => {
+    const saved = await withOffscreen(
+      async () => (await sendMessage('offscreen:recover', id)) !== null,
+    )
+    // 恢复出来的录制与正常结束的一样进入处理队列（只剩视频的不会加入）
+    if (saved) void processMeeting(id, true).catch(logProcessingError)
+    return { saved }
+  })
   onMessage('discardRecording', ({ data: id }) =>
     withOffscreen(() => sendMessage('offscreen:discard', id)),
   )
   onMessage('openApp', ({ data }) => openAppPage(data))
   onMessage('showRecordingPanel', ({ data: tabId }) => showPanel(tabId))
   onMessage('dismissRecordingNotice', () => dismissNotice())
+  onMessage('processMeeting', ({ data: id }) => processMeeting(id))
+
+  // 离屏文档里的处理队列需要的平台能力。每一步开始前都会来取设置：
+  // 先按同一份设置同步 Coding Plan 请求头规则，保证发出的请求与所用配置一致
+  onMessage('processingSettings', async () => {
+    await syncCodingPlanHeaders().catch(logHeaderRuleError)
+    return {
+      transcription: await transcriptionSetting.getValue(),
+      llm: await llmSetting.getValue(),
+    }
+  })
+  onMessage('processingHasHostPermission', ({ data: url }) => hasHostPermission(url))
+  onMessage('processingIdle', () => closeOffscreenIfIdle())
 
   onMessage('recordingFinished', async ({ data, sender }) => {
     await lastRecording.setValue(data)
     await updateBadge({ state: 'idle' })
+    // 有 meeting.json 的录制交给处理队列（离屏文档）；窗口录制结束时离屏文档可能还没打开
+    if (data.saved && data.id) void processMeeting(data.id, true).catch(logProcessingError)
     const host = await windowHost.getValue()
     if (host && sender.tab?.windowId === host.windowId) {
       // 录制窗口的使命完成：先清记录再关窗口，onRemoved 就不会当成「中途被关闭」。
@@ -370,6 +438,15 @@ export default defineBackground(() => {
     await closeOffscreenIfIdle()
   })
 
+  // GLM Coding Plan 请求头规则（实验）：启动 / 安装升级 / 设置变化时按已保存的设置同步
+  void syncCodingPlanHeaders().catch(logHeaderRuleError)
+  llmSetting.watch(() => void syncCodingPlanHeaders().catch(logHeaderRuleError))
+
+  // 浏览器重启 / Service Worker 被唤醒：继续没做完的处理任务
+  browser.runtime.onStartup.addListener(() => void resumeProcessing())
+  void resumeProcessing()
+  dataFolderAuthorizedSetting.watch(() => void onFolderAuthorized().catch(logProcessingError))
+
   // 录制中用户直接关掉了录制窗口：录制中断，数据留在 OPFS，可在「未完成的录制」里恢复
   browser.windows.onRemoved.addListener((windowId) => {
     void recorderWindowGone(windowId)
@@ -381,3 +458,11 @@ export default defineBackground(() => {
     toggleRecording(tab).catch((e: unknown) => console.error('[huilu] toggle recording failed', e))
   })
 })
+
+function logHeaderRuleError(e: unknown) {
+  console.error('[huilu] failed to sync coding plan header rules', e)
+}
+
+function logProcessingError(e: unknown) {
+  console.error('[huilu] processing request failed', e)
+}
