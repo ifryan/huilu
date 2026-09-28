@@ -15,7 +15,7 @@ export class CaptureFailedError extends Error {
 
 export interface CaptureGrant {
   streamId: string
-  /** 来源是否带声音：标签页始终带；窗口 / 屏幕取决于用户是否勾选「分享音频」 */
+  /** 是否允许请求来源音轨；实际是否获得音轨仍以取流结果为准 */
   sourceAudio: boolean
 }
 
@@ -23,9 +23,9 @@ export interface CaptureGrant {
  * 标签页采集凭证（streamId），由离屏文档用 getUserMedia 取流。
  * 要求用户刚在该标签页上调用过插件（打开弹窗 / 快捷键）。
  */
-export async function requestTabCapture(tabId: number): Promise<CaptureGrant> {
+export async function requestTabCapture(tabId: number, sourceAudio = true): Promise<CaptureGrant> {
   const streamId = await browser.tabCapture.getMediaStreamId({ targetTabId: tabId })
-  return { streamId, sourceAudio: true }
+  return { streamId, sourceAudio }
 }
 
 /**
@@ -34,13 +34,23 @@ export async function requestTabCapture(tabId: number): Promise<CaptureGrant> {
  * - 离屏文档调用不会显示选择框，一直等不到结果
  * - 得到的 streamId 只能在调用它的同一个页面里取流，所以录制也在这个页面里进行
  */
-export function chooseDesktopSource(source: 'window' | 'screen'): Promise<CaptureGrant> {
+export function chooseDesktopSource(
+  source: 'window' | 'screen',
+  sourceAudio = true,
+): Promise<CaptureGrant> {
   return new Promise((resolve, reject) => {
-    browser.desktopCapture.chooseDesktopMedia([source, 'audio'], (streamId, options) => {
-      const lastError = browser.runtime.lastError?.message
-      if (lastError) reject(new CaptureFailedError(lastError))
-      else if (!streamId) reject(new CaptureCancelledError())
-      else resolve({ streamId, sourceAudio: options?.canRequestAudioTrack ?? false })
-    })
+    browser.desktopCapture.chooseDesktopMedia(
+      sourceAudio ? [source, 'audio'] : [source],
+      (streamId, options) => {
+        const lastError = browser.runtime.lastError?.message
+        if (lastError) reject(new CaptureFailedError(lastError))
+        else if (!streamId) reject(new CaptureCancelledError())
+        else
+          resolve({
+            streamId,
+            sourceAudio: sourceAudio && (options?.canRequestAudioTrack ?? false),
+          })
+      },
+    )
   })
 }

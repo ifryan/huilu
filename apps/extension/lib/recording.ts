@@ -1,6 +1,7 @@
 import type { useTranslation } from '@huilu/i18n'
 import type { RecorderWarning } from '@huilu/recorder'
 import { useQuery } from '@tanstack/react-query'
+import { checkMessageError, isExtensionContextInvalidated } from './extension-context'
 import { sendMessage } from './messaging'
 
 type T = ReturnType<typeof useTranslation>['t']
@@ -9,8 +10,16 @@ type T = ReturnType<typeof useTranslation>['t']
 export function useRecorderStatus() {
   return useQuery({
     queryKey: ['recorderStatus'],
-    queryFn: () => sendMessage('getRecorderStatus'),
-    refetchInterval: 1000,
+    queryFn: async () => {
+      try {
+        return await sendMessage('getRecorderStatus')
+      } catch (error) {
+        checkMessageError(error)
+        throw error
+      }
+    },
+    retry: (count, error) => !isExtensionContextInvalidated(error) && count < 2,
+    refetchInterval: (query) => (query.state.data?.state === 'recording' ? 200 : 1000),
   })
 }
 
@@ -31,6 +40,8 @@ export function formatBytes(bytes: number): string {
 
 export function warningText(t: T, warning: RecorderWarning): string {
   switch (warning) {
+    case 'source-audio-unavailable':
+      return t('recorder.warning.sourceAudioUnavailable')
     case 'mic-unavailable':
       return t('recorder.warning.micUnavailable')
     case 'no-audio':

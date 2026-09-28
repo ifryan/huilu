@@ -6,6 +6,7 @@ import {
   type RecorderLike,
   type RecorderWarning,
 } from './media'
+import { levelFromSamples } from './audio-level'
 import { videoDimensions } from './quality'
 
 /**
@@ -19,7 +20,7 @@ function sourceConstraints(req: CaptureRequest) {
   const base = { chromeMediaSource, chromeMediaSourceId: req.streamId }
   const { width, height } = videoDimensions(req.quality)
   // 窗口 / 屏幕的仅音频模式也必须取画面（desktopCapture 不能只取声音）：用最低规格，只为感知「停止共享」
-  const wantVideo = req.mode === 'video' || req.source !== 'tab'
+  const wantVideo = req.mode === 'video' || req.source !== 'tab' || !req.sourceAudio
   const video: ChromeConstraints | false = wantVideo
     ? {
         mandatory:
@@ -49,14 +50,15 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
   const warnings: RecorderWarning[] = []
   const source = await navigator.mediaDevices.getUserMedia(sourceConstraints(req))
   let mic: MediaStream | undefined
-  const ctx = new AudioContext({ latencyHint: 'interactive' })
+  let ctx: AudioContext | undefined
   const stopAll = () => {
     source.getTracks().forEach((t) => t.stop())
     mic?.getTracks().forEach((t) => t.stop())
-    void ctx.close().catch(() => {})
+    void ctx?.close().catch((error: unknown) => console.warn('[huilu] audio cleanup failed', error))
   }
 
   try {
+    ctx = new AudioContext({ latencyHint: 'interactive' })
     // 所有声音先汇到 bus，再分两路输出：视频用的立体声轨，和转写用的单声道轨（有声音时才有）
     const bus = ctx.createGain()
     const mix = ctx.createMediaStreamDestination()
@@ -67,7 +69,14 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
     silence.offset.value = 0
     silence.connect(bus)
     silence.start()
-    const sourceAudio = source.getAudioTracks()
+    // 即使浏览器意外返回音轨，关闭来源音频时也不能把它接入混音。
+    const sourceAudio = req.sourceAudio
+      ? source.getAudioTracks().filter((t) => t.readyState !== 'ended')
+      : []
+    if (!req.sourceAudio) source.getAudioTracks().forEach((track) => track.stop())
+    if ((req.sourceAudioRequested ?? req.sourceAudio) && sourceAudio.length === 0) {
+      warnings.push('source-audio-unavailable')
+    }
     if (sourceAudio.length > 0) {
       const node = ctx.createMediaStreamSource(new MediaStream(sourceAudio))
       node.connect(bus)
@@ -102,6 +111,10 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
       transcriptAudioTrack = transcript.stream.getAudioTracks()[0]
       if (!transcriptAudioTrack) throw new Error('AudioContext produced no transcript audio track')
     }
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 2048
+    bus.connect(analyser)
+    const samples = new Float32Array(analyser.fftSize)
     if (ctx.state === 'suspended') await ctx.resume()
 
     const audioTrack = mix.stream.getAudioTracks()[0]
@@ -117,6 +130,11 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
         req.mode === 'video' && settings
           ? { width: settings.width, height: settings.height, fps: settings.frameRate }
           : undefined,
+      audioLevel() {
+        if (!hasAudio || ctx?.state !== 'running') return 0
+        analyser.getFloatTimeDomainData(samples)
+        return levelFromSamples(samples)
+      },
       warnings,
       onEnded(callback) {
         // 标签页关闭 / 停止共享时来源轨道会 ended；麦克风拔出不算来源结束。
@@ -127,7 +145,7 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
           fired = true
           callback()
         }
-        for (const track of source.getTracks()) {
+        for (const track of [...source.getVideoTracks(), ...sourceAudio]) {
           if (track.readyState === 'ended') queueMicrotask(once)
           else track.addEventListener('ended', once, { once: true })
         }

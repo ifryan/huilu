@@ -20,7 +20,7 @@
     "sourceTab": "当前标签页",
     "sourceWindow": "指定窗口",
     "sourceScreen": "整个屏幕",
-    "sourceDesktopHint": "开始后会弹出选择框；需要录制声音时请勾选「分享音频」",
+    "sourceDesktopHint": "开始后会弹出浏览器的来源选择框",
     "quality": "画质",
     "estimate": "每小时最多约 {{size}}",
     "microphone": "同时录制麦克风",
@@ -45,7 +45,10 @@
     "controlsInSidePanel": "暂停、继续和结束请在网页上的悬浮录制面板中操作",
     "showPanel": "显示录制面板",
     "panelUnavailable": "这个页面不允许显示悬浮录制面板（例如 chrome:// 页面），可以在这里控制录制",
-    "dismissNotice": "知道了"
+    "dismissNotice": "知道了",
+    "sourceAudio": "录制来源 / 系统音频",
+    "sourceAudioTabHint": "仅包含当前标签页播放的声音，与麦克风分开控制。",
+    "sourceAudioDesktopHint": "可用性取决于所选窗口 / 屏幕、系统和浏览器；如原生选择框提供「分享音频」，仍需勾选。"
   },
   "sidepanel": {
     "recording": "录制中",
@@ -70,7 +73,9 @@
     "notSaved": "录制未能保存：{{error}}",
     "startFailed": "开始录制失败：{{error}}",
     "openHistory": "查看历史记录",
-    "hint": "在弹窗中点击「开始记录」，或按 Alt+Shift+R 录制当前标签页"
+    "hint": "在弹窗中点击「开始记录」，或按 Alt+Shift+R 录制当前标签页",
+    "audioLevel": "实际采集音量",
+    "audioSilent": "当前未检测到声音"
   },
   "history": {
     "empty": "还没有录制",
@@ -257,7 +262,8 @@
     "warning": {
       "micUnavailable": "未能打开麦克风，本次录制不包含麦克风声音",
       "noAudio": "没有采集到声音，本次录制无法转写",
-      "lowStorage": "剩余存储空间不足 1 小时录制"
+      "lowStorage": "剩余存储空间不足 1 小时录制",
+      "sourceAudioUnavailable": "已选择录制来源音频，但浏览器未提供音轨。本次不包含来源声音，请检查分享音频选项及系统支持。"
     },
     "error": {
       "busy": "已有录制正在进行",

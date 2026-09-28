@@ -28,3 +28,26 @@ export async function claimResultNotification(
     db.close()
   }
 }
+
+/** 只有取得 claim 且投递失败的调用者可释放，供下一次显式重试。 */
+export async function releaseResultNotification(
+  id: string,
+  factory: IDBFactory = indexedDB,
+): Promise<void> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open('huilu-result-notifications', 1)
+    request.onupgradeneeded = () => request.result.createObjectStore('opened')
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction('opened', 'readwrite')
+      transaction.objectStore('opened').delete(id)
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = transaction.onabort = () => reject(transaction.error)
+    })
+  } finally {
+    db.close()
+  }
+}

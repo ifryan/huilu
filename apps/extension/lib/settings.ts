@@ -25,6 +25,8 @@ export type MeetingLanguage = (typeof MEETING_LANGUAGES)[number]
 export interface RecordingPrefs {
   videoSource: VideoSource
   quality: VideoQuality
+  /** 旧偏好缺少此字段时沿用开启来源音频的行为 */
+  sourceAudio?: boolean
   microphone: boolean
   /** 未指定时使用系统默认麦克风 */
   microphoneDeviceId?: string
@@ -33,6 +35,7 @@ export interface RecordingPrefs {
 
 export const DEFAULT_RECORDING_PREFS: RecordingPrefs = {
   videoSource: 'tab',
+  sourceAudio: true,
   quality: DEFAULT_VIDEO_QUALITY,
   microphone: true,
   language: 'zh',

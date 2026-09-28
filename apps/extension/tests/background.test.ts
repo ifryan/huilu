@@ -13,6 +13,9 @@ const h = vi.hoisted(() => ({
   offscreenState: 'idle' as RecorderStatus['state'],
   offscreenStart: (): Promise<RecorderStatus> => Promise.resolve({ state: 'recording' }),
   closeCalls: 0,
+  captureRequests: [] as unknown[],
+  releasedClaims: [] as string[],
+  openResult: async () => {},
   windowState: 'idle' as RecorderStatus['state'],
   /** 录制窗口页面：只要窗口还开着，广播的 window:* 消息它都会收到 */
   recorderWindows: new Set<number>(),
@@ -47,6 +50,7 @@ vi.mock('@/lib/messaging', () => ({
         return undefined
       case 'offscreen:start':
         if (!h.offscreenOpen) throw new Error('Could not establish connection')
+        h.captureRequests.push(data)
         return h.offscreenStart()
       case 'offscreen:status':
         if (!h.offscreenOpen) throw new Error('Could not establish connection')
@@ -74,16 +78,25 @@ vi.mock('@/platform/offscreen', () => ({
 
 vi.mock('@/platform/capture', () => ({
   CaptureCancelledError: class CaptureCancelledError extends Error {},
-  requestTabCapture: async () => ({ streamId: 'tab-stream', sourceAudio: true }),
+  requestTabCapture: async (_tabId: number, sourceAudio = true) => ({
+    streamId: 'tab-stream',
+    sourceAudio,
+  }),
 }))
 
 vi.mock('@/platform', () => ({
-  openAppPage: async (route: string) => void h.openedAppRoutes.push(route),
+  openAppPage: async (route: string) => {
+    await h.openResult()
+    h.openedAppRoutes.push(route)
+  },
   hasHostPermission: async () => true,
 }))
 
 vi.mock('@huilu/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof StorageModule>()),
+  releaseResultNotification: async (id: string) => {
+    h.releasedClaims.push(id)
+  },
   claimResultNotification: async (id: string) => {
     h.resultNotificationClaims.push(id)
     return true
@@ -137,6 +150,9 @@ beforeEach(() => {
     offscreenState: 'idle',
     offscreenStart: () => Promise.resolve({ state: 'recording' }),
     closeCalls: 0,
+    captureRequests: [],
+    releasedClaims: [],
+    openResult: async () => {},
     windowState: 'idle',
     windowStartReceivers: [],
     processingBusy: false,
@@ -429,5 +445,66 @@ describe('GLM Coding Plan header rule (experimental)', () => {
     h.sessionRules = []
     await call('processingSettings')
     expect(h.sessionRules).toHaveLength(1)
+  })
+})
+
+describe('U-41–U-44 regression', () => {
+  it.each([undefined, true, false])(
+    'propagates source-audio preference %s, with old preferences enabled',
+    async (sourceAudio) => {
+      const snapshot = settings('tab')
+      snapshot.prefs.sourceAudio = sourceAudio
+      await call('startRecording', { tabId: 1, title: 'test', settings: snapshot })
+      expect(h.captureRequests[0]).toMatchObject({
+        sourceAudio: sourceAudio !== false,
+        sourceAudioRequested: sourceAudio !== false,
+      })
+    },
+  )
+
+  it('acknowledges idle before closing the sender', async () => {
+    await settle()
+    h.offscreenOpen = true
+    await call('processingIdle')
+    expect(h.offscreenOpen).toBe(true)
+    await settle()
+    expect(h.offscreenOpen).toBe(false)
+  })
+
+  it('keeps the sender alive during result delivery even when idle arrives concurrently', async () => {
+    await settle()
+    h.offscreenOpen = true
+    h.jobs = [{ meetingId: 'r1', state: 'done' }]
+    let release!: () => void
+    h.openResult = () =>
+      new Promise<void>((r) => {
+        release = r
+      })
+    const notification = call('processingCompleted', 'r1')
+    await settle()
+    await call('processingIdle')
+    await settle()
+    expect(h.offscreenOpen).toBe(true)
+    const duplicate = call('processingCompleted', 'r1')
+    release()
+    await Promise.all([notification, duplicate])
+    expect(h.openedAppRoutes).toEqual(['/meeting/r1'])
+    expect(h.offscreenOpen).toBe(true)
+    await settle()
+    expect(h.offscreenOpen).toBe(false)
+  })
+
+  it('releases the durable claim when opening a result fails, and exposes the error', async () => {
+    await settle()
+    h.jobs = [{ meetingId: 'r1', state: 'done' }]
+    h.openResult = async () => {
+      throw new Error('tabs unavailable')
+    }
+    await expect(call('processingCompleted', 'r1')).rejects.toThrow('tabs unavailable')
+    expect(h.releasedClaims).toEqual(['r1'])
+    h.openResult = async () => {}
+    await call('processingCompleted', 'r1')
+    expect(h.openedAppRoutes).toEqual(['/meeting/r1'])
+    await settle()
   })
 })

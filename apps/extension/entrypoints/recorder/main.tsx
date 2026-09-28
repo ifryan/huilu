@@ -21,7 +21,7 @@ const controller = new RecorderController({
 
 onMessage('window:start', async ({ data }) => {
   if (data.source === 'tab') throw new Error('Tab recording runs in the offscreen document')
-  const grant = await chooseDesktopSource(data.source)
+  const grant = await chooseDesktopSource(data.source, data.sourceAudio)
   return controller.start({ ...data, streamId: grant.streamId, sourceAudio: grant.sourceAudio })
 })
 onMessage('window:pause', () => controller.pause())
