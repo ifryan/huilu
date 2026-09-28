@@ -1,11 +1,17 @@
-import { mappedSummary, mappedTranscript, resolveSpeaker, type Meeting } from '@huilu/core'
-import { timestamp } from '@huilu/exporters'
+import {
+  mappedSummary,
+  mappedTranscript,
+  resolveSpeaker,
+  type Meeting,
+  type Transcript,
+} from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
 import { EditConflictError, type MeetingEdit } from '@huilu/storage'
 import { Button } from '@huilu/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { TranscriptRows } from '@/components/TranscriptRows'
 import { MeetingExports } from '@/components/MeetingExports'
 import { MeetingGuide } from '@/components/MeetingGuide'
 import { MeetingPlayer, type PlayerControl } from '@/components/MeetingPlayer'
@@ -21,6 +27,8 @@ import {
 import { useProcessingJobs } from '@/lib/processing-jobs'
 import { processingReadiness } from '@/lib/processing-view'
 import { useReadiness } from '@/lib/readiness'
+
+const emptySegments: Transcript['segments'] = []
 
 const fieldClass =
   'border-border bg-background focus:border-primary rounded-lg border px-3 py-2 text-sm'
@@ -82,9 +90,20 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
   const [mediaError, setMediaError] = useState(false)
   const control = useRef<PlayerControl | null>(null)
   const meeting = doc.meeting
-  const transcript = doc.transcript ? mappedTranscript(meeting, doc.transcript) : undefined
-  const summary = doc.summary ? mappedSummary(meeting, doc.summary) : undefined
-  const speakers = meeting.speakers.filter((s) => resolveSpeaker(meeting, s.id) === s.id)
+  const transcript = useMemo(
+    () => (doc.transcript ? mappedTranscript(meeting, doc.transcript) : undefined),
+    [meeting, doc.transcript],
+  )
+  const summary = useMemo(
+    () => (doc.summary ? mappedSummary(meeting, doc.summary) : undefined),
+    [meeting, doc.summary],
+  )
+  const speakers = useMemo(
+    () => meeting.speakers.filter((s) => resolveSpeaker(meeting, s.id) === s.id),
+    [meeting],
+  )
+  const names = useMemo(() => new Map(speakers.map((s) => [s.id, s.name])), [speakers])
+  const seek = useCallback((ms: number) => control.current?.seek(ms), [])
   const resolvedSpeaker = resolveSpeaker(meeting, selectedSpeaker)
   const speaker = speakers.some((s) => s.id === resolvedSpeaker) ? resolvedSpeaker : ''
   const previewKind = resultMediaInfo(doc, 'video') ? 'video' : 'audio'
@@ -134,7 +153,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
       return false
     }
   }
-  const segments = transcript?.segments ?? []
+  const segments = transcript?.segments ?? emptySegments
   const active = segments.findLastIndex((s) => s.startMs <= time && s.endMs > time)
   const query = search.trim().toLocaleLowerCase()
   return (
@@ -254,80 +273,24 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
           {transcript && segments.length === 0 && (
             <p className="text-muted-foreground text-sm">{t('result.emptyTranscript')}</p>
           )}
-          <ol className="space-y-2">
-            {segments.map((s, i) => {
-              if (
-                (speaker && s.speakerId !== speaker) ||
-                (query && !s.text.toLocaleLowerCase().includes(query))
-              )
-                return null
-              return (
-                <li key={i}>
-                  <button
-                    type="button"
-                    data-segment={i}
-                    aria-current={active === i ? 'true' : undefined}
-                    className={`hover:bg-muted w-full rounded-xl border p-4 text-left ${active === i ? 'border-primary bg-muted' : 'border-transparent'}`}
-                    onClick={() => control.current?.seek(s.startMs)}
-                  >
-                    <div className="mb-2 flex items-center gap-3">
-                      <span className="bg-primary/10 text-primary flex h-7 w-7 items-center justify-center rounded-full text-xs">
-                        {(speakers.find((p) => p.id === s.speakerId)?.name ?? s.speakerId).slice(
-                          0,
-                          1,
-                        )}
-                      </span>
-                      <span className="text-sm font-medium">
-                        {speakers.find((p) => p.id === s.speakerId)?.name ?? s.speakerId}
-                      </span>
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {timestamp(s.startMs)}
-                      </span>
-                    </div>
-                    <p className="max-w-prose text-sm leading-7 whitespace-pre-wrap">
-                      <Highlight text={s.text} query={query} />
-                    </p>
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-          {segments.length > 0 &&
-            !segments.some(
-              (s) =>
-                (!speaker || s.speakerId === speaker) &&
-                (!query || s.text.toLocaleLowerCase().includes(query)),
-            ) && <p className="text-muted-foreground text-sm">{t('result.noMatches')}</p>}
+          <TranscriptRows
+            segments={segments}
+            active={active}
+            speaker={speaker}
+            query={query}
+            names={names}
+            seek={seek}
+          />
         </section>
         <MeetingGuide
           meeting={meeting}
           summary={summary}
-          seek={(ms) => control.current?.seek(ms)}
-          time={time}
+          seek={seek}
+          current={summary?.chapters.findLastIndex((c) => c.startMs <= time) ?? -1}
         />
       </div>
     </article>
   )
-}
-
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query) return text
-  const out: React.ReactNode[] = []
-  const lower = text.toLocaleLowerCase()
-  let start = 0
-  let found = lower.indexOf(query)
-  while (found >= 0) {
-    out.push(
-      text.slice(start, found),
-      <mark key={found} className="rounded-sm bg-yellow-200 text-neutral-900">
-        {text.slice(found, found + query.length)}
-      </mark>,
-    )
-    start = found + query.length
-    found = lower.indexOf(query, start)
-  }
-  out.push(text.slice(start))
-  return out
 }
 
 function SpeakerEditor({

@@ -1,20 +1,20 @@
 import type { Meeting, Summary } from '@huilu/core'
 import { timestamp } from '@huilu/exporters'
 import { useTranslation } from '@huilu/i18n'
+import { memo } from 'react'
 
-export function MeetingGuide({
+export const MeetingGuide = memo(function MeetingGuide({
   meeting,
   summary,
   seek,
-  time,
+  current,
 }: {
   meeting: Meeting
   summary?: Summary
   seek: (ms: number) => void
-  time: number
+  current: number
 }) {
   const { t } = useTranslation()
-  const current = summary?.chapters.findLastIndex((c) => c.startMs <= time)
   return (
     <aside className="border-border min-w-0 space-y-7 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
       <h2 className="text-lg font-semibold">{t('result.guide')}</h2>
@@ -103,4 +103,4 @@ export function MeetingGuide({
       )}
     </aside>
   )
-}
+})
