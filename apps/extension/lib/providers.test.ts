@@ -33,9 +33,7 @@ describe('provider forms', () => {
       },
     },
   ])('does not offer processing for an unregistered $kind provider', ({ kind, config }) => {
-    expect(isConfigured(kind, { providerId: 'unknown', configs: { unknown: config } })).toBe(
-      false,
-    )
+    expect(isConfigured(kind, { providerId: 'unknown', configs: { unknown: config } })).toBe(false)
   })
 
   it('prefills the default preset for a new provider', () => {
