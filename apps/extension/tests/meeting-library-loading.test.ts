@@ -60,16 +60,28 @@ it.each([undefined, {}, { kind: 'directory' }])(
     expect(MeetingIndex.prototype.replace).toHaveBeenCalled()
   },
 )
-it.each([null, 'stale schema', [null], [{ key: 'bad', dir: 'bad', meeting: { id: 'a' } }]])(
-  'ignores malformed cached entries: %s',
-  async (entries) => {
-    vi.mocked(MeetingIndex.prototype.read).mockResolvedValue({
-      root: root.asFolder(),
-      entries,
-    } as unknown as IndexSnapshot)
-    root.permission = 'denied'
-    const library = await loadLibrary()
-    expect(library.folderUnavailable).toBe(true)
-    expect(library.items).toEqual([])
-  },
-)
+it.each(
+  [null, 'stale schema', [null], [{ key: 'bad', dir: 'bad', meeting: { id: 'a' } }]].map(
+    (entries) => ({ entries }),
+  ),
+)('ignores malformed cached entries: %s', async ({ entries }) => {
+  vi.mocked(MeetingIndex.prototype.read).mockResolvedValue({
+    root: root.asFolder(),
+    entries,
+  } as unknown as IndexSnapshot)
+  root.permission = 'denied'
+  const library = await loadLibrary()
+  expect(library.folderUnavailable).toBe(true)
+  expect(library.items).toEqual([])
+})
+
+it('retains validated cached meeting titles when access is lost', async () => {
+  vi.mocked(MeetingIndex.prototype.read).mockResolvedValue({
+    root: root.asFolder(),
+    entries: [{ key: 'first', dir: 'first', meeting }],
+  })
+  root.permission = 'denied'
+  const library = await loadLibrary()
+  expect(library.folderUnavailable).toBe(true)
+  expect(library.items[0]).toMatchObject({ title: 'Authoritative meeting', available: false })
+})

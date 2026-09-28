@@ -16,7 +16,7 @@ const extension = fileURLToPath(new URL('../../apps/extension/.output/chrome-mv3
 const base = 'chrome-extension://fddknloecifbbeomieckhnegffdobgni/app.html#'
 const launch = () =>
   chromium.launchPersistentContext(profile, {
-    executablePath: chromium.executablePath(),
+    executablePath: process.env.U35_CHROMIUM_PATH ?? chromium.executablePath(),
     headless: true,
     viewport: { width: 1440, height: 1000 },
     args: [
@@ -293,9 +293,11 @@ try {
   await p.getByText(/The data folder is unavailable/).waitFor()
   assert.equal(
     await p.getByRole('link', { name: 'Edited synthetic meeting', exact: true }).count(),
-    1,
+    0,
   )
-  await p.getByRole('link', { name: 'Edited synthetic meeting', exact: true }).click()
+  await p.getByRole('heading', { name: 'Edited synthetic meeting', exact: true }).waitFor()
+  assert.equal(await p.getByRole('link', { name: 'Legacy audio fixture', exact: true }).count(), 1)
+  await p.goto(base + '/meeting/fixture')
   await p.getByRole('heading', { name: 'This meeting is unavailable', exact: true }).waitFor()
   await p.evaluate(() => {
     FileSystemDirectoryHandle.prototype.queryPermission = window.originalPermission

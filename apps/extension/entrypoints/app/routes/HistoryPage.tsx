@@ -62,6 +62,7 @@ export function HistoryPage() {
           const meeting = item.meeting
           const local = item.local
           const playable =
+            item.available &&
             !!item.id &&
             !item.folder?.issue &&
             (!!item.folder || (local?.state !== 'unfinished' && local?.state !== 'damaged'))
