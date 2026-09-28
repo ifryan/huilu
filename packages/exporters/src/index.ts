@@ -1,4 +1,10 @@
-import { mappedSummary, mappedTranscript, type ExportInput, type Exporter } from '@huilu/core'
+import {
+  mappedSummary,
+  mappedTranscript,
+  summaryLocale,
+  type ExportInput,
+  type Exporter,
+} from '@huilu/core'
 
 export function timestamp(ms: number, srt = false): string {
   const value = Math.max(0, Math.round(ms))
@@ -53,7 +59,7 @@ export const markdownExporter: Exporter = {
   async export(input) {
     if (!input.summary) throw new Error('noSummary')
     const summary = mappedSummary(input.meeting, input.summary)
-    const zh = input.meeting.language.startsWith('zh')
+    const zh = summaryLocale(input.meeting.language, input.transcript) === 'zh-CN'
     const labels = zh
       ? ['关键词', '全文概要', '章节速览', '发言总结', '要点回顾', '待办事项']
       : ['Keywords', 'Overview', 'Chapters', 'Speaker summaries', 'Key points', 'Action items']

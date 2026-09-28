@@ -12,3 +12,4 @@ export * from './summary-templates/general'
 export { registries } from './registries'
 
 export * from './speakers'
+export { summaryLocale } from './summary-locale'
