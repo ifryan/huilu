@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Meeting, mappedTranscript, mappedSummary } from '@huilu/core'
 import { OpfsStorageAdapter } from './opfs'
 import { MemoryDirectoryHandle } from './memory-fs.test-helper'
@@ -83,6 +83,23 @@ describe('folder authority and atomic metadata editing', () => {
     })
     expect((await index.read())?.entries).toEqual(entries)
   })
+  it.each(['transcript', 'summary'])(
+    'propagates permission loss while opening %s',
+    async (kind) => {
+      const store = await fixture()
+      let ready = true
+      const readFile = store.readFile.bind(store)
+      vi.spyOn(store, 'isReady').mockImplementation(async () => ready)
+      vi.spyOn(store, 'readFile').mockImplementation(async (path) => {
+        if (path.endsWith(`/${kind}.json`)) {
+          ready = false
+          throw new DOMException('Permission revoked', 'NotAllowedError')
+        }
+        return readFile(path)
+      })
+      await expect(readMeetingDocument(store, 'a', 'a')).rejects.toThrow('folderUnavailable')
+    },
+  )
   it('keeps valid media metadata when transcript is corrupt', async () => {
     const store = await fixture()
     await store.writeFile('a/transcript.json', '{')

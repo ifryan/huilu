@@ -75,7 +75,8 @@ export async function readMeetingDocument(
           throw new Error('timeline')
         result.transcript = transcript
       } else result.summary = Summary.parse(data)
-    } catch {
+    } catch (error) {
+      if (!(await adapter.isReady())) throw new Error('folderUnavailable', { cause: error })
       result.warnings.push(kind)
     }
   }
