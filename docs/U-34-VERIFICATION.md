@@ -5,6 +5,19 @@ and locally exercised. This is ready for code review, **not full product accepta
 real service compatibility and the 60-minute Chinese meeting / three-minute
 processing target remain unverified. U-35 has not been started.
 
+## PR #7 第三轮三项审查修复（2026-09-28，MBP 本地，当前增量）
+
+基线为 RH 本地手测通过的版本（含 U-40 GLM Coding Plan 三个提交，HEAD `254f82b`）。RH 的确认仅指本地手测无问题，
+不代表已核实后台套餐扣费或全部真实 API 验收。三条意见（07:30:19 UTC，针对 `554783c`）均核实有效：
+
+| 评论 ID    | 修复与回归证据                                                                                                                                                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4119592498 | 执行循环遇到任务存储失败时清理 #current，按 1 秒起翻倍、上限 1 分钟退避重新调度；无法记录结果而可能停在 running 的任务下一轮改回 queued。覆盖 list 失败、标记 running 失败、保存结果与记录失败都失败、持续失败有界退避与 stop() 后不再重试。 |
+| 4119592503 | Paraformer 结果必须包含 transcripts 数组：`{}`、null、非对象条目为 badResponse；明确的 `transcripts: []` 仍是无语音结果。                                                                                                                    |
+| 4119592510 | 历史页统一轮询任务、订阅就绪状态一次并按行传入；ProcessingStatus 不再各自创建 jobs 观察者与 4 个 storage 监听。                                                                                                                              |
+
+新增的存储失败回归在修复前代码上失败。本轮未做浏览器测试以外的真实 API 调用。
+
 ## RH 手测反馈：纪要「余额不足」被当作限流（2026-09-28，MBP 本地，当前增量）
 
 现象：生成纪要时智谱 BigModel 返回 HTTP 429 + `{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}`，
