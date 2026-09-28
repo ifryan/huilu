@@ -5,6 +5,26 @@ and locally exercised. This is ready for code review, **not full product accepta
 real service compatibility and the 60-minute Chinese meeting / three-minute
 processing target remain unverified. U-35 has not been started.
 
+## RH 手测反馈：纪要「余额不足」被当作限流（2026-09-28，MBP 本地，当前增量）
+
+现象：生成纪要时智谱 BigModel 返回 HTTP 429 + `{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}`，
+界面显示「请求过于频繁或额度已用完」并定时自动重试。根因：HTTP 与 AI SDK 两条路径都只按状态码分类，
+429 一律为 rateLimited（可自动重试）；官方文档中 1113 为 HTTP 429「账户已欠费」。
+
+修复（官方文档依据：智谱错误码、OpenAI error codes、DeepSeek error codes、阿里云百炼错误码）：
+
+- 新增不可自动重试的 `quotaExceeded`，结构化业务码优先于状态码：智谱 1113 / 1309 / 1314，
+  OpenAI credit_balance_exhausted、organization/project_spend_limit_exceeded、organization_usage_limit_exceeded，
+  百炼 Arrearage、AllocationQuota.FreeTierOnly，以及 HTTP 402。
+- 真限流与会重置的窗口（智谱 1302 / 1305 / 1308 / 1310 / 1313 / 1316–1321、百炼 insufficient_quota（其 TPM 限流）、
+  普通 429）仍为 rateLimited，按 Retry-After / 退避有限重试；408 / 5xx 语义不变。说明带业务码并去掉 Bearer / sk- 凭据。
+- 旧版本已持久化为 rateLimited 且说明含上述业务码的任务：启动恢复时改为 failed / quotaExceeded，
+  取消重试计划；认不出的历史错误不改。中间结果保留，手动重试从出错步骤继续，不重新转写。
+- 中英文文案：rateLimited 不再写「额度已用完」；quotaExceeded 提示检查服务商账户与 API 配置或更换服务后手动重试。
+
+回归：用户原始响应 fixture（`zhipu-1113-balance.json`）经 AI SDK 与 fetch 两条路径、限流对照、402 / Arrearage / OpenAI 花费上限、
+凭据脱敏、旧任务迁移与手动续跑。未做浏览器测试，未调用任何真实 / 付费 API。
+
 ## PR #7 第二轮三项审查修复（2026-09-28，MBP 本地，当前增量）
 
 三条新意见（06:46:40 UTC）均核实有效，在 MBP `Ryans-MBP.local` 的
