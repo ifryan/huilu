@@ -3,7 +3,7 @@ import type { LlmProvider, TaskContext } from '@huilu/core'
 import { APICallError, NoObjectGeneratedError, Output, generateText } from 'ai'
 import { z } from 'zod'
 import { httpUrl, requireKeyForPresets } from '../config-fields'
-import { ProviderError, parseRetryAfter, statusToCode } from '../errors'
+import { ProviderError, httpError, parseRetryAfter } from '../errors'
 import { trimBaseUrl } from '../http'
 import { testOpenAiCompatible } from '../openai-compatible'
 import type { WithPresets } from '../presets'
@@ -46,10 +46,10 @@ export function toProviderError(e: unknown, ctx: Pick<TaskContext, 'signal'>): P
   if (ctx.signal.aborted) return new ProviderError('aborted')
   if (APICallError.isInstance(e)) {
     if (e.statusCode === undefined) return new ProviderError('network', e.message)
-    return new ProviderError(
-      statusToCode(e.statusCode),
-      (e.responseBody ?? e.message).slice(0, 300),
+    // 与 fetch 路径同一套分类：结构化业务错误码（如智谱 1113 欠费）优先于状态码
+    return httpError(
       e.statusCode,
+      e.responseBody ?? e.message,
       parseRetryAfter(e.responseHeaders?.['retry-after'] ?? null),
     )
   }

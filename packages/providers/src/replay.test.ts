@@ -8,9 +8,12 @@ import result from './__fixtures__/paraformer-result.json'
 import running from './__fixtures__/paraformer-running.json'
 import submitted from './__fixtures__/paraformer-submit.json'
 import succeeded from './__fixtures__/paraformer-succeeded.json'
+import zhipuBalance from './__fixtures__/zhipu-1113-balance.json'
 import {
   PARAFORMER_LIMITS,
   ProviderError,
+  isQuotaExceededDetail,
+  isRetryable,
   openAiCompatibleLlm,
   openAiCompatibleTranscription,
   paraformer,
@@ -577,6 +580,14 @@ describe('openAiCompatibleTranscription.transcribe', () => {
       retryAfterMs: 2000,
     })
   })
+  it('classifies the Zhipu 1113 balance error on the fetch path too', async () => {
+    replay([[/transcriptions/, () => json(zhipuBalance, 429)]])
+    await expect(
+      openAiCompatibleTranscription.transcribe(audio(), groq, {
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'quotaExceeded', status: 429 })
+  })
 })
 
 describe('openAiCompatibleLlm.generateObject', () => {
@@ -644,6 +655,89 @@ describe('openAiCompatibleLlm.generateObject', () => {
       openAiCompatibleLlm.generateObject(request, qwen, { signal: new AbortController().signal }),
     ).rejects.toMatchObject({ code, status })
     expect(calls).toHaveLength(1)
+  })
+
+  it('classifies the Zhipu 1113 balance error (HTTP 429) as quotaExceeded, not a rate limit', async () => {
+    const calls = replay([
+      [/chat\/completions/, () => json(zhipuBalance, 429, { 'retry-after': '30' })],
+    ])
+    const err = await openAiCompatibleLlm
+      .generateObject(request, qwen, { signal: new AbortController().signal })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ProviderError)
+    expect(err).toMatchObject({
+      code: 'quotaExceeded',
+      status: 429,
+      detail: '1113: 余额不足或无可用资源包,请充值。',
+    })
+    expect(isRetryable((err as ProviderError).code)).toBe(false)
+    expect(calls).toHaveLength(1)
+  })
+
+  it.each([
+    ['Zhipu 1302 rate limit', 429, { error: { code: '1302', message: '您的账户已达到速率限制' } }],
+    [
+      'Zhipu 1308 usage window',
+      429,
+      { error: { code: '1308', message: '已达到 5 小时的使用上限' } },
+    ],
+    [
+      'DashScope TPM throttling',
+      429,
+      { error: { code: 'insufficient_quota', message: 'You exceeded your current quota' } },
+    ],
+    ['plain 429', 429, { error: { message: 'Rate limit reached' } }],
+  ])('keeps %s retryable as rateLimited with Retry-After', async (_name, status, body) => {
+    replay([[/chat\/completions/, () => json(body, status, { 'retry-after': '3' })]])
+    const err = await openAiCompatibleLlm
+      .generateObject(request, qwen, { signal: new AbortController().signal })
+      .catch((e: unknown) => e)
+    expect(err).toMatchObject({ code: 'rateLimited', retryAfterMs: 3000 })
+    expect(isRetryable((err as ProviderError).code)).toBe(true)
+  })
+
+  it.each([
+    ['OpenAI credit balance', 429, { error: { code: 'credit_balance_exhausted', message: 'x' } }],
+    ['OpenAI spend limit', 429, { error: { code: 'project_spend_limit_exceeded', message: 'x' } }],
+    ['DashScope arrears', 400, { error: { code: 'Arrearage', message: 'Access denied' } }],
+    ['DeepSeek 402', 402, { error: { message: 'Insufficient Balance' } }],
+  ])('classifies %s as quotaExceeded', async (_name, status, body) => {
+    replay([[/chat\/completions/, () => json(body, status)]])
+    await expect(
+      openAiCompatibleLlm.generateObject(request, qwen, { signal: new AbortController().signal }),
+    ).rejects.toMatchObject({ code: 'quotaExceeded', status })
+  })
+
+  it('keeps 408 / 5xx semantics and strips credentials from error details', async () => {
+    replay([[/chat\/completions/, () => json({ error: { message: 'slow' } }, 408)]])
+    await expect(
+      openAiCompatibleLlm.generateObject(request, qwen, { signal: new AbortController().signal }),
+    ).rejects.toMatchObject({ code: 'timeout' })
+    replay([
+      [
+        /chat\/completions/,
+        () =>
+          json(
+            { error: { message: 'bad header Bearer sk-secret123456 for key sk-abcdefghij' } },
+            502,
+          ),
+      ],
+    ])
+    const err = (await openAiCompatibleLlm
+      .generateObject(request, qwen, { signal: new AbortController().signal })
+      .catch((e: unknown) => e)) as ProviderError
+    expect(err.code).toBe('server')
+    expect(err.detail).not.toMatch(/secret123456|abcdefghij/)
+    expect(err.detail).toContain('Bearer ***')
+  })
+
+  it('recognizes quota errors persisted by older versions only by structured code', () => {
+    expect(isQuotaExceededDetail(JSON.stringify(zhipuBalance))).toBe(true)
+    expect(isQuotaExceededDetail('1113: 余额不足或无可用资源包,请充值。')).toBe(true)
+    expect(isQuotaExceededDetail('{"error":{"code":"1302","message":"限流"}}')).toBe(false)
+    expect(isQuotaExceededDetail('Rate limit reached')).toBe(false)
+    expect(isQuotaExceededDetail('余额不足')).toBe(false)
+    expect(isQuotaExceededDetail(undefined)).toBe(false)
   })
 
   it('maps network failures and aborts', async () => {

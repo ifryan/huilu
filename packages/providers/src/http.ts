@@ -1,29 +1,10 @@
 import type { TaskContext } from '@huilu/core'
-import { ProviderError, parseRetryAfter, statusToCode } from './errors'
+import { ProviderError, httpError, parseRetryAfter } from './errors'
 
 export const DEFAULT_TIMEOUT_MS = 15_000
 
 /** 去掉 Base URL 末尾的斜杠，便于拼接路径 */
 export const trimBaseUrl = (url: string) => url.trim().replace(/\/+$/, '')
-
-/** 从各家不同格式的错误响应里取出可读的说明 */
-function errorDetail(body: unknown, raw: string): string | undefined {
-  if (body && typeof body === 'object') {
-    const b = body as Record<string, unknown>
-    const err = b.error
-    if (
-      err &&
-      typeof err === 'object' &&
-      typeof (err as { message?: unknown }).message === 'string'
-    ) {
-      return (err as { message: string }).message
-    }
-    if (typeof err === 'string') return err
-    if (typeof b.message === 'string') return [b.code, b.message].filter(Boolean).join(': ')
-    if (typeof b.code === 'string') return b.code
-  }
-  return raw.trim().slice(0, 300) || undefined
-}
 
 function parseJson(raw: string): unknown {
   try {
@@ -55,12 +36,7 @@ export async function fetchText(
     throw new ProviderError('network', e instanceof Error ? e.message : String(e))
   }
   if (!res.ok) {
-    throw new ProviderError(
-      statusToCode(res.status),
-      errorDetail(parseJson(raw), raw),
-      res.status,
-      parseRetryAfter(res.headers.get('retry-after')),
-    )
+    throw httpError(res.status, raw, parseRetryAfter(res.headers.get('retry-after')))
   }
   return { res, raw }
 }
