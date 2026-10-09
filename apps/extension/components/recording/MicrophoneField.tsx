@@ -1,5 +1,5 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button } from '@huilu/ui'
+import { Button, fieldClass } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { sendMessage } from '@/lib/messaging'
 import { useMicLevel } from '@/lib/mic-level'
@@ -58,8 +58,8 @@ export function MicrophoneField({
 
   return (
     <section className="flex flex-col gap-1.5">
-      <label className="flex items-center justify-between gap-2 text-sm">
-        <span>{t('popup.microphone')}</span>
+      <label className="text-body flex items-center justify-between gap-2">
+        <span className="font-medium">{t('popup.microphone')}</span>
         <input
           type="checkbox"
           className="accent-primary size-4"
@@ -69,7 +69,7 @@ export function MicrophoneField({
       </label>
       {enabled && permission === 'granted' && (
         <select
-          className="border-border bg-background rounded-lg border px-2 py-1.5 text-sm"
+          className={fieldClass}
           value={deviceId ?? ''}
           onChange={(e) => onChange({ enabled, deviceId: e.target.value || undefined })}
         >
@@ -85,16 +85,16 @@ export function MicrophoneField({
         <div
           role="meter"
           aria-label={t('popup.micLevel')}
-          className="bg-muted h-1.5 overflow-hidden rounded-full"
+          className="bg-field h-1.5 overflow-hidden rounded-full"
         >
-          <div ref={meterRef} className="bg-primary h-full w-0 transition-[width] duration-75" />
+          <div ref={meterRef} className="bg-accent-500 h-full w-0 transition-[width] duration-75" />
         </div>
       )}
       {enabled && permission === 'granted' && preview === 'failed' && (
-        <p className="text-muted-foreground text-xs">{t('popup.micPreviewFailed')}</p>
+        <p className="text-muted-foreground text-caption">{t('popup.micPreviewFailed')}</p>
       )}
       {enabled && permission !== 'granted' && (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-2 py-1.5 text-xs">
+        <div className="bg-warning-soft text-body2 rounded-control flex items-center justify-between gap-2 px-3 py-2">
           <span>
             {permission === 'denied' ? t('popup.micDenied') : t('popup.micNeedsPermission')}
           </span>

@@ -1,5 +1,5 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button, cn } from '@huilu/ui'
+import { Button, X, cn } from '@huilu/ui'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { reportPanelError } from '@/lib/extension-context'
 import { sendMessage } from '@/lib/messaging'
@@ -86,14 +86,16 @@ export function RecordingPanel() {
         }}
         type="button"
         style={style}
-        className="huilu-panel bg-background text-foreground border-border fixed flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm shadow-lg"
+        className="huilu-panel bg-surface text-foreground shadow-float fixed flex items-center gap-2 rounded-full px-3 py-1.5 text-sm"
         onClick={() => setCollapsed(false)}
         title={t('panel.expand')}
       >
         <span
           className={cn(
             'size-2 rounded-full',
-            status.state === 'recording' ? 'bg-danger' : 'bg-muted-foreground',
+            status.state === 'recording'
+              ? 'bg-danger motion-safe:animate-pulse'
+              : 'bg-muted-foreground',
           )}
         />
         <span className="font-mono tabular-nums">{formatDuration(status.session.elapsedMs)}</span>
@@ -107,7 +109,7 @@ export function RecordingPanel() {
         panel.current = node
       }}
       style={style}
-      className="huilu-panel bg-background text-foreground border-border fixed flex w-72 flex-col gap-3 rounded-2xl border p-3 text-sm shadow-xl"
+      className="huilu-panel bg-surface text-foreground shadow-float fixed flex w-72 flex-col gap-3 rounded-3xl p-3 text-sm"
       role="dialog"
       aria-label={t('panel.title')}
     >
@@ -119,7 +121,7 @@ export function RecordingPanel() {
         onPointerCancel={onPointerUp}
         onLostPointerCapture={onPointerUp}
       >
-        <span className="font-semibold">{t('app.name')}</span>
+        <span className="pl-1 font-semibold">{t('app.name')}</span>
         <span className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
           {busy && (
             <Button size="sm" variant="ghost" onClick={() => setCollapsed(true)}>
@@ -129,6 +131,7 @@ export function RecordingPanel() {
           <Button
             size="sm"
             variant="ghost"
+            className="px-2"
             aria-label={t('panel.close')}
             onClick={() => {
               setHiddenFor(key)
@@ -136,7 +139,7 @@ export function RecordingPanel() {
               if (!busy) void sendMessage('dismissRecordingNotice').catch(reportPanelError)
             }}
           >
-            ✕
+            <X aria-hidden="true" />
           </Button>
         </span>
       </header>
@@ -155,7 +158,7 @@ export function RecordingPanel() {
           </Button>
         </>
       )}
-      {busy && <p className="text-muted-foreground text-xs">{t('panel.hint')}</p>}
+      {busy && <p className="text-muted-foreground px-1 text-xs">{t('panel.hint')}</p>}
     </section>
   )
 }
