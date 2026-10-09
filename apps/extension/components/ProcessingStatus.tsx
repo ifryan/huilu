@@ -121,7 +121,7 @@ export function ProcessingStatus({
             <span>{t(`processing.step.${v.step}`)}</span>
             {v.progress !== undefined && (
               <>
-                <progress className="h-1.5 w-32 accent-current" max={1} value={v.progress} />
+                <progress className="h-1.5 w-32" max={1} value={v.progress} />
                 <span>{Math.round(v.progress * 100)}%</span>
               </>
             )}

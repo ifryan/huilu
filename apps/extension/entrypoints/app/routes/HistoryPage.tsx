@@ -1,5 +1,5 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button, RefreshCw, Search, fieldClass } from '@huilu/ui'
+import { Button, RefreshCw, Search, cn, fieldClass } from '@huilu/ui'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { ProcessingStatus } from '@/components/ProcessingStatus'
@@ -56,7 +56,7 @@ export function HistoryPage() {
               placeholder={t('library.search')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={`${fieldClass} pl-8`}
+              className={cn(fieldClass, 'pl-8')}
             />
           </label>
           <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>

@@ -1,6 +1,7 @@
 import type { Meeting, Summary } from '@huilu/core'
 import { timestamp } from '@huilu/exporters'
 import { useTranslation } from '@huilu/i18n'
+import { cn } from '@huilu/ui'
 import { memo } from 'react'
 
 export const MeetingGuide = memo(function MeetingGuide({
@@ -8,7 +9,9 @@ export const MeetingGuide = memo(function MeetingGuide({
   summary,
   seek,
   current,
+  className,
 }: {
+  className?: string
   meeting: Meeting
   summary?: Summary
   seek: (ms: number) => void
@@ -16,30 +19,41 @@ export const MeetingGuide = memo(function MeetingGuide({
 }) {
   const { t } = useTranslation()
   return (
-    <aside className="border-border min-w-0 space-y-7 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
-      <h2 className="text-lg font-semibold">{t('result.guide')}</h2>
+    <aside
+      className={cn('lg:bg-muted min-w-0 space-y-6 self-start lg:rounded-2xl lg:p-5', className)}
+    >
+      <h2 className="text-headline font-semibold">{t('result.guide')}</h2>
       {!summary ? (
         <p className="text-muted-foreground text-sm leading-6">{t('result.noSummary')}</p>
       ) : (
         <>
           <section>
-            <h3 className="mb-3 text-sm font-semibold">{t('result.keywords')}</h3>
+            <h3 className="text-muted-foreground text-body2 mb-2.5 font-medium">
+              {t('result.keywords')}
+            </h3>
             <div className="flex flex-wrap gap-2">
               {summary.keywords.map((k, i) => (
-                <span key={i} className="bg-muted text-primary rounded-md px-2 py-1 text-xs">
+                <span
+                  key={i}
+                  className="bg-primary-soft text-primary text-caption rounded-md px-2 py-1 font-medium"
+                >
                   {k}
                 </span>
               ))}
             </div>
           </section>
           <section>
-            <h3 className="mb-3 text-sm font-semibold">{t('result.overview')}</h3>
+            <h3 className="text-muted-foreground text-body2 mb-2.5 font-medium">
+              {t('result.overview')}
+            </h3>
             <p className="text-muted-foreground max-w-prose text-sm leading-7 whitespace-pre-wrap">
               {summary.overview}
             </p>
           </section>
           <section>
-            <h3 className="mb-3 text-sm font-semibold">{t('result.chapters')}</h3>
+            <h3 className="text-muted-foreground text-body2 mb-2.5 font-medium">
+              {t('result.chapters')}
+            </h3>
             <ol className="space-y-2">
               {summary.chapters.map((c, i) => (
                 <li key={i}>
@@ -47,7 +61,10 @@ export const MeetingGuide = memo(function MeetingGuide({
                     type="button"
                     onClick={() => seek(c.startMs)}
                     aria-current={current === i ? 'true' : undefined}
-                    className={`hover:bg-muted w-full rounded-lg p-3 text-left ${current === i ? 'bg-muted' : ''}`}
+                    className={cn(
+                      'rounded-control hover:bg-surface focus-visible:outline-ring w-full p-3 text-left transition-colors focus-visible:outline-2',
+                      current === i && 'bg-surface shadow-xs',
+                    )}
                   >
                     <div className="flex items-baseline gap-3">
                       <span className="text-primary shrink-0 text-xs tabular-nums">
@@ -62,7 +79,9 @@ export const MeetingGuide = memo(function MeetingGuide({
             </ol>
           </section>
           <section>
-            <h3 className="mb-3 text-sm font-semibold">{t('result.speakerSummaries')}</h3>
+            <h3 className="text-muted-foreground text-body2 mb-2.5 font-medium">
+              {t('result.speakerSummaries')}
+            </h3>
             <div className="space-y-4">
               {summary.speakerSummaries.map((s, i) => (
                 <div key={i}>
@@ -77,7 +96,9 @@ export const MeetingGuide = memo(function MeetingGuide({
             </div>
           </section>
           <section>
-            <h3 className="mb-3 text-sm font-semibold">{t('result.keyPoints')}</h3>
+            <h3 className="text-muted-foreground text-body2 mb-2.5 font-medium">
+              {t('result.keyPoints')}
+            </h3>
             <ul className="text-muted-foreground list-disc space-y-2 pl-5 text-sm leading-6">
               {summary.keyPoints.map((p, i) => (
                 <li key={i}>{p}</li>
@@ -85,10 +106,12 @@ export const MeetingGuide = memo(function MeetingGuide({
             </ul>
           </section>
           <section>
-            <h3 className="mb-3 text-sm font-semibold">{t('result.actions')}</h3>
+            <h3 className="text-muted-foreground text-body2 mb-2.5 font-medium">
+              {t('result.actions')}
+            </h3>
             <ul className="space-y-3">
               {summary.actionItems.map((a, i) => (
-                <li key={i} className="border-border border-l-2 pl-3 text-sm leading-6">
+                <li key={i} className="border-accent-500 border-l-2 pl-3 text-sm leading-6">
                   <p>{a.text}</p>
                   {(a.owner || a.due) && (
                     <p className="text-muted-foreground text-xs">

@@ -7,7 +7,7 @@ import {
 } from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
 import { EditConflictError, type MeetingEdit } from '@huilu/storage'
-import { Button } from '@huilu/ui'
+import { ArrowLeft, Button, ChevronDown, Star, cn, fieldClass } from '@huilu/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -30,9 +30,6 @@ import { useReadiness } from '@/lib/readiness'
 
 const emptySegments: Transcript['segments'] = []
 
-const fieldClass =
-  'border-border bg-background focus:border-primary rounded-lg border px-3 py-2 text-sm'
-
 export function ResultPage() {
   const { meetingId } = useParams({ strict: false })
   const { t } = useTranslation()
@@ -53,15 +50,20 @@ export function ResultPage() {
   if (query.error || !query.data)
     return (
       <section className="space-y-4">
-        <Link to="/" className="text-primary">
-          ← {t('nav.history')}
-        </Link>
-        <h1 className="text-xl font-semibold">{t('result.unavailable')}</h1>
-        <p className="text-muted-foreground">{t('result.unavailableHint')}</p>
-        <Button onClick={() => void query.refetch()}>{t('history.refresh')}</Button>
-        <Button asChild variant="outline">
-          <Link to="/settings">{t('nav.settings')}</Link>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/">
+            <ArrowLeft aria-hidden="true" />
+            {t('nav.history')}
+          </Link>
         </Button>
+        <h1 className="text-title2 font-semibold">{t('result.unavailable')}</h1>
+        <p className="text-muted-foreground">{t('result.unavailableHint')}</p>
+        <div className="flex gap-2">
+          <Button onClick={() => void query.refetch()}>{t('history.refresh')}</Button>
+          <Button asChild variant="outline">
+            <Link to="/settings">{t('nav.settings')}</Link>
+          </Button>
+        </div>
       </section>
     )
   return (
@@ -83,6 +85,8 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
   const [time, setTime] = useState(0)
   const [search, setSearch] = useState('')
   const [selectedSpeaker, setSpeaker] = useState('')
+  // 窄屏用选项卡在逐字稿与导读之间切换；宽屏两栏同时显示
+  const [pane, setPane] = useState<'transcript' | 'guide'>('transcript')
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error' | 'conflict' | 'empty'>(
     'saved',
   )
@@ -157,12 +161,16 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
   const active = segments.findLastIndex((s) => s.startMs <= time && s.endMs > time)
   const query = search.trim().toLocaleLowerCase()
   return (
-    <article className="mx-auto max-w-[1440px] pb-28">
-      <header className="border-border mb-6 flex flex-wrap items-start gap-4 border-b pb-5">
-        <Link to="/" className="text-muted-foreground hover:bg-muted rounded-lg px-2 py-2 text-sm">
-          ← {t('nav.history')}
-        </Link>
-        <div className="min-w-48 flex-1">
+    <article className="mx-auto max-w-[1440px] pb-40 sm:pb-28">
+      <header className="border-border mb-6 flex flex-wrap items-start gap-x-3 gap-y-2 border-b pb-5">
+        <Button asChild variant="ghost" size="sm" className="text-muted-foreground mt-0.5">
+          <Link to="/">
+            <ArrowLeft aria-hidden="true" />
+            {t('nav.history')}
+          </Link>
+        </Button>
+        <span className="flex-1 md:hidden" />
+        <div className="order-last min-w-48 basis-full md:order-none md:flex-1 md:basis-auto">
           <input
             key={meeting.title}
             aria-label={t('result.title')}
@@ -170,7 +178,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
             defaultValue={meeting.title}
             readOnly={doc.readOnly}
             maxLength={200}
-            className="focus:border-primary w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-xl font-semibold"
+            className="text-title2 rounded-control hover:bg-muted focus-visible:bg-field w-full bg-transparent px-2 py-1 font-semibold outline-none read-only:hover:bg-transparent"
             onBlur={(e) => {
               if (e.target.value !== meeting.title)
                 void save({ type: 'title', value: e.target.value, previous: meeting.title })
@@ -181,7 +189,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
           />
           <p
             aria-live="polite"
-            className={`px-2 pt-1 text-xs ${saveState === 'error' || saveState === 'conflict' || saveState === 'empty' ? 'text-danger' : 'text-muted-foreground'}`}
+            className={`text-caption px-2 pt-1 ${saveState === 'error' || saveState === 'conflict' || saveState === 'empty' ? 'text-danger' : 'text-muted-foreground'}`}
           >
             {doc.readOnly ? t('result.readOnly') : t(`result.save.${saveState}`)}
           </p>
@@ -197,12 +205,16 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
         </div>
         <Button
           variant="ghost"
+          size="icon"
           aria-label={meeting.favorite ? t('result.unfavorite') : t('result.favorite')}
           aria-pressed={meeting.favorite ?? false}
           disabled={doc.readOnly || saveState === 'saving'}
           onClick={() => void save({ type: 'favorite', value: !meeting.favorite })}
         >
-          {meeting.favorite ? '★' : '☆'}
+          <Star
+            aria-hidden="true"
+            className={meeting.favorite ? 'fill-amber-400 text-amber-400' : undefined}
+          />
         </Button>
         <MeetingExports doc={doc} />
       </header>
@@ -212,8 +224,31 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
           {t('result.damagedText')}
         </p>
       )}
+      <div
+        role="tablist"
+        aria-label={t('result.transcript')}
+        className="border-border mb-5 flex gap-1 border-b lg:hidden"
+      >
+        {(['transcript', 'guide'] as const).map((p) => (
+          <button
+            key={p}
+            type="button"
+            role="tab"
+            aria-selected={pane === p}
+            onClick={() => setPane(p)}
+            className={cn(
+              'text-body focus-visible:outline-ring -mb-px border-b-2 px-2.5 py-2 transition-colors duration-200 focus-visible:outline-2',
+              pane === p
+                ? 'border-accent-600 text-primary font-medium'
+                : 'text-muted-foreground hover:text-foreground border-transparent',
+            )}
+          >
+            {t(p === 'transcript' ? 'result.transcript' : 'result.guide')}
+          </button>
+        ))}
+      </div>
       <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,1fr)]">
-        <section className="min-w-0 space-y-5">
+        <section className={cn('min-w-0 space-y-5', pane !== 'transcript' && 'hidden lg:block')}>
           <MeetingPlayer
             media={media}
             meeting={meeting}
@@ -227,8 +262,8 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
             </p>
           )}
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{t('result.transcript')}</h2>
-            <span className="text-muted-foreground text-xs">
+            <h2 className="text-headline font-semibold">{t('result.transcript')}</h2>
+            <span className="text-muted-foreground text-caption">
               {new Date(meeting.createdAt).toLocaleDateString()}
             </span>
           </div>
@@ -240,12 +275,12 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('result.search')}
-                className={`${fieldClass} w-full`}
+                className={cn(fieldClass, 'w-full')}
               />
             </label>
             <select
               aria-label={t('result.filterSpeaker')}
-              className={`${fieldClass} w-auto`}
+              className={cn(fieldClass, 'w-auto max-w-full')}
               value={speaker}
               onChange={(e) => setSpeaker(e.target.value)}
             >
@@ -266,7 +301,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
             />
           )}
           {!transcript && (
-            <p className="text-muted-foreground bg-muted rounded-xl p-5 text-sm leading-6">
+            <p className="text-muted-foreground bg-muted rounded-2xl p-5 text-sm leading-6">
               {t('result.noTranscript')}
             </p>
           )}
@@ -283,6 +318,7 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
           />
         </section>
         <MeetingGuide
+          className={pane !== 'guide' ? 'hidden lg:block' : undefined}
           meeting={meeting}
           summary={summary}
           seek={seek}
@@ -307,9 +343,15 @@ function SpeakerEditor({
   const [from, setFrom] = useState(speakers[0]?.id ?? '')
   const [into, setInto] = useState(speakers[1]?.id ?? '')
   return (
-    <details className="border-border rounded-lg border p-3 text-sm">
-      <summary className="cursor-pointer font-medium">{t('result.manageSpeakers')}</summary>
-      <div className="mt-3 space-y-3">
+    <details className="group border-border bg-surface rounded-2xl border text-sm">
+      <summary className="hover:bg-muted flex cursor-pointer list-none items-center justify-between rounded-2xl px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
+        {t('result.manageSpeakers')}
+        <ChevronDown
+          aria-hidden="true"
+          className="text-muted-foreground size-4 transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div className="space-y-3 px-4 pb-4">
         {speakers.map((s) => (
           <label key={s.id} className="flex items-center gap-3">
             <span className="text-muted-foreground w-20 shrink-0 truncate">{s.name}</span>
@@ -318,7 +360,7 @@ function SpeakerEditor({
               defaultValue={s.name}
               disabled={disabled}
               maxLength={100}
-              className={`${fieldClass} w-full`}
+              className={cn(fieldClass, 'w-full')}
               onBlur={(e) => {
                 if (e.target.value !== s.name)
                   void save({ type: 'rename', id: s.id, value: e.target.value, previous: s.name })
@@ -344,7 +386,7 @@ function SpeakerEditor({
                 value={from}
                 disabled={disabled}
                 onChange={(e) => setFrom(e.target.value)}
-                className={`${fieldClass} w-auto`}
+                className={cn(fieldClass, 'w-auto')}
               >
                 {speakers.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -358,7 +400,7 @@ function SpeakerEditor({
                 value={into}
                 disabled={disabled}
                 onChange={(e) => setInto(e.target.value)}
-                className={`${fieldClass} w-auto`}
+                className={cn(fieldClass, 'w-auto')}
               >
                 {speakers.map((s) => (
                   <option key={s.id} value={s.id}>

@@ -75,11 +75,11 @@ const TranscriptRow = memo(function TranscriptRow({
         type="button"
         data-segment={index}
         aria-current={active ? 'true' : undefined}
-        className={`hover:bg-muted w-full rounded-xl border p-4 text-left ${active ? 'border-primary bg-muted' : 'border-transparent'}`}
+        className={`focus-visible:outline-ring w-full rounded-2xl border p-4 text-left transition-colors focus-visible:outline-2 ${active ? 'border-accent-500/40 bg-primary-soft' : 'hover:bg-muted border-transparent'}`}
         onClick={() => seek(segment.startMs)}
       >
         <div className="mb-2 flex items-center gap-3">
-          <span className="bg-primary/10 text-primary flex h-7 w-7 items-center justify-center rounded-full text-xs">
+          <span className="bg-primary-soft text-primary flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium">
             {name.slice(0, 1)}
           </span>
           <span className="text-sm font-medium">{name}</span>

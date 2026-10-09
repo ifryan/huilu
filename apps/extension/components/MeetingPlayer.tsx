@@ -1,7 +1,7 @@
 import type { Meeting, Summary } from '@huilu/core'
 import { timestamp } from '@huilu/exporters'
 import { useTranslation } from '@huilu/i18n'
-import { Button } from '@huilu/ui'
+import { Button, cn, fieldClass } from '@huilu/ui'
 import { useImperativeHandle, useRef, useState, type RefObject } from 'react'
 
 export interface PlayerControl {
@@ -74,7 +74,7 @@ export function MeetingPlayer({
   }
   return (
     <>
-      <div className="bg-muted overflow-hidden rounded-xl">
+      <div className="bg-muted overflow-hidden rounded-2xl">
         {media?.kind === 'video' ? (
           <video
             ref={element}
@@ -86,7 +86,7 @@ export function MeetingPlayer({
           />
         ) : (
           <div className="flex h-44 flex-col items-center justify-center gap-4">
-            <div className="text-primary flex h-12 items-center gap-1" aria-hidden="true">
+            <div className="text-accent-500 flex h-12 items-center gap-1" aria-hidden="true">
               {Array.from({ length: 45 }, (_, i) => (
                 <span
                   key={i}
@@ -107,8 +107,9 @@ export function MeetingPlayer({
           {t('result.playbackError')}
         </p>
       )}
-      <div className="bg-background border-border fixed inset-x-0 bottom-0 z-20 border-t px-4 py-3 shadow-sm">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-3">
+      {/* 浮动播放条：宽屏让出左侧浮动侧栏（见 Layout），窄屏贴底留边 */}
+      <div className="bg-surface/95 shadow-float fixed inset-x-2 bottom-2 z-20 rounded-2xl px-3 py-2.5 backdrop-blur md:right-3 md:bottom-3 md:left-[284px] md:px-4">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 sm:gap-3">
           <Button
             variant="outline"
             size="sm"
@@ -130,7 +131,7 @@ export function MeetingPlayer({
           >
             +15s
           </Button>
-          <span className="text-muted-foreground text-xs tabular-nums">
+          <span className="text-muted-foreground text-caption tabular-nums">
             {timestamp(time)} / {timestamp(duration)}
           </span>
           <div className="relative min-w-40 flex-1 pb-2">
@@ -177,7 +178,7 @@ export function MeetingPlayer({
               setRate(e.target.value)
               if (element.current) element.current.playbackRate = Number(e.target.value)
             }}
-            className="border-border bg-background rounded-lg border px-2 py-2 text-sm"
+            className={cn(fieldClass, 'h-8 w-auto rounded-lg')}
           >
             {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((r) => (
               <option key={r} value={r}>
