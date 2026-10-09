@@ -22,13 +22,17 @@ export function DataFolderSection({ compact = false }: { compact?: boolean }) {
       title={t('settings.dataFolder')}
       description={compact ? t('onboarding.step1Desc') : undefined}
       aside={
-        <StatusPill ok={permission === 'granted'}>
+        <StatusPill
+          tone={
+            permission === 'granted' ? 'success' : permission === 'denied' ? 'error' : 'warning'
+          }
+        >
           {t(`settings.folder.status.${permission}`)}
         </StatusPill>
       }
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm">
+        <div className="text-body">
           <span className="text-muted-foreground">
             {t('settings.folder.current')}
             {t('common.colon')}
@@ -55,13 +59,13 @@ export function DataFolderSection({ compact = false }: { compact?: boolean }) {
       </div>
 
       {action.error && (
-        <p className="text-danger text-sm">
+        <p className="text-danger text-body2">
           {t('settings.folder.pickFailed', { reason: action.error.message })}
         </p>
       )}
 
       {!compact && permission === 'granted' && (
-        <div className="flex items-center gap-3 text-sm">
+        <div className="text-body flex items-center gap-3">
           <span className="text-muted-foreground">
             {t('settings.folder.usage')}
             {t('common.colon')}
@@ -82,7 +86,7 @@ export function DataFolderSection({ compact = false }: { compact?: boolean }) {
         </div>
       )}
 
-      <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-xs">
+      <ul className="text-muted-foreground bg-muted rounded-control text-caption list-disc space-y-1 py-3 pr-3 pl-7">
         {permission === 'unset' && <li>{t('settings.folder.suggestion')}</li>}
         <li>{t('settings.folder.persistHint')}</li>
         <li>{t('settings.folder.reloadHint')}</li>
