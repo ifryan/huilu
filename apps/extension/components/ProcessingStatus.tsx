@@ -81,7 +81,7 @@ export function ProcessingStatus({
 
   const content = render(view)
   return (
-    <div className="flex flex-col gap-2 text-xs">
+    <div className="text-body2 flex flex-col gap-2">
       {content}
       {actionError && <p className="text-danger">{actionError}</p>}
     </div>
@@ -121,7 +121,7 @@ export function ProcessingStatus({
             <span>{t(`processing.step.${v.step}`)}</span>
             {v.progress !== undefined && (
               <>
-                <progress className="h-1.5 w-32" max={1} value={v.progress} />
+                <progress className="h-1.5 w-32 accent-current" max={1} value={v.progress} />
                 <span>{Math.round(v.progress * 100)}%</span>
               </>
             )}
@@ -129,7 +129,7 @@ export function ProcessingStatus({
         )
       case 'retrying':
         return (
-          <p className="text-amber-700 dark:text-amber-400">
+          <p className="text-warning">
             {t('processing.retrying', {
               step: t(`processing.stepName.${v.error.step}`),
               reason: reason(v.error),
@@ -173,7 +173,7 @@ export function ProcessingStatus({
       case 'done':
         return (
           <>
-            <p className="text-emerald-700 dark:text-emerald-400">
+            <p className="text-success">
               {v.folderDir
                 ? t('processing.done', { folder: v.folderDir })
                 : t('history.transcribed')}
