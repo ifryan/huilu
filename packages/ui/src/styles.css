@@ -136,6 +136,12 @@
     @apply bg-background text-foreground text-body antialiased;
     accent-color: var(--color-accent-600);
   }
+  /* 没有单独焦点样式的链接等也用 Board UI 的 2px 蓝色焦点外环 */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
   /* 录音电平：细长胶囊，填充色用强调色 */
   meter.hl-meter {
     appearance: none;

@@ -1,7 +1,10 @@
 import { cn } from '@huilu/ui'
 import type { ReactNode } from 'react'
 
-/** 设置分组卡片：白底细描边、圆角 16、轻投影（Board UI 卡片 / 表格容器） */
+/**
+ * 设置分组卡片：白底细描边、圆角 16、轻投影（Board UI 卡片 / 表格容器）。
+ * 深色下控件表面与输入填充同为 neutral-800，卡片退到 neutral-900 才能看清输入框
+ */
 export function Section({
   title,
   description,
@@ -14,7 +17,7 @@ export function Section({
   children: ReactNode
 }) {
   return (
-    <section className="border-border bg-surface shadow-card flex flex-col gap-4 rounded-2xl border p-5">
+    <section className="border-border bg-surface dark:bg-muted shadow-card flex flex-col gap-4 rounded-2xl border p-5">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-headline font-semibold">{title}</h2>

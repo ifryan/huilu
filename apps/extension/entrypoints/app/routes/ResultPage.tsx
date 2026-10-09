@@ -343,7 +343,7 @@ function SpeakerEditor({
   const [from, setFrom] = useState(speakers[0]?.id ?? '')
   const [into, setInto] = useState(speakers[1]?.id ?? '')
   return (
-    <details className="group border-border bg-surface rounded-2xl border text-sm">
+    <details className="group border-border bg-surface dark:bg-muted rounded-2xl border text-sm">
       <summary className="hover:bg-muted flex cursor-pointer list-none items-center justify-between rounded-2xl px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
         {t('result.manageSpeakers')}
         <ChevronDown

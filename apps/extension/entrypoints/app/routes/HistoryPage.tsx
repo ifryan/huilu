@@ -40,7 +40,7 @@ export function HistoryPage() {
         </p>
       )}
       {/* Board UI 表格容器：工具栏 + 分隔行，窄屏每条记录自然换行为卡片式 */}
-      <div className="border-border bg-surface shadow-card overflow-hidden rounded-2xl border">
+      <div className="border-border bg-surface dark:bg-muted shadow-card overflow-hidden rounded-2xl border">
         <div className="border-border flex flex-wrap items-center gap-2 border-b px-4 py-3">
           <div className="text-body mr-auto font-medium tabular-nums">
             {items && t('library.count', { count: items.length })}

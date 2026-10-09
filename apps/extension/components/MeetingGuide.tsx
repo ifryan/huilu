@@ -62,8 +62,8 @@ export const MeetingGuide = memo(function MeetingGuide({
                     onClick={() => seek(c.startMs)}
                     aria-current={current === i ? 'true' : undefined}
                     className={cn(
-                      'rounded-control hover:bg-surface focus-visible:outline-ring w-full p-3 text-left transition-colors focus-visible:outline-2',
-                      current === i && 'bg-surface shadow-xs',
+                      'rounded-control hover:bg-muted lg:hover:bg-surface focus-visible:outline-ring w-full p-3 text-left transition-colors focus-visible:outline-2',
+                      current === i && 'bg-muted lg:bg-surface lg:shadow-xs',
                     )}
                   >
                     <div className="flex items-baseline gap-3">
