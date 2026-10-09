@@ -1,7 +1,7 @@
 import type { TranscriptionProvider } from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
 import { ProviderError, describeConfigFields, getPresets, type ConfigField } from '@huilu/providers'
-import { Button } from '@huilu/ui'
+import { Button, fieldClass } from '@huilu/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import { useDynamicT } from '@/lib/i18n'
@@ -23,7 +23,7 @@ import {
 import { isReady, readinessKey } from '@/lib/readiness'
 import { llmSetting, transcriptionSetting } from '@/lib/settings'
 import { requestHostPermission } from '@/platform'
-import { Section, StatusPill, inputClass } from './Section'
+import { Section, StatusPill } from './Section'
 
 const settingItem = { transcription: transcriptionSetting, llm: llmSetting }
 
@@ -215,7 +215,7 @@ function ProviderForm({
       title={kind === 'transcription' ? t('settings.transcription') : t('settings.llm')}
       description={description}
       aside={
-        <StatusPill ok={configured}>
+        <StatusPill tone={dirty ? 'info' : configured ? 'success' : 'warning'}>
           {dirty
             ? t('settings.unsaved')
             : configured
@@ -234,7 +234,7 @@ function ProviderForm({
         {providers.length > 1 && (
           <Field label={t('settings.provider')}>
             <select
-              className={inputClass}
+              className={fieldClass}
               value={provider.id}
               onChange={(e) => selectProvider(e.target.value)}
             >
@@ -256,19 +256,19 @@ function ProviderForm({
               onChange={(v) => setField(field, v)}
             />
             {field.kind === 'secret' && keyCleared && (
-              <p className="mt-1 text-xs text-amber-600">{t('settings.keyCleared')}</p>
+              <p className="text-warning text-caption mt-1">{t('settings.keyCleared')}</p>
             )}
             {field.hintKey && (
-              <p className="text-muted-foreground mt-1 text-xs">{dt(field.hintKey)}</p>
+              <p className="text-muted-foreground text-caption mt-1">{dt(field.hintKey)}</p>
             )}
             {field.key === 'preset' && preset?.hintKey && (
-              <p className="text-muted-foreground mt-1 text-xs">{dt(preset.hintKey)}</p>
+              <p className="text-muted-foreground text-caption mt-1">{dt(preset.hintKey)}</p>
             )}
           </Field>
         ))}
 
         {capabilities && (
-          <div className="bg-muted rounded-lg px-3 py-2 text-xs">
+          <div className="bg-muted text-body2 rounded-control px-3 py-2">
             <span className="font-medium">
               {t('settings.capabilities')}
               {t('common.colon')}
@@ -296,16 +296,19 @@ function ProviderForm({
           >
             {test.state === 'testing' ? t('settings.testing') : t('settings.test')}
           </Button>
-          {saved && <span className="text-sm text-emerald-600">{t('settings.saved')}</span>}
+          {saved && <span className="text-success text-body2">{t('settings.saved')}</span>}
         </div>
 
         {test.state === 'ok' && (
-          <p className="text-sm text-emerald-600" role="status">
+          <p className="text-success text-body2" role="status">
             ✓ {t('settings.testOk')}
           </p>
         )}
         {test.state === 'failed' && (
-          <div className="border-danger/40 bg-danger/10 rounded-lg px-3 py-2 text-sm" role="alert">
+          <div
+            className="bg-error-soft text-error rounded-control text-body2 px-3 py-2"
+            role="alert"
+          >
             <div className="font-medium">
               {t('settings.testFailed')}
               {t('common.colon')}
@@ -333,8 +336,8 @@ function Field({
   children: React.ReactNode
 }) {
   return (
-    <label className="flex flex-col gap-1.5 text-sm">
-      <span>
+    <label className="text-body flex flex-col gap-1">
+      <span className="font-medium">
         {label}
         {required && <span className="text-danger ml-0.5">*</span>}
       </span>
@@ -360,7 +363,7 @@ function FieldInput({
 
   if (field.kind === 'select') {
     return (
-      <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className={fieldClass} value={value} onChange={(e) => onChange(e.target.value)}>
         {field.options?.map((o) => (
           <option key={o} value={o}>
             {field.optionKeyPrefix ? dt(`${field.optionKeyPrefix}.${o}`) : o}
@@ -372,7 +375,7 @@ function FieldInput({
 
   const input = (
     <input
-      className={inputClass}
+      className={fieldClass}
       aria-invalid={invalid || undefined}
       type={field.kind === 'secret' && !reveal ? 'password' : field.kind === 'url' ? 'url' : 'text'}
       autoComplete="off"
