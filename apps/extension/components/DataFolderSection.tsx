@@ -86,7 +86,7 @@ export function DataFolderSection({ compact = false }: { compact?: boolean }) {
         </div>
       )}
 
-      <ul className="text-muted-foreground bg-muted rounded-control text-caption list-disc space-y-1 py-3 pr-3 pl-7">
+      <ul className="text-muted-foreground bg-muted dark:bg-background rounded-control text-caption list-disc space-y-1 py-3 pr-3 pl-7">
         {permission === 'unset' && <li>{t('settings.folder.suggestion')}</li>}
         <li>{t('settings.folder.persistHint')}</li>
         <li>{t('settings.folder.reloadHint')}</li>
