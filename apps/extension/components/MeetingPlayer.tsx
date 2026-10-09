@@ -3,6 +3,7 @@ import { timestamp } from '@huilu/exporters'
 import { useTranslation } from '@huilu/i18n'
 import { Button, cn, fieldClass } from '@huilu/ui'
 import { useImperativeHandle, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 
 export interface PlayerControl {
   seek: (ms: number) => void
@@ -107,87 +108,91 @@ export function MeetingPlayer({
           {t('result.playbackError')}
         </p>
       )}
-      {/* 浮动播放条：宽屏让出左侧浮动侧栏（见 Layout），窄屏贴底留边 */}
-      <div className="bg-surface/95 shadow-float fixed inset-x-2 bottom-2 z-20 rounded-2xl px-3 py-2.5 backdrop-blur md:right-3 md:bottom-3 md:left-[284px] md:px-4">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 sm:gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!media}
-            aria-label={t('result.back15')}
-            onClick={() => seek(time - 15000)}
-          >
-            −15s
-          </Button>
-          <Button size="sm" disabled={!media} onClick={toggle}>
-            {playing ? t('result.pause') : t('result.play')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!media}
-            aria-label={t('result.forward15')}
-            onClick={() => seek(time + 15000)}
-          >
-            +15s
-          </Button>
-          <span className="text-muted-foreground text-caption tabular-nums">
-            {timestamp(time)} / {timestamp(duration)}
-          </span>
-          <div className="relative min-w-40 flex-1 pb-2">
-            <input
-              type="range"
-              min={0}
-              max={Math.max(1, duration)}
-              step={100}
-              value={Math.min(time, duration)}
+      {/* 浮动播放条：宽屏让出左侧浮动侧栏（见 Layout），窄屏贴底留边。
+          挂到 body，窄屏切到导读、预览所在区块被隐藏时仍能控制播放 */}
+      {createPortal(
+        <div className="bg-surface/95 shadow-float fixed inset-x-2 bottom-2 z-20 rounded-2xl px-3 py-2.5 backdrop-blur md:right-3 md:bottom-3 md:left-[284px] md:px-4">
+          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!media}
-              aria-label={t('result.seek')}
-              onChange={(e) => seek(Number(e.target.value))}
-              className="accent-primary w-full"
-            />
-            {summary?.chapters.map((c, i) => (
-              <button
-                key={i}
-                type="button"
-                title={`${timestamp(c.startMs)} ${c.title}`}
-                aria-label={`${t('result.chapter')}: ${c.title}`}
-                onClick={() => control.current?.seek(c.startMs)}
+              aria-label={t('result.back15')}
+              onClick={() => seek(time - 15000)}
+            >
+              −15s
+            </Button>
+            <Button size="sm" disabled={!media} onClick={toggle}>
+              {playing ? t('result.pause') : t('result.play')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!media}
+              aria-label={t('result.forward15')}
+              onClick={() => seek(time + 15000)}
+            >
+              +15s
+            </Button>
+            <span className="text-muted-foreground text-caption tabular-nums">
+              {timestamp(time)} / {timestamp(duration)}
+            </span>
+            <div className="relative min-w-40 flex-1 pb-2">
+              <input
+                type="range"
+                min={0}
+                max={Math.max(1, duration)}
+                step={100}
+                value={Math.min(time, duration)}
                 disabled={!media}
-                className="border-background bg-primary absolute bottom-0 h-3 w-3 -translate-x-1/2 rounded-full border-2"
-                style={{ left: `${Math.min(100, (c.startMs / Math.max(1, duration)) * 100)}%` }}
+                aria-label={t('result.seek')}
+                onChange={(e) => seek(Number(e.target.value))}
+                className="accent-primary w-full"
               />
-            ))}
-            {meeting.markers.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                title={m.label ?? t('result.marker')}
-                aria-label={m.label ?? t('result.marker')}
-                onClick={() => control.current?.seek(m.atMs)}
-                disabled={!media}
-                className="bg-foreground absolute bottom-0 h-3 w-1"
-                style={{ left: `${Math.min(100, (m.atMs / Math.max(1, duration)) * 100)}%` }}
-              />
-            ))}
+              {summary?.chapters.map((c, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  title={`${timestamp(c.startMs)} ${c.title}`}
+                  aria-label={`${t('result.chapter')}: ${c.title}`}
+                  onClick={() => control.current?.seek(c.startMs)}
+                  disabled={!media}
+                  className="border-background bg-primary absolute bottom-0 h-3 w-3 -translate-x-1/2 rounded-full border-2"
+                  style={{ left: `${Math.min(100, (c.startMs / Math.max(1, duration)) * 100)}%` }}
+                />
+              ))}
+              {meeting.markers.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  title={m.label ?? t('result.marker')}
+                  aria-label={m.label ?? t('result.marker')}
+                  onClick={() => control.current?.seek(m.atMs)}
+                  disabled={!media}
+                  className="bg-foreground absolute bottom-0 h-3 w-1"
+                  style={{ left: `${Math.min(100, (m.atMs / Math.max(1, duration)) * 100)}%` }}
+                />
+              ))}
+            </div>
+            <select
+              aria-label={t('result.speed')}
+              value={rate}
+              onChange={(e) => {
+                setRate(e.target.value)
+                if (element.current) element.current.playbackRate = Number(e.target.value)
+              }}
+              className={cn(fieldClass, 'h-8 w-auto rounded-lg')}
+            >
+              {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((r) => (
+                <option key={r} value={r}>
+                  {r}×
+                </option>
+              ))}
+            </select>
           </div>
-          <select
-            aria-label={t('result.speed')}
-            value={rate}
-            onChange={(e) => {
-              setRate(e.target.value)
-              if (element.current) element.current.playbackRate = Number(e.target.value)
-            }}
-            className={cn(fieldClass, 'h-8 w-auto rounded-lg')}
-          >
-            {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((r) => (
-              <option key={r} value={r}>
-                {r}×
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+        </div>,
+        document.body,
+      )}
     </>
   )
 }
