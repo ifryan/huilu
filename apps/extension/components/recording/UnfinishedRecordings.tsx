@@ -37,8 +37,8 @@ export function UnfinishedRecordings() {
 
   if (!data?.length && !notice) return null
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-      {notice && <p className="text-emerald-700 dark:text-emerald-400">{notice}</p>}
+    <section className="bg-warning-soft flex flex-col gap-2 rounded-2xl p-3 text-xs">
+      {notice && <p className="text-success">{notice}</p>}
       {data && data.length > 0 && (
         <>
           <div>
@@ -79,7 +79,7 @@ function UnfinishedItem({
   const { t } = useTranslation()
   const [confirming, setConfirming] = useState(false)
   return (
-    <li className="bg-background flex flex-col gap-2 rounded-md p-2">
+    <li className="bg-surface shadow-card flex flex-col gap-2 rounded-xl p-2.5">
       <div className="flex justify-between gap-2">
         <span className="truncate font-medium">{item.title}</span>
         <span className="text-muted-foreground shrink-0">

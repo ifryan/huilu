@@ -26,29 +26,17 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
   color-scheme: light dark;
 }
 
 /* WXT 给 :host 加了 all: initial !important（字体被重置成衬线体）；:where 保持最低优先级，font-mono 仍然生效 */
 :where(*) {
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'PingFang SC',
-    'Microsoft YaHei',
-    sans-serif;
+  font-family: var(--font-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :host {
-    --color-background: oklch(0.18 0.02 280);
-    --color-foreground: oklch(0.95 0.01 280);
-    --color-muted: oklch(0.25 0.02 280);
-    --color-muted-foreground: oklch(0.7 0.02 280);
-    --color-border: oklch(0.3 0.02 280);
-  }
-}
+/* 深色变量已在共享样式里同时作用于 :root 与 :host */
 
 .huilu-panel-layer {
   position: fixed;

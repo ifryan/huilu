@@ -1,9 +1,10 @@
 import { SUPPORTED_LOCALES, type Locale, useTranslation } from '@huilu/i18n'
+import { fieldClass } from '@huilu/ui'
 import { ConfigTransfer } from '@/components/ConfigTransfer'
 import { DataFolderSection } from '@/components/DataFolderSection'
 import { ProviderComparison } from '@/components/ProviderComparison'
 import { ProviderSection } from '@/components/ProviderSection'
-import { Section, inputClass } from '@/components/Section'
+import { Section } from '@/components/Section'
 import { localeSetting } from '@/lib/settings'
 
 const LOCALE_LABELS: Record<Locale, string> = { 'zh-CN': '简体中文', en: 'English' }
@@ -13,7 +14,7 @@ export function SettingsPage() {
 
   return (
     <section className="flex max-w-2xl flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('nav.settings')}</h1>
+      <h1 className="text-title2 font-semibold">{t('nav.settings')}</h1>
 
       <DataFolderSection />
 
@@ -26,7 +27,7 @@ export function SettingsPage() {
 
       <Section title={t('settings.language')}>
         <select
-          className={inputClass}
+          className={fieldClass}
           value={i18n.language}
           onChange={(e) => void localeSetting.setValue(e.target.value as Locale)}
         >

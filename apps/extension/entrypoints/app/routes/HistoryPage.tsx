@@ -1,8 +1,9 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button } from '@huilu/ui'
+import { Button, RefreshCw, Search, cn, fieldClass } from '@huilu/ui'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { ProcessingStatus } from '@/components/ProcessingStatus'
+import { StatusPill } from '@/components/Section'
 import { resultMedia, useMeetingLibrary, type LibraryItem } from '@/lib/meeting-library'
 import { openRecordingMedia } from '@/lib/library'
 import { useProcessingJobs } from '@/lib/processing-jobs'
@@ -21,25 +22,12 @@ export function HistoryPage() {
   )
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('nav.history')}</h1>
-          <p className="text-muted-foreground mt-2 text-sm">{t('library.note')}</p>
-        </div>
-        <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
-          {t('library.rebuild')}
-        </Button>
+      <header>
+        <h1 className="text-title2 font-semibold">{t('nav.history')}</h1>
+        <p className="text-muted-foreground text-body2 mt-1">{t('library.note')}</p>
       </header>
-      <input
-        type="search"
-        aria-label={t('library.search')}
-        placeholder={t('library.search')}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="border-border bg-background w-full max-w-md rounded-lg border px-3 py-2 text-sm"
-      />
       {(data?.folderUnavailable || data?.scanFailed) && (
-        <p role="status" className="border-border rounded-lg border p-3 text-sm">
+        <p role="status" className="bg-warning-soft rounded-control text-body px-3 py-2">
           {t('library.folderUnavailable')}{' '}
           <Link to="/settings" className="text-primary underline">
             {t('nav.settings')}
@@ -51,106 +39,144 @@ export function HistoryPage() {
           {t('library.loadError')}
         </p>
       )}
-      {isLoading && <p className="text-muted-foreground">{t('result.loading')}</p>}
-      {!isLoading && items?.length === 0 && (
-        <div className="bg-muted text-muted-foreground rounded-xl p-8 text-center text-sm">
-          {search ? t('result.noMatches') : t('history.empty')}
+      {/* Board UI 表格容器：工具栏 + 分隔行，窄屏每条记录自然换行为卡片式 */}
+      <div className="border-border bg-surface dark:bg-muted shadow-card overflow-hidden rounded-2xl border">
+        <div className="border-border flex flex-wrap items-center gap-2 border-b px-4 py-3">
+          <div className="text-body mr-auto font-medium tabular-nums">
+            {items && t('library.count', { count: items.length })}
+          </div>
+          <label className="relative w-full sm:w-64">
+            <Search
+              className="text-subtle-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              aria-label={t('library.search')}
+              placeholder={t('library.search')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={cn(fieldClass, 'pl-8')}
+            />
+          </label>
+          <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
+            <RefreshCw
+              className={isFetching ? 'motion-safe:animate-spin' : undefined}
+              aria-hidden="true"
+            />
+            {t('library.rebuild')}
+          </Button>
         </div>
-      )}
-      <ul className="space-y-3">
-        {items?.map((item) => {
-          const meeting = item.meeting
-          const local = item.local
-          const playable =
-            item.available &&
-            !!item.id &&
-            !item.folder?.issue &&
-            (!!item.folder || (local?.state !== 'unfinished' && local?.state !== 'damaged'))
-          return (
-            <li
-              key={item.key}
-              className="border-border flex items-start gap-4 rounded-xl border p-4"
-            >
-              <Thumbnail item={item} />
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  {playable ? (
-                    <Link
-                      to="/meeting/$meetingId"
-                      params={{ meetingId: item.id! }}
-                      className="hover:text-primary text-base font-medium break-words"
-                    >
-                      {meeting?.favorite && '★ '}
-                      {item.title}
-                    </Link>
-                  ) : (
-                    <h2 className="font-medium break-words">{item.title}</h2>
-                  )}
-                  {playable && (
-                    <Button size="sm" variant="outline" asChild>
-                      <Link to="/meeting/$meetingId" params={{ meetingId: item.id! }}>
-                        {t('library.open')}
+        {isLoading && <p className="text-muted-foreground text-body p-6">{t('result.loading')}</p>}
+        {!isLoading && items?.length === 0 && (
+          <div className="text-muted-foreground text-body p-10 text-center">
+            {search ? t('result.noMatches') : t('history.empty')}
+          </div>
+        )}
+        <ul className="divide-border divide-y">
+          {items?.map((item) => {
+            const meeting = item.meeting
+            const local = item.local
+            const playable =
+              item.available &&
+              !!item.id &&
+              !item.folder?.issue &&
+              (!!item.folder || (local?.state !== 'unfinished' && local?.state !== 'damaged'))
+            return (
+              <li
+                key={item.key}
+                className="hover:bg-muted/60 flex items-start gap-4 px-4 py-3.5 transition-colors"
+              >
+                <Thumbnail item={item} />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {playable ? (
+                      <Link
+                        to="/meeting/$meetingId"
+                        params={{ meetingId: item.id! }}
+                        className="hover:text-primary text-body font-medium break-words"
+                      >
+                        {meeting?.favorite && '★ '}
+                        {item.title}
                       </Link>
-                    </Button>
+                    ) : (
+                      <h2 className="text-body font-medium break-words">{item.title}</h2>
+                    )}
+                    {!local && meeting && (
+                      <StatusPill
+                        tone={
+                          meeting.status === 'ready'
+                            ? 'success'
+                            : meeting.status === 'failed'
+                              ? 'error'
+                              : 'warning'
+                        }
+                      >
+                        {meeting.status === 'ready' ? t('library.ready') : t('library.incomplete')}
+                      </StatusPill>
+                    )}
+                  </div>
+                  <div className="text-muted-foreground text-body2 flex flex-wrap gap-x-3 gap-y-1">
+                    <span>
+                      {meeting
+                        ? new Date(meeting.createdAt).toLocaleString()
+                        : local?.startedAt
+                          ? new Date(local.startedAt).toLocaleString()
+                          : ''}
+                    </span>
+                    <span>{formatDuration(meeting?.durationMs ?? local?.durationMs ?? 0)}</span>
+                    <span>
+                      {(meeting?.mode ?? local?.mode) === 'video'
+                        ? t('popup.modeVideo')
+                        : t('popup.modeAudio')}
+                    </span>
+                    <span>{item.folder ? t('library.inFolder') : t('library.onDevice')}</span>
+                  </div>
+                  {item.folder?.issue && (
+                    <p className="text-danger text-body2">
+                      {item.folder.issue === 'duplicate'
+                        ? t('library.duplicate')
+                        : t('library.damaged')}
+                    </p>
+                  )}
+                  {!item.available && (
+                    <p className="text-muted-foreground text-body2">{t('library.accessNeeded')}</p>
+                  )}
+                  {local && (
+                    <ProcessingStatus
+                      recording={{
+                        ...local,
+                        title: item.title,
+                        processing: meeting?.status ?? local.processing,
+                      }}
+                      job={jobs?.get(local.id)}
+                      readiness={readiness}
+                    />
+                  )}
+                  {local?.state === 'unfinished' && (
+                    <p className="text-muted-foreground text-body2">
+                      {t('history.unfinishedHint')}
+                    </p>
+                  )}
+                  {local?.state === 'damaged' && (
+                    <p className="text-danger text-body2">{t('library.damaged')}</p>
+                  )}
+                  {local?.state === 'partial' && (
+                    <p className="text-muted-foreground text-body2">{t('history.state.partial')}</p>
                   )}
                 </div>
-                <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                  <span>
-                    {meeting
-                      ? new Date(meeting.createdAt).toLocaleString()
-                      : local?.startedAt
-                        ? new Date(local.startedAt).toLocaleString()
-                        : ''}
-                  </span>
-                  <span>{formatDuration(meeting?.durationMs ?? local?.durationMs ?? 0)}</span>
-                  <span>
-                    {(meeting?.mode ?? local?.mode) === 'video'
-                      ? t('popup.modeVideo')
-                      : t('popup.modeAudio')}
-                  </span>
-                  <span>{item.folder ? t('library.inFolder') : t('library.onDevice')}</span>
-                </div>
-                {item.folder?.issue && (
-                  <p className="text-danger text-xs">
-                    {item.folder.issue === 'duplicate'
-                      ? t('library.duplicate')
-                      : t('library.damaged')}
-                  </p>
+                {playable && (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/meeting/$meetingId" params={{ meetingId: item.id! }}>
+                      {t('library.open')}
+                    </Link>
+                  </Button>
                 )}
-                {!item.available && (
-                  <p className="text-muted-foreground text-xs">{t('library.accessNeeded')}</p>
-                )}
-                {local ? (
-                  <ProcessingStatus
-                    recording={{
-                      ...local,
-                      title: item.title,
-                      processing: meeting?.status ?? local.processing,
-                    }}
-                    job={jobs?.get(local.id)}
-                    readiness={readiness}
-                  />
-                ) : (
-                  meeting && (
-                    <p className="text-muted-foreground text-xs">
-                      {meeting.status === 'ready' ? t('library.ready') : t('library.incomplete')}
-                    </p>
-                  )
-                )}
-                {local?.state === 'unfinished' && (
-                  <p className="text-muted-foreground text-xs">{t('history.unfinishedHint')}</p>
-                )}
-                {local?.state === 'damaged' && (
-                  <p className="text-danger text-xs">{t('library.damaged')}</p>
-                )}
-                {local?.state === 'partial' && (
-                  <p className="text-muted-foreground text-xs">{t('history.state.partial')}</p>
-                )}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
     </section>
   )
 }
@@ -201,7 +227,7 @@ function Thumbnail({ item }: { item: LibraryItem }) {
   return (
     <div
       ref={host}
-      className="bg-muted text-primary hidden h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:flex"
+      className="bg-muted text-primary hidden h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl sm:flex"
       aria-hidden="true"
     >
       {src ? (
@@ -215,7 +241,7 @@ function Thumbnail({ item }: { item: LibraryItem }) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <span className="text-2xl">{video ? '▷' : '▂▅▃▆▂'}</span>
+        <span className="text-xl">{video ? '▷' : '▂▅▃▆▂'}</span>
       )}
     </div>
   )

@@ -2,7 +2,7 @@ import { browser } from '#imports'
 import type { RecordingMode, VideoSource } from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
 import { estimateBytesPerHour, type VideoFps, type VideoResolution } from '@huilu/recorder'
-import { Button } from '@huilu/ui'
+import { Button, fieldClass } from '@huilu/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { sendMessage } from '@/lib/messaging'
@@ -123,7 +123,7 @@ export function RecordingSetup({
           ]}
         />
         {prefs.videoSource !== 'tab' && (
-          <span className="text-muted-foreground text-xs">{t('popup.sourceDesktopHint')}</span>
+          <span className="text-muted-foreground text-caption">{t('popup.sourceDesktopHint')}</span>
         )}
       </Field>
 
@@ -149,20 +149,21 @@ export function RecordingSetup({
           </div>
         </Field>
       )}
-      <span className="text-muted-foreground -mt-2 text-xs">
+      <span className="text-muted-foreground text-caption -mt-2">
         {t('popup.estimate', { size: formatBytes(perHour) })}
       </span>
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="flex items-center gap-2">
+      <label className="text-body flex flex-col gap-1">
+        <span className="flex items-center gap-2 font-medium">
           <input
             type="checkbox"
             checked={prefs.sourceAudio !== false}
+            className="size-4"
             onChange={(e) => updatePrefs({ sourceAudio: e.target.checked })}
           />
           {t('popup.sourceAudio')}
         </span>
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-caption">
           {t(
             prefs.videoSource === 'tab'
               ? 'popup.sourceAudioTabHint'
@@ -181,7 +182,7 @@ export function RecordingSetup({
 
       <Field label={t('popup.language')}>
         <select
-          className="border-border bg-background rounded-lg border px-2 py-1.5 text-sm"
+          className={fieldClass}
           value={prefs.language}
           onChange={(e) => updatePrefs({ language: e.target.value as MeetingLanguage })}
         >
@@ -195,18 +196,25 @@ export function RecordingSetup({
 
       <Field label={t('popup.meetingTitle')}>
         <input
-          className="border-border bg-background rounded-lg border px-2 py-1.5 text-sm"
+          className={fieldClass}
           value={title}
           placeholder={t('popup.meetingTitlePlaceholder')}
           onChange={(e) => setTitle(e.target.value)}
         />
       </Field>
 
-      {error && <p className="text-danger text-xs">{error}</p>}
-      <Button size="lg" disabled={starting || !loaded || tab.id === undefined} onClick={start}>
+      {error && <p className="text-danger text-body2">{error}</p>}
+      <Button
+        size="lg"
+        className="w-full"
+        disabled={starting || !loaded || tab.id === undefined}
+        onClick={start}
+      >
         {starting ? t('popup.starting') : t('popup.start')}
       </Button>
-      <span className="text-muted-foreground -mt-2 text-center text-xs">{t('popup.shortcut')}</span>
+      <span className="text-muted-foreground text-caption -mt-2 text-center">
+        {t('popup.shortcut')}
+      </span>
     </div>
   )
 }

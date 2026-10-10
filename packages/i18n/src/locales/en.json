@@ -450,6 +450,7 @@
     "damaged": "This record could not be read. Original files have been kept.",
     "accessNeeded": "Restore access to the original data folder",
     "ready": "Completed",
-    "incomplete": "Processing is incomplete"
+    "incomplete": "Processing is incomplete",
+    "count": "Meetings: {{count}}"
   }
 }

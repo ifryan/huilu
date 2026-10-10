@@ -34,16 +34,23 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
             : t('sidepanel.recordingAudio')
 
   return (
-    <section className="bg-muted flex flex-col gap-3 rounded-xl p-4">
+    <section className="bg-muted flex flex-col gap-3 rounded-2xl p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <span className={cn('size-2.5 rounded-full', live ? 'bg-danger' : 'bg-muted-foreground')} />
+        <span
+          className={cn(
+            'size-2.5 rounded-full',
+            live ? 'bg-danger motion-safe:animate-pulse' : 'bg-muted-foreground',
+          )}
+        />
         {label}
       </div>
       <div className="truncate text-sm" title={session.title}>
         {session.title}
       </div>
       <div className="flex items-baseline justify-between">
-        <span className="font-mono text-3xl tabular-nums">{formatDuration(session.elapsedMs)}</span>
+        <span className="font-mono text-3xl font-medium tabular-nums">
+          {formatDuration(session.elapsedMs)}
+        </span>
         <span className="text-muted-foreground text-xs">
           {t('sidepanel.recorded', { size: formatBytes(session.bytes) })}
         </span>
@@ -52,7 +59,7 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
       <RecordingAudioLevel status={status} />
 
       {session.warnings.map((w) => (
-        <p key={w} className="rounded-md bg-amber-500/10 px-2 py-1 text-xs">
+        <p key={w} className="bg-warning-soft text-warning rounded-lg px-2 py-1 text-xs">
           {warningText(t, w)}
         </p>
       ))}
@@ -103,7 +110,7 @@ function RecordingAudioLevel({ status }: { status: RecorderStatus }) {
     <div className="flex flex-col gap-1">
       <span className="text-muted-foreground text-xs">{t('sidepanel.audioLevel')}</span>
       <meter
-        className="h-3 w-full"
+        className="hl-meter w-full"
         min={0}
         max={1}
         value={live ? (session.audioLevel ?? 0) : 0}
@@ -132,9 +139,11 @@ export function RecordingBrief({ status }: { status: RecorderStatus }) {
             ? t('sidepanel.recordingVideo')
             : t('sidepanel.recordingAudio')
   return (
-    <section className="bg-muted flex flex-col gap-1 rounded-xl p-3 text-sm">
+    <section className="bg-muted flex flex-col gap-1 rounded-2xl p-3 text-sm">
       <div className="flex items-center gap-2 font-medium">
-        {status.state === 'recording' && <span className="size-2 rounded-full bg-red-600" />}
+        {status.state === 'recording' && (
+          <span className="bg-danger size-2 rounded-full motion-safe:animate-pulse" />
+        )}
         {label} · {formatDuration(session.elapsedMs)}
       </div>
       <div className="text-muted-foreground truncate text-xs">{session.title}</div>
@@ -148,7 +157,7 @@ export function RecordingBrief({ status }: { status: RecorderStatus }) {
 export function LastRecordingNotice({ result }: { result: LastRecording }) {
   const { t } = useTranslation()
   return (
-    <section className="border-border flex flex-col gap-1 rounded-xl border p-4 text-sm">
+    <section className="border-border bg-surface shadow-card flex flex-col gap-1 rounded-2xl border p-4 text-sm">
       {result.saved ? (
         <>
           <div className="font-medium">
@@ -182,7 +191,7 @@ export function LastRecordingNotice({ result }: { result: LastRecording }) {
 export function StartErrorNotice({ error }: { error: string }) {
   const { t } = useTranslation()
   return (
-    <p className="border-border text-danger rounded-xl border p-4 text-xs">
+    <p className="bg-error-soft text-error rounded-2xl p-4 text-xs">
       {t('sidepanel.startFailed', { error: startErrorText(t, error) })}
     </p>
   )

@@ -3,28 +3,172 @@
 /* 让 Tailwind 扫描共享组件中的类名 */
 @source './';
 
+/*
+ * 视觉基线参考 Board UI（boardui-library@1.0.0，styles/theme.css、typography.css）：
+ * 中性色分层 + 细描边 + 轻投影，蓝色只用于主操作、选中与键盘焦点。
+ * 只取色值、尺度与状态规则自行实现，未复制原库源码。
+ */
 @theme {
-  --color-background: oklch(0.985 0.005 280);
-  --color-foreground: oklch(0.2 0.02 280);
-  --color-muted: oklch(0.95 0.01 280);
-  --color-muted-foreground: oklch(0.5 0.02 280);
-  --color-border: oklch(0.9 0.01 280);
-  --color-primary: oklch(0.55 0.2 275);
-  --color-primary-foreground: oklch(0.99 0 0);
-  --color-ring: oklch(0.55 0.2 275);
-  --color-danger: oklch(0.6 0.22 25);
+  /* 表面：页面 / 控件 #FFF，分组与侧栏 #F7F7F7，输入填充 #EBEBEB */
+  --color-background: #fff;
+  --color-surface: #fff;
+  --color-muted: #f7f7f7;
+  --color-field: #ebebeb;
+  /* 文字：主 / 次 / 第三级 */
+  --color-foreground: oklch(14.5% 0 0);
+  --color-muted-foreground: oklch(55.6% 0 0);
+  --color-subtle-foreground: oklch(70.8% 0 0);
+  /* 描边：默认 / hover / active 与输入焦点 */
+  --color-border: #ebebeb;
+  --color-border-hover: oklch(87% 0 0);
+  --color-border-active: oklch(70.8% 0 0);
+  /* 强调色 accent-400…700；primary 用于文字链接与选中，ring 是键盘焦点环 */
+  --color-accent-400: #3392ff;
+  --color-accent-500: oklch(62.3% 0.214 259.815);
+  --color-accent-600: oklch(54.6% 0.245 262.881);
+  --color-accent-700: oklch(48.8% 0.243 264.376);
+  --color-primary: oklch(54.6% 0.245 262.881);
+  --color-primary-foreground: #fff;
+  --color-primary-soft: oklch(97% 0.014 254.604);
+  --color-ring: oklch(62.3% 0.214 259.815);
+  /* 状态：危险 / 成功（lime）/ 失败（rose）；警告色 Board UI 无语义变量，取 yellow 同级色 */
+  --color-danger: oklch(63.7% 0.237 25.331);
+  --color-success: oklch(45.3% 0.124 130.933);
+  --color-success-soft: oklch(93.8% 0.127 124.321);
+  --color-error: oklch(45.5% 0.188 13.697);
+  --color-error-soft: oklch(89.2% 0.058 10.001);
+  --color-warning: oklch(47.6% 0.114 61.907);
+  --color-warning-soft: oklch(94.5% 0.129 101.54);
+
+  /* 字体：Inter 优先（未随插件打包，系统没有时回退），中文回退苹方 / 微软雅黑 */
+  --font-sans:
+    Inter, InterVariable, ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+  /* 字号层级用 px：悬浮面板在网页 Shadow DOM 里，rem 会随网页变化 */
+  --text-title1: 24px;
+  --text-title1--line-height: 34px;
+  --text-title2: 20px;
+  --text-title2--line-height: 26px;
+  --text-headline: 16px;
+  --text-headline--line-height: 22px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-body2: 13px;
+  --text-body2--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+
+  /* 圆角：按钮 / 输入 10，卡片 16（rounded-2xl），侧栏与弹层 24（rounded-3xl） */
+  --radius-control: 10px;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-card: 0 1px 1px 0 rgb(0 0 0 / 0.05);
+  --shadow-menu: 0 1px 1px 0 rgb(0 0 0 / 0.04), 0 4px 4px 0 rgb(0 0 0 / 0.02);
+  --shadow-float:
+    0 1px 0 0 rgb(0 0 0 / 0.0196), 0 1px 12px 0 rgb(0 0 0 / 0.0588), 0 0 1px 0 rgb(0 0 0 / 0.3216);
+}
+
+:root,
+:host {
+  --gradient-primary: linear-gradient(180deg, var(--color-accent-500), var(--color-accent-600));
+  --gradient-primary-hover: linear-gradient(
+    180deg,
+    var(--color-accent-400),
+    var(--color-accent-500)
+  );
+  --gradient-primary-active: linear-gradient(
+    180deg,
+    var(--color-accent-600),
+    var(--color-accent-700)
+  );
+  --gradient-disabled: linear-gradient(180deg, #ebebeb, oklch(87% 0 0));
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: oklch(0.18 0.02 280);
-    --color-foreground: oklch(0.95 0.01 280);
-    --color-muted: oklch(0.25 0.02 280);
-    --color-muted-foreground: oklch(0.7 0.02 280);
-    --color-border: oklch(0.3 0.02 280);
+  /* :host 让悬浮面板（Shadow DOM）也跟随深色 */
+  :root,
+  :host {
+    --color-background: #121212;
+    --color-surface: oklch(26.9% 0 0);
+    --color-muted: oklch(20.5% 0 0);
+    --color-field: oklch(26.9% 0 0);
+    --color-foreground: oklch(98.5% 0 0);
+    /* Board UI 暗色次文字是 #737373，小字号对比不足，这里提到 neutral-400 */
+    --color-muted-foreground: oklch(70.8% 0 0);
+    --color-subtle-foreground: oklch(55.6% 0 0);
+    --color-border: oklch(37.1% 0 0);
+    --color-border-hover: oklch(55.6% 0 0);
+    --color-border-active: oklch(43.9% 0 0);
+    --color-primary: oklch(70.7% 0.165 254.624);
+    --color-primary-soft: color-mix(in srgb, oklch(28.2% 0.091 267.935) 60%, transparent);
+    --color-danger: oklch(70.4% 0.191 22.216);
+    --color-success: oklch(76.8% 0.233 130.85);
+    --color-success-soft: color-mix(in srgb, oklch(27.4% 0.072 132.109) 60%, transparent);
+    --color-error: oklch(64.5% 0.246 16.439);
+    --color-error-soft: color-mix(in srgb, oklch(27.1% 0.105 12.094) 60%, transparent);
+    --color-warning: oklch(85.2% 0.199 91.936);
+    --color-warning-soft: color-mix(in srgb, oklch(28.6% 0.066 53.813) 60%, transparent);
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.18);
+    --shadow-card: 0 1px 1px 0 rgb(0 0 0 / 0.14);
+    --shadow-menu: 0 1px 1px 0 rgb(0 0 0 / 0.14), 0 4px 4px 0 rgb(0 0 0 / 0.1);
+    --shadow-float:
+      0 1px 0 0 rgb(0 0 0 / 0.1), 0 1px 12px 0 rgb(0 0 0 / 0.16), 0 0 1px 0 rgb(0 0 0 / 0.42);
+    --gradient-disabled: linear-gradient(180deg, oklch(37.1% 0 0), oklch(26.9% 0 0));
   }
 }
 
-body {
-  @apply bg-background text-foreground antialiased;
+/* 主按钮的竖向蓝色渐变（Board UI gradient-button-primary-*） */
+@utility bg-gradient-primary {
+  background-image: var(--gradient-primary);
+}
+@utility bg-gradient-primary-hover {
+  background-image: var(--gradient-primary-hover);
+}
+@utility bg-gradient-primary-active {
+  background-image: var(--gradient-primary-active);
+}
+@utility bg-gradient-disabled {
+  background-image: var(--gradient-disabled);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground text-body antialiased;
+    accent-color: var(--color-accent-600);
+  }
+  /* 没有单独焦点样式的链接等也用 Board UI 的 2px 蓝色焦点外环 */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* 录音电平：细长胶囊，填充色用强调色 */
+  meter.hl-meter {
+    appearance: none;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--color-field);
+  }
+  meter.hl-meter::-webkit-meter-bar {
+    height: 6px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--color-field);
+  }
+  meter.hl-meter::-webkit-meter-optimum-value,
+  meter.hl-meter::-webkit-meter-suboptimum-value,
+  meter.hl-meter::-webkit-meter-even-less-good-value {
+    border-radius: 9999px;
+    background: var(--color-accent-500);
+  }
+}
+
+/* 原生下拉框统一用自绘箭头；不放进 layer，右侧留白才能盖过 px-* 工具类 */
+select.hl-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 32px;
 }

@@ -49,16 +49,17 @@ export function ConfigTransfer() {
 
   return (
     <Section title={t('settings.transfer.title')}>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="text-body flex items-center gap-2">
         <input
           type="checkbox"
+          className="size-4"
           checked={includeSecrets}
           onChange={(e) => setIncludeSecrets(e.target.checked)}
         />
         {t('settings.transfer.includeKeys')}
       </label>
       {includeSecrets && (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-warning bg-warning-soft rounded-control text-body2 px-3 py-2">
           {t('settings.transfer.keysWarning')}
         </p>
       )}
@@ -82,7 +83,7 @@ export function ConfigTransfer() {
         />
       </div>
       {message && (
-        <p className={message.ok ? 'text-sm text-emerald-600' : 'text-danger text-sm'}>
+        <p className={message.ok ? 'text-success text-body2' : 'text-danger text-body2'}>
           {message.text}
         </p>
       )}

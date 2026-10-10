@@ -22,14 +22,12 @@ export function MicrophonePermissionPage() {
 
   return (
     <section className="flex max-w-lg flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t('permissions.micTitle')}</h1>
+      <h1 className="text-title2 font-semibold">{t('permissions.micTitle')}</h1>
       <p className="text-muted-foreground">{t('permissions.micBody')}</p>
       <Button className="self-start" onClick={() => void request()}>
         {t('permissions.micButton')}
       </Button>
-      {result?.ok && (
-        <p className="text-emerald-700 dark:text-emerald-400">{t('permissions.micGranted')}</p>
-      )}
+      {result?.ok && <p className="text-success">{t('permissions.micGranted')}</p>}
       {result && !result.ok && (
         <p className="text-danger">{t('permissions.micFailed', { error: result.error })}</p>
       )}

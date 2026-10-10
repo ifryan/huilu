@@ -1,5 +1,5 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button, cn } from '@huilu/ui'
+import { Button, Check, cn } from '@huilu/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -30,7 +30,7 @@ export function OnboardingPage() {
   if (done) {
     return (
       <section className="flex max-w-2xl flex-col gap-4">
-        <h1 className="text-2xl font-semibold">{t('onboarding.doneTitle')}</h1>
+        <h1 className="text-title2 font-semibold">{t('onboarding.doneTitle')}</h1>
         <p className="text-muted-foreground">{t('onboarding.doneDesc')}</p>
         <div>
           <Button onClick={() => void navigate({ to: '/' })}>{t('onboarding.openHistory')}</Button>
@@ -48,28 +48,36 @@ export function OnboardingPage() {
   return (
     <section className="flex max-w-2xl flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-semibold">{t('onboarding.title')}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t('onboarding.intro')}</p>
+        <h1 className="text-title2 font-semibold">{t('onboarding.title')}</h1>
+        <p className="text-muted-foreground text-body2 mt-1">{t('onboarding.intro')}</p>
       </header>
 
-      <ol className="grid grid-cols-3 gap-2">
+      {/* 步骤卡参考 Board UI RadioCard：整卡可点，选中为蓝色描边 */}
+      <ol className="grid gap-2 sm:grid-cols-3">
         {STEPS.map((key, i) => (
           <li key={key}>
             <button
               type="button"
+              aria-current={i === step ? 'step' : undefined}
               onClick={() => setStep(i)}
               className={cn(
-                'flex w-full items-center gap-2 rounded-xl border p-3 text-left text-sm',
-                i === step ? 'border-primary bg-primary/10' : 'border-border',
+                'rounded-control text-body focus-visible:outline-ring flex h-full w-full items-center gap-2.5 border px-3 py-2.5 text-left transition-colors focus-visible:outline-2',
+                i === step
+                  ? 'border-accent-500 bg-surface ring-accent-500 font-medium ring-1'
+                  : 'border-border bg-surface hover:bg-muted',
               )}
             >
               <span
                 className={cn(
-                  'flex size-6 shrink-0 items-center justify-center rounded-full text-xs',
-                  stepDone[i] ? 'bg-emerald-500 text-white' : 'bg-primary text-primary-foreground',
+                  'text-caption flex size-6 shrink-0 items-center justify-center rounded-full font-medium',
+                  stepDone[i]
+                    ? 'bg-success-soft text-success'
+                    : i === step
+                      ? 'bg-gradient-primary text-primary-foreground'
+                      : 'bg-field text-muted-foreground',
                 )}
               >
-                {stepDone[i] ? '✓' : i + 1}
+                {stepDone[i] ? <Check className="size-3.5" aria-hidden="true" /> : i + 1}
               </span>
               <span>{t(key)}</span>
             </button>
@@ -77,7 +85,9 @@ export function OnboardingPage() {
         ))}
       </ol>
 
-      <p className="text-muted-foreground text-xs">{t('onboarding.stepOf', { n: step + 1 })}</p>
+      <p className="text-muted-foreground text-caption">
+        {t('onboarding.stepOf', { n: step + 1 })}
+      </p>
 
       {step === 0 && <DataFolderSection compact />}
       {step === 1 && (

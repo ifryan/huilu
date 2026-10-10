@@ -1,6 +1,6 @@
 import { browser } from '#imports'
 import { useTranslation } from '@huilu/i18n'
-import { Button } from '@huilu/ui'
+import { Button, CheckCircle2 } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { RecordingSetup } from '@/components/recording/RecordingSetup'
 import {
@@ -39,7 +39,7 @@ export function Popup() {
   return (
     <main className="flex w-80 flex-col gap-4 p-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{t('app.name')}</h1>
+        <h1 className="text-headline font-semibold">{t('app.name')}</h1>
         <Button variant="outline" size="sm" onClick={() => void sendMessage('openApp', '/')}>
           {t('popup.openApp')}
         </Button>
@@ -48,7 +48,7 @@ export function Popup() {
       {status && busy ? (
         panelUnavailable ? (
           <>
-            <p className="text-muted-foreground text-xs">{t('popup.panelUnavailable')}</p>
+            <p className="text-muted-foreground text-body2">{t('popup.panelUnavailable')}</p>
             <RecordingStatusCard status={status} />
           </>
         ) : (
@@ -145,8 +145,9 @@ function ReadinessStatus() {
 
   if (items.length === 0) {
     return (
-      <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
-        ✓ {t('readiness.ready')}
+      <div className="bg-success-soft text-success text-body2 rounded-control flex items-center gap-2 px-3 py-2">
+        <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+        {t('readiness.ready')}
       </div>
     )
   }
@@ -155,7 +156,7 @@ function ReadinessStatus() {
       {items.map((item) => (
         <li
           key={item.key}
-          className="flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs"
+          className="bg-warning-soft text-body2 rounded-control flex items-center justify-between gap-2 py-2 pr-2 pl-3"
         >
           <span>{item.text}</span>
           <Button

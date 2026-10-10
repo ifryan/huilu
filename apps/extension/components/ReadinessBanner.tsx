@@ -1,15 +1,18 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button, cn } from '@huilu/ui'
+import { AlertCircle, Button, cn } from '@huilu/ui'
 import { Link } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react'
 import { useFolderActions, useReadiness } from '@/lib/readiness'
 
 function Notice({ title, note, action }: { title: string; note?: string; action: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-      <div className="text-sm">
-        <div className="font-medium">{title}</div>
-        {note && <div className="text-muted-foreground text-xs">{note}</div>}
+    <div className="border-border bg-surface shadow-card flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3">
+      <span className="bg-warning-soft text-warning flex size-8 shrink-0 items-center justify-center rounded-full">
+        <AlertCircle className="size-[18px]" aria-hidden="true" />
+      </span>
+      <div className="min-w-40 flex-1">
+        <div className="text-body font-medium">{title}</div>
+        {note && <div className="text-muted-foreground text-body2">{note}</div>}
       </div>
       <div className="shrink-0">{action}</div>
     </div>

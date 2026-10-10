@@ -2,7 +2,7 @@ import { registries, type Exporter } from '@huilu/core'
 import { textExporters } from '@huilu/exporters'
 import { useTranslation } from '@huilu/i18n'
 import { extensionForMime } from '@huilu/recorder'
-import { Button } from '@huilu/ui'
+import { Button, ChevronDown, Download, buttonVariants, cn } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { resultMedia, resultMediaInfo, type ResultDocument } from '@/lib/meeting-library'
 
@@ -69,11 +69,21 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
     }
   }
   return (
-    <details className="relative">
-      <summary className="border-border cursor-pointer rounded-lg border px-4 py-2 text-sm font-medium">
+    <details className="group relative">
+      <summary
+        className={cn(
+          buttonVariants({ variant: 'outline' }),
+          'cursor-pointer list-none [&::-webkit-details-marker]:hidden',
+        )}
+      >
+        <Download aria-hidden="true" />
         {busy ? t('result.exporting') : t('result.export')}
+        <ChevronDown
+          aria-hidden="true"
+          className="text-muted-foreground size-4! transition-transform group-open:rotate-180"
+        />
       </summary>
-      <div className="bg-background border-border absolute left-0 z-30 mt-2 w-72 max-w-[calc(100vw-6rem)] space-y-3 rounded-xl border p-4 shadow-lg sm:right-0 sm:left-auto sm:w-80 sm:max-w-none">
+      <div className="bg-surface border-border shadow-menu absolute left-0 z-30 mt-2 w-72 max-w-[calc(100vw-6rem)] space-y-1 rounded-2xl border p-2 sm:right-0 sm:left-auto sm:w-80 sm:max-w-none">
         {textExporters.map((e) => (
           <div key={e.id}>
             <Button
@@ -90,7 +100,7 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
                   : t('result.exportMarkdown')}
             </Button>
             {(e.id === 'markdown' ? !doc.summary : !doc.transcript) && (
-              <p className="text-muted-foreground px-3 text-xs">
+              <p className="text-muted-foreground text-caption px-2.5 pb-1">
                 {e.id === 'markdown' ? t('result.noSummaryExport') : t('result.noTranscriptExport')}
               </p>
             )}
@@ -107,7 +117,9 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
             {t('result.exportMp4')}
           </Button>
           {!video?.mimeType.startsWith('video/mp4') && (
-            <p className="text-muted-foreground px-3 text-xs">{t('result.mp4Unavailable')}</p>
+            <p className="text-muted-foreground text-caption px-2.5 pb-1">
+              {t('result.mp4Unavailable')}
+            </p>
           )}
         </div>
         <div>
@@ -121,7 +133,7 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
             {t('result.exportM4a')}
           </Button>
           {(!audio || !aac) && (
-            <p className="text-muted-foreground px-3 text-xs">
+            <p className="text-muted-foreground text-caption px-2.5 pb-1">
               {audio ? t('result.aacUnavailable') : t('history.noTranscriptAudio')}
             </p>
           )}
@@ -129,14 +141,14 @@ export function MeetingExports({ doc }: { doc: ResultDocument }) {
         <Button
           size="sm"
           variant="outline"
-          className="w-full"
+          className="mt-1 w-full"
           disabled={busy || (!video && !audio)}
           onClick={() => void original()}
         >
           {t('result.original')}
         </Button>
         {error && (
-          <p role="alert" className="text-danger text-xs">
+          <p role="alert" className="text-danger text-caption px-2.5">
             {t('result.exportError')}
           </p>
         )}

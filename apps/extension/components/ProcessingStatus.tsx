@@ -81,7 +81,7 @@ export function ProcessingStatus({
 
   const content = render(view)
   return (
-    <div className="flex flex-col gap-2 text-xs">
+    <div className="text-body2 flex flex-col gap-2">
       {content}
       {actionError && <p className="text-danger">{actionError}</p>}
     </div>
@@ -129,7 +129,7 @@ export function ProcessingStatus({
         )
       case 'retrying':
         return (
-          <p className="text-amber-700 dark:text-amber-400">
+          <p className="text-warning">
             {t('processing.retrying', {
               step: t(`processing.stepName.${v.error.step}`),
               reason: reason(v.error),
@@ -173,7 +173,7 @@ export function ProcessingStatus({
       case 'done':
         return (
           <>
-            <p className="text-emerald-700 dark:text-emerald-400">
+            <p className="text-success">
               {v.folderDir
                 ? t('processing.done', { folder: v.folderDir })
                 : t('history.transcribed')}
