@@ -9,14 +9,19 @@ import { pathToFileURL } from 'node:url'
 const root = resolve(import.meta.dirname, '..')
 const injected = process.env.INJECT_CAPTURE === '1'
 const baseline = process.env.BASELINE_EXTENSION
+const auditSharing = process.env.AUDIT_SHARING_UI === '1'
 const out = resolve(
   root,
   'output/playwright',
-  `U-93-${baseline ? 'baseline' : injected ? 'injected' : 'native'}-${Date.now()}`,
+  `${auditSharing ? 'U-94' : 'U-93'}-${process.env.EVIDENCE_LABEL || (baseline ? 'baseline' : injected ? 'injected' : 'native')}-${Date.now()}`,
 )
 const ext = resolve(out, 'extension')
 await mkdir(out, { recursive: true })
-await cp(baseline || resolve(root, 'apps/extension/.output/chrome-mv3'), ext, { recursive: true })
+await cp(
+  process.env.EXTENSION_BUILD || baseline || resolve(root, 'apps/extension/.output/chrome-mv3'),
+  ext,
+  { recursive: true },
+)
 await writeFile(resolve(ext, 'u93-harness.html'), '<!doctype html><title>U93 control</title>')
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE
@@ -48,6 +53,7 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 const report = {
   injected,
   baseline: Boolean(baseline),
+  auditSharing,
   ui: [],
   cases: [],
   limitations:
@@ -231,8 +237,21 @@ try {
   const sourceSession = await context.newCDPSession(source)
   const panelClick = async (name) => {
     const ax = await sourceSession.send('Accessibility.getFullAXTree')
-    const target = ax.nodes.find((n) => n.role?.value === 'button' && n.name?.value === name)
-    assert.ok(target, 'Missing panel button ' + name)
+    const target = ax.nodes.find(
+      (n) =>
+        n.role?.value === 'button' && (n.name?.value === name || n.description?.value === name),
+    )
+    assert.ok(
+      target,
+      'Missing panel button ' +
+        name +
+        ': ' +
+        JSON.stringify(
+          ax.nodes
+            .filter((n) => n.role?.value === 'button')
+            .map((n) => ({ name: n.name, description: n.description })),
+        ),
+    )
     const { model } = await sourceSession.send('DOM.getBoxModel', {
       backendNodeId: target.backendDOMNodeId,
     })
@@ -296,6 +315,160 @@ try {
     }
   }
   const restorePanel = async () => toolbar('restore-' + Date.now(), true)
+  // U-94: browser chrome is outside the page/closed Shadow DOM. Inspect both boundaries.
+  const inspectLayers = async (name) => {
+    await sourceSession.send('DOM.enable')
+    await sourceSession.send('CSS.enable')
+    const { root: document } = await sourceSession.send('DOM.getDocument', {
+      depth: -1,
+      pierce: true,
+    })
+    const nodes = []
+    const visit = (node) => {
+      nodes.push(node)
+      for (const child of [...(node.children || []), ...(node.shadowRoots || [])]) visit(child)
+    }
+    visit(document)
+    const classes = (node) => {
+      const i = node.attributes?.indexOf('class') ?? -1
+      return i < 0 ? [] : node.attributes[i + 1].split(/\s+/)
+    }
+    const host = nodes.filter((n) => n.nodeName === 'HUILU-RECORDING-PANEL')
+    const layers = nodes.filter((n) => classes(n).includes('huilu-panel-layer'))
+    const panels = nodes.filter((n) => classes(n).includes('huilu-panel'))
+    const surfaces = []
+    for (const node of nodes.filter((n) => n.nodeName === 'SECTION' || layers.includes(n))) {
+      const { computedStyle } = await sourceSession.send('CSS.getComputedStyleForNode', {
+        nodeId: node.nodeId,
+      })
+      surfaces.push({
+        tag: node.nodeName,
+        classes: classes(node),
+        style: Object.fromEntries(
+          computedStyle
+            .filter((s) =>
+              /^(background-color|box-shadow|border-top-width|padding-top)$/.test(s.name),
+            )
+            .map((s) => [s.name, s.value]),
+        ),
+      })
+    }
+    const x11 = execFileSync('xwininfo', ['-root', '-tree'], { env, encoding: 'utf8' })
+    await writeFile(resolve(out, name + '-x11.txt'), x11)
+    const nativeWindows = x11.split('\n').filter((line) => /HuiLu is sharing/.test(line))
+    const nativeWindowInfo = nativeWindows.map((line) =>
+      execFileSync('xwininfo', ['-id', line.trim().split(' ')[0]], { env, encoding: 'utf8' }),
+    )
+    const result = {
+      name,
+      hosts: host.length,
+      shadowRoots: host.flatMap((n) => n.shadowRoots || []).map((n) => n.shadowRootType),
+      layers: layers.length,
+      panels: panels.length,
+      nativeTextInPage: nodes.some((n) =>
+        /HuiLu is sharing (a window|your screen)/.test(n.nodeValue || ''),
+      ),
+      surfaces,
+      nativeWindows,
+      nativeWindowInfo,
+    }
+    report.ui.push(result)
+    assert.equal(result.nativeTextInPage, false)
+    assert.ok(result.hosts <= 1)
+    assert.equal(result.layers, result.hosts)
+    assert.equal(result.panels, result.hosts)
+    assert.equal(result.shadowRoots.length, result.hosts)
+    return result
+  }
+  const auditNativeBar = async (kind) => {
+    const prefix = 'sharing-' + kind
+    const before = await inspectLayers(prefix + '-before')
+    assert.equal(before.hosts, 1)
+    assert.equal(before.nativeWindows.length, 1, JSON.stringify(before.nativeWindows))
+    assert.match(before.nativeWindowInfo[0], /Map State: IsViewable/)
+    const card = before.surfaces.filter((s) => s.tag === 'SECTION').at(-1)
+    if (process.env.EXTENSION_BUILD)
+      assert.notEqual(card.style['background-color'], 'rgba(0, 0, 0, 0)')
+    else assert.equal(card.style['background-color'], 'rgba(0, 0, 0, 0)')
+    await shot(prefix + '-before-desktop')
+    // Close only our page controls. The native sharing bar must remain independently visible.
+    await panelClick('关闭面板')
+    await snapshot(prefix + '-page-controls-closed')
+    const closed = await inspectLayers(prefix + '-page-controls-closed')
+    assert.equal(closed.hosts, 0)
+    assert.equal(closed.nativeWindows.length, 1)
+    assert.equal((await status()).state, 'recording')
+    await restorePanel()
+    await panelClick('收起')
+    await snapshot(prefix + '-collapsed')
+    await panelClick('展开录制面板')
+    await shot(prefix + '-hide-target')
+    const info = before.nativeWindowInfo[0]
+    const nativeX = Number(info.match(/Absolute upper-left X:\s+(\d+)/)[1])
+    const nativeY = Number(info.match(/Absolute upper-left Y:\s+(\d+)/)[1])
+    const nativeWidth = Number(info.match(/Width:\s+(\d+)/)[1])
+    const nativeHeight = Number(info.match(/Height:\s+(\d+)/)[1])
+    execFileSync('ffmpeg', [
+      '-y',
+      '-loglevel',
+      'error',
+      '-i',
+      resolve(out, prefix + '-hide-target.png'),
+      '-vf',
+      `crop=${nativeWidth}:${nativeHeight}:${nativeX}:${nativeY},scale=iw*3:ih*3`,
+      resolve(out, prefix + '-native-bar.png'),
+    ])
+    const tsv = execFileSync(
+      'tesseract',
+      [resolve(out, prefix + '-native-bar.png'), 'stdout', '--psm', '6', 'tsv'],
+      { encoding: 'utf8' },
+    )
+    await writeFile(resolve(out, prefix + '-hide-target.tsv'), tsv)
+    const hide = tsv
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .find((r) => r[11]?.toLowerCase() === 'hide')
+    // Orange text is often omitted by OCR. Fallback uses the rightmost Hide control
+    // visually verified in the saved Chromium 156 crop, relative to the X11 widget.
+    const hideClick = {
+      method: hide ? 'ocr' : 'verified-chromium-156-geometry',
+      x: Math.round(
+        nativeX +
+          (hide
+            ? (Number(hide[6]) + Number(hide[8]) / 2) / 3
+            : nativeWidth - 32 * report.screen.scale),
+      ),
+      y: Math.round(
+        nativeY + (hide ? (Number(hide[7]) + Number(hide[9]) / 2) / 3 : nativeHeight / 2),
+      ),
+    }
+    // Real user action on Chrome UI, never a production API/flag to hide the indicator.
+    execFileSync('xdotool', ['mousemove', String(hideClick.x), String(hideClick.y), 'click', '1'], {
+      env,
+    })
+    await snapshot(prefix + '-after-hide')
+    const after = await inspectLayers(prefix + '-after-hide')
+    assert.equal(after.hosts, 1)
+    assert.ok(after.nativeWindowInfo.every((info) => !info.includes('Map State: IsViewable')))
+    assert.equal((await status()).state, 'recording')
+    const afterTsv = execFileSync(
+      'tesseract',
+      [resolve(out, prefix + '-after-hide-desktop.png'), 'stdout', 'tsv'],
+      { encoding: 'utf8' },
+    )
+    assert.equal(
+      afterTsv.split('\n').some((line) => line.split('\t')[11]?.toLowerCase() === 'hide'),
+      false,
+    )
+    report.cases.push({
+      action: 'native-hide',
+      kind,
+      hideClick,
+      before,
+      after,
+      status: await status(),
+    })
+  }
   await pause(700)
   for (const page of context.pages()) if (page !== control && page !== source) await page.close()
   await source.bringToFront()
@@ -347,15 +520,22 @@ try {
       return { manifest, meeting, signal }
     }, id)
   const launch = async (name, options = {}) => {
+    const opened = context.waitForEvent('page')
+    opened.catch(() => {})
     const start = send('startRecording', {
       tabId,
       title: 'U93 ' + name,
       settings: { mode: options.mode || 'video', prefs: { ...prefs, ...options } },
     })
     start.catch(() => {})
-    const recorder = await context.waitForEvent('page', {
-      predicate: (p) => p.url().endsWith('/recorder.html'),
-    })
+    const recorder = await Promise.race([
+      opened,
+      start.then((result) => {
+        assert.equal(result.err, undefined, JSON.stringify(result))
+        return opened
+      }),
+    ])
+    await recorder.waitForURL('**/recorder.html')
     await recorder.waitForLoadState()
     await pause(900)
     return { start, recorder, bounds: await recorder.evaluate(() => chrome.windows.getCurrent()) }
@@ -485,6 +665,7 @@ try {
       assert.equal(result.res.session.videoSource, kind)
       await pause(1600)
       const active = await snapshot('recording-' + label)
+      if (auditSharing && (kind === 'window' || kind === 'screen')) await auditNativeBar(kind)
       const host = active.tabs.find((t) => t.url?.endsWith('/recorder.html'))
       const origin = active.tabs.find((t) => t.id === tabId)
       assert.ok(host)
@@ -658,14 +839,14 @@ try {
     await control.evaluate(() =>
       chrome.storage.local.set({ u93Case: { surface: 'browser', granted: true } }),
     )
+    const opened = context.waitForEvent('page')
     const pending = send('startRecording', {
       tabId,
       title: 'U93 interruption',
       settings: { mode: 'audio', prefs },
     })
-    const recorder = await context.waitForEvent('page', {
-      predicate: (p) => p.url().endsWith('/recorder.html'),
-    })
+    const recorder = await opened
+    await recorder.waitForURL('**/recorder.html')
     const started = await pending
     assert.equal(started.res?.state, 'recording')
     await pause(6500)
