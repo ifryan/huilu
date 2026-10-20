@@ -1,0 +1,228 @@
+{
+  "at": "2026-10-20T16:32:15.122Z",
+  "browser": "156.0.8078.4",
+  "origin": "http://localhost:4178",
+  "results": [
+    {
+      "id": "paraformer-cn-policy",
+      "url": "https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2",
+      "readable": false,
+      "error": "TypeError: Failed to fetch"
+    },
+    {
+      "id": "paraformer-intl-policy",
+      "url": "https://dashscope-intl.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2",
+      "readable": false,
+      "error": "TypeError: Failed to fetch"
+    },
+    {
+      "id": "paraformer-cn-task",
+      "url": "https://dashscope.aliyuncs.com/api/v1/tasks/00000000-0000-0000-0000-000000000000",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "paraformer-intl-task",
+      "url": "https://dashscope-intl.aliyuncs.com/api/v1/tasks/00000000-0000-0000-0000-000000000000",
+      "readable": false,
+      "error": "TypeError: Failed to fetch"
+    },
+    {
+      "id": "paraformer-submit",
+      "url": "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "groq-models",
+      "url": "https://api.groq.com/openai/v1/models",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "groq-transcribe",
+      "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "openai-models",
+      "url": "https://api.openai.com/v1/models",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "openai-transcribe",
+      "url": "https://api.openai.com/v1/audio/transcriptions",
+      "readable": false,
+      "error": "TypeError: Failed to fetch"
+    },
+    {
+      "id": "qwen-chat",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "deepseek-chat",
+      "url": "https://api.deepseek.com/v1/chat/completions",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "zhipu-chat",
+      "url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+      "readable": true,
+      "status": 401
+    },
+    {
+      "id": "openai-chat",
+      "url": "https://api.openai.com/v1/chat/completions",
+      "readable": false,
+      "error": "TypeError: Failed to fetch"
+    },
+    {
+      "id": "ollama-models",
+      "url": "http://localhost:11434/v1/models",
+      "readable": false,
+      "error": "TypeError: Failed to fetch"
+    },
+    {
+      "id": "oss-candidate-upload",
+      "url": "https://dashscope-file-mgr.oss-cn-beijing.aliyuncs.com",
+      "readable": true,
+      "status": 403
+    },
+    {
+      "id": "result-candidate-download",
+      "url": "https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/u101-cors-probe.json",
+      "readable": true,
+      "status": 403
+    }
+  ],
+  "network": [
+    {
+      "url": "http://localhost:11434/v1/models",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    },
+    {
+      "url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+      "method": "POST",
+      "status": 401,
+      "allowOrigin": "http://localhost:4178",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2",
+      "method": "GET",
+      "failure": "net::ERR_FAILED"
+    },
+    {
+      "url": "https://api.deepseek.com/v1/chat/completions",
+      "method": "POST",
+      "status": 401,
+      "allowOrigin": "http://localhost:4178",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://dashscope.aliyuncs.com/api/v1/tasks/00000000-0000-0000-0000-000000000000",
+      "method": "GET",
+      "status": 401,
+      "allowOrigin": "http://localhost:4178",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
+      "method": "POST",
+      "status": 401,
+      "allowOrigin": "http://localhost:4178",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+      "method": "POST",
+      "status": 401,
+      "allowOrigin": "*",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://dashscope-file-mgr.oss-cn-beijing.aliyuncs.com/",
+      "method": "POST",
+      "status": 403,
+      "allowOrigin": "*",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+      "method": "POST",
+      "status": 401,
+      "allowOrigin": "*",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/u101-cors-probe.json",
+      "method": "GET",
+      "status": 403,
+      "allowOrigin": "*",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://api.openai.com/v1/models",
+      "method": "GET",
+      "status": 401,
+      "allowOrigin": "*",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://api.openai.com/v1/audio/transcriptions",
+      "method": "POST",
+      "failure": "net::ERR_FAILED"
+    },
+    {
+      "url": "https://api.groq.com/openai/v1/models",
+      "method": "GET",
+      "status": 401,
+      "allowOrigin": "*",
+      "allowHeaders": null
+    },
+    {
+      "url": "https://api.openai.com/v1/chat/completions",
+      "method": "POST",
+      "failure": "net::ERR_FAILED"
+    },
+    {
+      "url": "https://dashscope-intl.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2",
+      "method": "GET",
+      "failure": "net::ERR_FAILED"
+    },
+    {
+      "url": "https://dashscope-intl.aliyuncs.com/api/v1/tasks/00000000-0000-0000-0000-000000000000",
+      "method": "GET",
+      "failure": "net::ERR_FAILED"
+    }
+  ],
+  "errors": [
+    "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Access to fetch at 'https://dashscope.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2' from origin 'http://localhost:4178' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Access to fetch at 'https://api.openai.com/v1/audio/transcriptions' from origin 'http://localhost:4178' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Access to fetch at 'https://api.openai.com/v1/chat/completions' from origin 'http://localhost:4178' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    "Failed to load resource: net::ERR_FAILED",
+    "Access to fetch at 'https://dashscope-intl.aliyuncs.com/api/v1/uploads?action=getPolicy&model=paraformer-v2' from origin 'http://localhost:4178' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    "Failed to load resource: net::ERR_FAILED",
+    "Access to fetch at 'https://dashscope-intl.aliyuncs.com/api/v1/tasks/00000000-0000-0000-0000-000000000000' from origin 'http://localhost:4178' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    "Failed to load resource: net::ERR_FAILED"
+  ]
+}

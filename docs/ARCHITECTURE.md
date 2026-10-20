@@ -32,7 +32,11 @@
 ```
 huilu/
 ├── apps/
-│   └── extension/                # WXT 插件（唯一的“外壳”）
+│   ├── web/                      # Vite 静态网页宿主（hash 路由，dist 为纯静态产物）
+│   │   ├── routes/               # 网页录制页与共享页面的适配
+│   │   ├── platform/             # localStorage、getDisplayMedia、Web Locks、Document PiP
+│   │   └── lib/                  # 页面内队列命令、设置与 CORS 调用包装
+│   └── extension/                # WXT 插件宿主（现有入口与行为保留）
 │       ├── entrypoints/
 │       │   ├── background.ts     # 后台：调度、消息中心、任务队列唤醒
 │       │   ├── offscreen/        # 离屏文档：采集、混音、录制、写盘、执行处理任务
@@ -45,6 +49,7 @@ huilu/
 │       ├── platform/             # Chrome 平台适配：把 chrome.* 注入到下面各包
 │       └── wxt.config.ts
 ├── packages/
+│   ├── app-shell/                # 两个宿主共享的页面、组件、会议库与处理视图
 │   ├── core/                     # 领域模型 + 数据格式 + 插件注册中心（无任何浏览器 API）
 │   ├── recorder/                 # 录制管线：来源 → 混音 → 编码 → 输出
 │   ├── storage/                  # 存储适配器：本地文件夹、OPFS（将来：服务端、WebDAV）
@@ -60,11 +65,13 @@ huilu/
 
 **分层规则（保证扩展性的关键）**
 
-- `packages/*` **禁止直接调用 `chrome.*` / 依赖 WXT**（ESLint 规则强制），需要平台能力时通过接口注入，由 `apps/extension/platform` 实现
-- 依赖只能从上往下：`extension → pipeline / recorder / exporters → providers / storage → core`
+- `packages/*` **禁止直接调用 `chrome.*` / 依赖 WXT**（ESLint 规则强制），需要平台能力时通过接口注入，由 `apps/extension/platform` 或 `apps/web/platform` 实现
+- 依赖只能从上往下：`web / extension → app-shell / pipeline / recorder / exporters → providers / storage → core`（app-shell 的宿主依赖通过构建时别名注入，见该包 README）
 - 以后加 `apps/server`（Docker）或 `apps/desktop`，只需要写一层新的平台适配，其余包直接复用
 
 ## 4. 运行时结构
+
+### 插件宿主
 
 ```
  弹窗 / 悬浮面板 / 插件网页 ──(类型安全消息)──▶ 后台 Service Worker（调度中心，随时可能被浏览器回收，不做重活）
@@ -83,6 +90,23 @@ huilu/
 - **录制宿主**：「快捷录制当前标签页」在离屏文档。统一来源选择优先在发起录制的网页里进行（`entrypoints/capture.content`）：后台注入内容脚本并把录制设置交给网页，用户在页面录制面板上点「选择来源」后由 `getDisplayMedia` 弹出共享选择框（它要求网页内的点击；只有它能让窗口来源带上系统声音：标签页录标签页声音，窗口 / 整个屏幕录系统声音，开关默认由 Chrome 决定为关闭）。取流、混音和 MediaRecorder 在内容脚本里运行，分片经私有 MessagePort 交给隐藏的插件 iframe（`entrypoints/recorder-sink`）写入插件 OPFS；iframe 只接受后台校验过一次性令牌的端口。录制跟着网页走（刷新 / 跳转 / 关闭即中断，可从「未完成的录制」恢复），麦克风按网站授权。非 HTTPS 网页或网页不能注入（chrome:// 等）时退回可见的采集标签页（`entrypoints/recorder`）。后台把暂停 / 继续 / 结束转给实际宿主，快捷键同理
 - **录制界面分工**：弹窗只负责开始前的设置，开始成功后自动关闭；录制中再打开只显示简短状态和「显示录制面板」。页面内悬浮录制面板是唯一的计时、暂停 / 继续、结束和错误提示入口，悬浮在网页之上、不改变网页布局，可拖动、收起、关闭。录制窗口选好来源后自动最小化、不显示进度，结束后自动关闭；它不能被关闭，关闭会中断录制（数据可在「未完成的录制」中恢复）
 - **悬浮面板的注入**：不在 manifest 声明 content script、不申请「所有网站」权限，由后台在用户点击弹窗 / 按快捷键后借 `activeTab` 用 `scripting.executeScript` 注入当前标签页；样式编译进脚本放入 Shadow DOM（不设 web_accessible_resources）。`chrome://` 等不允许注入的页面，弹窗保留并直接提供控制。最近一次结果（已保存 / 部分保存 / 未能保存）和开始失败原因存在后台 session 存储里，悬浮面板和空闲时的弹窗都显示，直到用户关掉（弹窗「知道了」、空闲时关闭面板）或开始新的录制。标签页「音频 + 视频」录制会录下网页画面，展开的面板也会出现在视频里
+
+### 静态网页宿主（U-101）
+
+```text
+可见页面 / Document PiP 控件
+  ├─ getDisplayMedia + 可选麦克风 → 共享混音 / 录制器 → 当前网页源 OPFS
+  └─ 共享页面与处理视图 → 当前网页源 IndexedDB 队列 → 转写 → AI 纪要
+       ├─ 支持文件夹选择：已授权本地文件夹（失效时 waitingFolder → 点击重新授权）
+       └─ 不支持文件夹选择：OPFS recordings/<id>/ 最终文件 + 导出下载
+```
+
+- 网页没有后台服务，处理必须保持页面打开；页面重新打开时恢复未完成录制 / 中断任务。
+- `huilu:web-recording` Web Lock 持续到录制完成收尾；`huilu:web-pipeline` 保证只有一个页面恢复 / 执行共享队列，其他页面通过 BroadcastChannel 发送处理命令。
+- 各源独立存储。网页 API Key 保存在 localStorage，文件夹句柄保存在 IndexedDB；插件仍使用原有 chrome.storage 设置。共享文件夹可重建索引，设置通过配置文件迁移。
+- `packages/app-shell` 通过 `@/platform`、`@/lib/settings`、`@/lib/messaging` 等宿主模块装配，不导入 WXT。web 用 Vite resolver / TS paths 选择平台覆盖，extension 通过原路径 facade 沿用现有实现。两个宿主各自 typecheck。
+- 网页服务商预设增加被动 CORS 能力标记；网页包装器分类可能的 CORS 错误，插件请求行为不变。GLM Coding Plan 不可在网页中使用。
+- 完整分工、授权与逐路径跨域实测见 [ADR 0005](adr/0005-web-app.md)。
 
 ### Recording → processing integration (U-34)
 
@@ -142,6 +166,8 @@ registry.transcription.register(openaiCompatible) // 内置 Groq / OpenAI 预设
 
 | 包                   | 状态                                                                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | ✅ 静态网页版：录制、页面内处理、共享历史 / 结果 / 设置 / 导出、OPFS 降级；人工授权及真实 Key 验收仍待补测                            |
+| `packages/app-shell` | ✅ 两个宿主共用的页面、组件与会议读写逻辑                                                                                             |
 | `apps/extension`     | ✅ 框架已搭好：弹窗、侧边栏、插件网页（历史 / 设置 / 首次引导，hash 路由）、后台、离屏文档录制、类型安全消息、中英文切换、固定插件 ID |
 | `packages/core`      | ✅ 数据格式（Meeting / Transcript / Summary）、版本迁移、全部扩展点接口、注册中心                                                     |
 | `packages/i18n`      | ✅ 中英文文案、语言检测、key 一致性测试                                                                                               |
