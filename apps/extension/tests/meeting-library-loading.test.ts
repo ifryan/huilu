@@ -130,7 +130,7 @@ it('refuses stale permissions and folder changes rather than writing to the new 
   root.permission = 'denied'
   await expect(
     saveLibraryEdit(item, { type: 'archive', previous: false, value: true }),
-  ).rejects.toThrow()
+  ).rejects.toThrow('folderUnavailable')
   root.permission = 'granted'
   const another = new MemoryDirectoryHandle('other')
   Object.assign(another, { isSameEntry: async (other: unknown) => other === another })

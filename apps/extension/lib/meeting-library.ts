@@ -248,10 +248,17 @@ async function assertEditable(meeting: Meeting): Promise<void> {
 
 export async function saveLibraryEdit(item: LibraryItem, edit: MeetingEdit): Promise<Meeting> {
   if (!item.id || !item.available || item.folder?.issue) throw new Error('unavailableMeeting')
+  if (item.folder) {
+    const current = await handles.get()
+    if (!item.root || !current || !(await current.isSameEntry(item.root)))
+      throw new Error('folderChanged')
+    if (!(await LocalFolderStorageAdapter.forHandle(item.root).isReady()))
+      throw new Error('folderUnavailable')
+  }
   // Re-resolve from source: a local record may have completed while its dialog was open.
   const fresh = (await loadLibrary()).items.find((r) => r.key === item.key)
-  if (!fresh || fresh.id !== item.id || fresh.folder?.issue || !fresh.available)
-    throw new Error('editConflict')
+  if (fresh && !fresh.available) throw new Error('folderUnavailable')
+  if (!fresh || fresh.id !== item.id || fresh.folder?.issue) throw new Error('editConflict')
   if (fresh.folder) {
     const current = await handles.get()
     if (
