@@ -140,7 +140,7 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
           </Button>
         </span>
       </header>
-      <RecordingStatusCard status={status} />
+      <RecordingStatusCard status={status} embedded />
       {busy && <p className="text-muted-foreground px-1 text-xs">{t('panel.hint')}</p>}
     </section>
   )
