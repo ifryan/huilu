@@ -114,12 +114,18 @@ describe('actual audio routing', () => {
     expect(captured.transcriptAudioTrack).toBeDefined()
     captured.stop()
   })
-  it.each(['tab', 'window', 'screen'] as const)(
-    'rejects missing requested %s audio before opening the microphone and cleans up',
-    async (sourceType) => {
+  it.each([
+    ['tab', true],
+    ['window', true],
+    ['screen', true],
+    ['window', false],
+    ['screen', false],
+  ] as const)(
+    'rejects missing requested %s audio (grant=%s) before opening the microphone',
+    async (sourceType, granted) => {
       source.tracks.splice(1)
       await expect(
-        browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: false }),
+        browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: granted }),
       ).rejects.toMatchObject({ name: 'SourceAudioUnavailableError' })
       expect(getUserMedia).toHaveBeenCalledOnce()
       expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
@@ -163,7 +169,7 @@ describe('actual audio routing', () => {
     expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
     expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
   })
-  it('reports an audio-only source that ended before microphone initialization completed', async () => {
+  it('rejects an audio-only source that already ended before microphone initialization', async () => {
     const ended = new Track('audio')
     ended.readyState = 'ended'
     source = new Stream([ended])

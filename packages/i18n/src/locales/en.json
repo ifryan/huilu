@@ -48,7 +48,7 @@
     "dismissNotice": "Dismiss",
     "sourceAudio": "Record source / system audio",
     "sourceAudioTabHint": "Captures sound from this tab only, separately from the microphone.",
-    "sourceAudioDesktopHint": "Windows may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track."
+    "sourceAudioDesktopHint": "Window capture may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track."
   },
   "sidepanel": {
     "recording": "Recording",
