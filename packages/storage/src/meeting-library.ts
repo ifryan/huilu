@@ -86,6 +86,7 @@ export async function readMeetingDocument(
 export type MeetingEdit =
   | { type: 'title'; value: string; previous: string }
   | { type: 'favorite'; value: boolean }
+  | { type: 'archive'; value: boolean; previous: boolean }
   | { type: 'rename'; id: string; value: string; previous: string }
   | { type: 'merge'; from: string; into: string; revision: number }
 
@@ -116,6 +117,7 @@ export async function editMeeting(
   dir: string,
   id: string,
   edit: MeetingEdit,
+  beforeEdit?: (meeting: Meeting) => Promise<void>,
 ): Promise<Meeting> {
   return withMeetingLock(id, async () => {
     const path = `${dir}/meeting.json`
@@ -125,12 +127,17 @@ export async function editMeeting(
     const raw = JSON.parse(before) as Record<string, unknown>
     const meeting = migrateMeeting(raw)
     if (meeting.id !== id) throw new Error('foreignMeeting')
+    await beforeEdit?.(meeting)
     if (edit.type === 'title') {
       if (meeting.title !== edit.previous) throw new EditConflictError()
       if (!edit.value.trim()) throw new Error('emptyTitle')
+      if (edit.value.trim().length > 200) throw new Error('longTitle')
       meeting.title = edit.value.trim()
     } else if (edit.type === 'favorite') meeting.favorite = edit.value
-    else if (edit.type === 'rename') {
+    else if (edit.type === 'archive') {
+      if ((meeting.archived ?? false) !== edit.previous) throw new EditConflictError()
+      meeting.archived = edit.value
+    } else if (edit.type === 'rename') {
       const speaker = meeting.speakers.find((s) => s.id === edit.id)
       if (
         !speaker ||

@@ -59,6 +59,8 @@ export const Meeting = z.object({
   /** Atomic user edits; aliases preserve original transcript speaker IDs. */
   speakerAliases: z.record(z.string(), z.string()).optional(),
   favorite: z.boolean().optional(),
+  /** Recoverable library archive; meeting files and processing checkpoints are retained. */
+  archived: z.boolean().optional(),
   editRevision: z.number().int().nonnegative().optional(),
   status: ProcessingStatus,
   /** 录制产物的编码信息；导入的外部文件可能没有 */

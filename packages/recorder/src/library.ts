@@ -29,6 +29,7 @@ export interface LocalRecording {
   error?: string
   /** meeting.json 中的处理状态；没有 meeting.json 时为空 */
   processing?: ProcessingStatus
+  archived?: boolean
   /** 有转写音频分片；为 false 时只能预览视频，不能转写 */
   transcribable: boolean
   tracks: Partial<Record<TrackName, LocalRecordingTrack>>
@@ -62,7 +63,8 @@ export async function listLocalRecordings(store: RecordingStore): Promise<LocalR
     }
     out.push({
       id,
-      title: manifest.title,
+      title: meeting?.title ?? manifest.title,
+      archived: meeting?.archived,
       state: isUnfinished(manifest)
         ? 'unfinished'
         : manifest.endReason === 'error' || manifest.error

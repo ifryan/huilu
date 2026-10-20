@@ -190,6 +190,28 @@ function setup(
 const DIR = '2026-09-28_1030_需求评审'
 
 describe('ProcessingQueue', () => {
+  it('does not enqueue archived OPFS data or mutate its failed job', async () => {
+    const t = setup({ meeting: meeting({ archived: true, status: 'failed' }) })
+    expect(await t.queue.enqueue(MEETING_ID)).toEqual({ queued: false, reason: 'archived' })
+    expect(await t.job()).toBeUndefined()
+    expect(t.transcription.transcribe).not.toHaveBeenCalled()
+    expect(t.source.meeting()?.status).toBe('failed')
+  })
+  it('uses the final folder archive flag over retained OPFS metadata on retry', async () => {
+    const t = setup()
+    await t.queue.start()
+    await t.queue.enqueue(MEETING_ID)
+    await t.settle()
+    const path = `${(await t.job())!.folderDir}/meeting.json`
+    const final = await t.folder.json(path)
+    await t.folder.writeFile(path, JSON.stringify({ ...final, archived: true }))
+    const before = await t.job()
+    expect(await t.queue.enqueue(MEETING_ID)).toEqual({ queued: false, reason: 'archived' })
+    expect(await t.job()).toEqual(before)
+    expect(t.transcription.transcribe).toHaveBeenCalledOnce()
+    t.queue.stop()
+  })
+
   it.each(['silence', 'decodeFailure', 'signal'] as const)(
     'checks local audio before provider calls: %s',
     async (scenario) => {

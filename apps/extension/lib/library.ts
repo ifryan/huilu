@@ -12,6 +12,8 @@ export const listRecordings = () => listLocalRecordings(store)
 
 const store = new RecordingStore(() => navigator.storage.getDirectory())
 
+export const recordingManifest = async (id: string) => (await store.open(id))?.readManifest()
+
 export const libraryKey = ['localRecordings'] as const
 
 export function useLocalRecordings() {

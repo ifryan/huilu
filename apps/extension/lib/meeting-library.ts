@@ -16,7 +16,12 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
 import { opfs } from '@/platform/storage'
-import { listRecordings, openRecordingTrack, useLocalRecordings } from './library'
+import {
+  listRecordings,
+  openRecordingTrack,
+  recordingManifest,
+  useLocalRecordings,
+} from './library'
 import { dataFolderAuthorizedSetting } from './settings'
 
 const index = new MeetingIndex()
@@ -39,6 +44,7 @@ export interface LibraryItem {
   local?: LocalRecording
   available: boolean
   root?: FolderHandle
+  archived: boolean
 }
 export interface LibrarySnapshot {
   items: LibraryItem[]
@@ -105,6 +111,7 @@ function combineLibrary(
       local: recording,
       available,
       root,
+      archived: entry.meeting?.archived ?? false,
     }
   })
   for (const recording of byId.values())
@@ -114,6 +121,7 @@ function combineLibrary(
       title: recording.title,
       local: recording,
       available: true,
+      archived: recording.archived ?? false,
     })
   items.sort(
     (a, b) =>
@@ -218,5 +226,59 @@ export async function saveResultEdit(doc: ResultDocument, edit: MeetingEdit): Pr
   const current = await handles.get()
   if (doc.readOnly || !doc.root || !current || !(await current.isSameEntry(doc.root)))
     throw new Error('folderChanged')
-  return editMeeting(LocalFolderStorageAdapter.forHandle(doc.root), doc.dir, doc.meeting.id, edit)
+  return editMeeting(
+    LocalFolderStorageAdapter.forHandle(doc.root),
+    doc.dir,
+    doc.meeting.id,
+    edit,
+    assertEditable,
+  )
+}
+
+/** Called inside the same cross-context lock used to reserve pipeline work. */
+async function assertEditable(meeting: Meeting): Promise<void> {
+  const [job, manifest] = await Promise.all([jobs.get(meeting.id), recordingManifest(meeting.id)])
+  if (
+    meeting.status === 'recording' ||
+    (manifest && manifest.state !== 'stopped') ||
+    (job && ['queued', 'running', 'waitingFolder'].includes(job.state))
+  )
+    throw new Error('meetingBusy')
+}
+
+export async function saveLibraryEdit(item: LibraryItem, edit: MeetingEdit): Promise<Meeting> {
+  if (!item.id || !item.available || item.folder?.issue) throw new Error('unavailableMeeting')
+  // Re-resolve from source: a local record may have completed while its dialog was open.
+  const fresh = (await loadLibrary()).items.find((r) => r.key === item.key)
+  if (!fresh || fresh.id !== item.id || fresh.folder?.issue || !fresh.available)
+    throw new Error('editConflict')
+  if (fresh.folder) {
+    const current = await handles.get()
+    if (
+      !item.root ||
+      !fresh.root ||
+      !current ||
+      !(await current.isSameEntry(item.root)) ||
+      !(await fresh.root.isSameEntry(item.root))
+    )
+      throw new Error('folderChanged')
+    return editMeeting(
+      LocalFolderStorageAdapter.forHandle(item.root),
+      fresh.folder.dir,
+      item.id,
+      edit,
+      async (meeting) => {
+        const current = await handles.get()
+        if (!current || !(await current.isSameEntry(item.root!))) throw new Error('folderChanged')
+        await assertEditable(meeting)
+      },
+    )
+  }
+  const job = await jobs.get(item.id)
+  if (job?.folderCommitted || job?.state === 'done') throw new Error('folderUnavailable')
+  return editMeeting(opfs, item.id, item.id, edit, async (meeting) => {
+    await assertEditable(meeting)
+    const latest = await jobs.get(meeting.id)
+    if (latest?.folderCommitted || latest?.state === 'done') throw new Error('folderUnavailable')
+  })
 }

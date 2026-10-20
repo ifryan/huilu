@@ -138,7 +138,8 @@
       "noAudio": "No transcription audio was recorded, so this cannot be transcribed",
       "notConfigured": "No transcription service is set up",
       "meetingNotFound": "The meeting information for this recording is missing",
-      "notProcessing": "This recording does not need processing"
+      "notProcessing": "This recording does not need processing",
+      "archived": "Restore the archived meeting before processing."
     },
     "error": {
       "transcriptionNotConfigured": "No transcription service is set up",
@@ -463,6 +464,25 @@
     "accessNeeded": "Restore access to the original data folder",
     "ready": "Completed",
     "incomplete": "Processing is incomplete",
-    "count": "Meetings: {{count}}"
+    "count": "Meetings: {{count}}",
+    "views": "History views",
+    "activeView": "Meetings",
+    "archiveView": "Archived",
+    "archiveEmpty": "No archived meetings.",
+    "editTitle": "Edit title",
+    "archive": "Archive",
+    "restore": "Restore",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "archiveHint": "Hide this meeting from Meetings? You can restore it from Archived. Audio, video, transcript and notes will be kept.",
+    "restoreHint": "Restore this meeting to Meetings? Its files and processing status will be kept.",
+    "emptyTitle": "Enter a meeting title.",
+    "busy": "Finish recording, recovery or pending processing before editing or archiving.",
+    "editConflict": "The meeting or data folder changed. Cancel and refresh before trying again.",
+    "editFailed": "Could not confirm the save. Check folder permission and free space, then refresh to verify before retrying.",
+    "titleSaved": "Meeting title saved.",
+    "archived": "Meeting archived. Restore it from Archived.",
+    "restored": "Meeting restored."
   }
 }

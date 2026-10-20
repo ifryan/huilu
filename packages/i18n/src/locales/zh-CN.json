@@ -138,7 +138,8 @@
       "noAudio": "没有录到转写音频，无法转写",
       "notConfigured": "尚未配置转写服务",
       "meetingNotFound": "找不到这场录制的会议信息",
-      "notProcessing": "这场录制不需要处理"
+      "notProcessing": "这场录制不需要处理",
+      "archived": "请先恢复已归档会议，再开始处理。"
     },
     "error": {
       "transcriptionNotConfigured": "尚未配置转写服务",
@@ -463,6 +464,25 @@
     "accessNeeded": "需要重新授权原数据文件夹",
     "ready": "已完成",
     "incomplete": "尚未完成处理",
-    "count": "共 {{count}} 场会议"
+    "count": "共 {{count}} 场会议",
+    "views": "历史记录视图",
+    "activeView": "会议记录",
+    "archiveView": "已归档",
+    "archiveEmpty": "暂无已归档的会议。",
+    "editTitle": "编辑标题",
+    "archive": "归档",
+    "restore": "恢复",
+    "save": "保存",
+    "cancel": "取消",
+    "saving": "保存中…",
+    "archiveHint": "将这场会议从会议记录中隐藏？可在「已归档」中恢复，音视频、逐字稿和纪要都会保留。",
+    "restoreHint": "将这场会议恢复到会议记录？文件和处理状态都会保留。",
+    "emptyTitle": "请输入会议标题。",
+    "busy": "请先结束录制、恢复未完成录制或等待处理任务结束，再编辑或归档。",
+    "editConflict": "会议或数据文件夹已更改，请取消并刷新列表后重试。",
+    "editFailed": "无法确认保存结果。请检查文件夹授权及剩余空间，刷新核对后再重试。",
+    "titleSaved": "会议标题已保存。",
+    "archived": "会议已归档，可在「已归档」中恢复。",
+    "restored": "会议已恢复。"
   }
 }

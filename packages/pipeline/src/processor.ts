@@ -251,8 +251,21 @@ export class ProcessingQueue {
    * 失败或已完成的任务重新排队：保留断点和 OPFS 中的中间结果，只补做缺少的步骤
    */
   async enqueue(meetingId: string, options: EnqueueOptions = {}): Promise<EnqueueResult> {
+    return withMeetingLock(meetingId, () => this.#enqueue(meetingId, options))
+  }
+
+  async #enqueue(meetingId: string, options: EnqueueOptions): Promise<EnqueueResult> {
     const meeting = await this.deps.source.readMeeting(meetingId)
     if (!meeting) return { queued: false, reason: 'meetingNotFound' }
+    const existing = await this.deps.jobs.get(meetingId)
+    const committed = existing?.folderCommitted || existing?.state === 'done'
+    const final =
+      committed && existing?.folderDir && (await this.deps.folder.isReady())
+        ? await readJson(this.deps.folder, `${existing.folderDir}/meeting.json`, (v) =>
+            Meeting.parse(v),
+          )
+        : undefined
+    if ((final ?? meeting).archived) return { queued: false, reason: 'archived' }
     // 只有视频、没有转写音频（或旧数据标为 failed 且无音频）：不可转写，不上传静音
     if (!meeting.media?.audio || !(await this.deps.source.readAudio(meetingId))) {
       return { queued: false, reason: 'noAudio' }
@@ -263,7 +276,6 @@ export class ProcessingQueue {
         return { queued: false, reason: 'notConfigured' }
       }
     }
-    const existing = await this.deps.jobs.get(meetingId)
     if (existing && isActive(existing)) return { queued: true, job: existing }
     if (options.auto && existing) return { queued: true, job: existing }
 
