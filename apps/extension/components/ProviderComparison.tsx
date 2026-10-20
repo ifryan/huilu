@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/ProviderComparison'
+export { ProviderComparison } from '@huilu/app-shell/components/ProviderComparison'

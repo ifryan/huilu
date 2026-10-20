@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/TranscriptRows'
+export { TranscriptRows } from '@huilu/app-shell/components/TranscriptRows'

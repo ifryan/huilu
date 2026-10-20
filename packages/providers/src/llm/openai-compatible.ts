@@ -85,11 +85,13 @@ export const openAiCompatibleLlm: LlmProvider<OpenAiCompatibleLlmConfig> & WithP
   presets: [
     {
       id: 'qwen',
+      browserCors: 'ok',
       nameKey: 'providers.preset.qwen',
       values: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
     },
     {
       id: 'deepseek',
+      browserCors: 'ok',
       nameKey: 'providers.preset.deepseek',
       values: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
     },
@@ -97,28 +99,32 @@ export const openAiCompatibleLlm: LlmProvider<OpenAiCompatibleLlmConfig> & WithP
     // 模型名随套餐与版本变化，不预填，由用户按服务商文档填写
     {
       id: 'zhipu',
+      browserCors: 'ok',
       nameKey: 'providers.preset.zhipu',
       values: { baseUrl: ZHIPU_BASE_URL, model: '' },
       hintKey: 'providers.preset.zhipuHint',
     },
     {
       id: 'glmCodingPlan',
+      browserCors: 'blocked',
       nameKey: 'providers.preset.glmCodingPlan',
       values: { baseUrl: GLM_CODING_PLAN_BASE_URL, model: '', clientHeaders: 'claudeCli' },
       hintKey: 'providers.preset.glmCodingPlanHint',
     },
     {
       id: 'openai',
+      browserCors: 'blocked',
       nameKey: 'providers.preset.openai',
       values: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
     },
     {
       id: 'ollama',
+      browserCors: 'unknown',
       nameKey: 'providers.preset.ollama',
       values: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b' },
       hintKey: 'providers.preset.ollamaHint',
     },
-    { id: 'custom', nameKey: 'providers.preset.custom', values: {} },
+    { id: 'custom', browserCors: 'unknown', nameKey: 'providers.preset.custom', values: {} },
   ],
   testConnection: (config, ctx) => testOpenAiCompatible(config, ctx),
   async generateObject({ system, prompt, schema }, config, ctx) {

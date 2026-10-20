@@ -15,6 +15,7 @@ import {
   type ProcessingReadiness,
   type ProcessingView,
 } from '@/lib/processing-view'
+import { localResults } from '@/platform/storage'
 import { useFolderActions } from '@/lib/readiness'
 
 /**
@@ -182,9 +183,11 @@ export function ProcessingStatus({
         return (
           <>
             <p className="text-success">
-              {v.folderDir
-                ? t('processing.done', { folder: v.folderDir })
-                : t('history.transcribed')}
+              {localResults
+                ? t('web.browserOnlyDone')
+                : v.folderDir
+                  ? t('processing.done', { folder: v.folderDir })
+                  : t('history.transcribed')}
             </p>
             {v.summarySkipped && (
               <p className="text-muted-foreground">

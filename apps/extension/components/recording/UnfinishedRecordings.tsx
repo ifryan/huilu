@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/recording/UnfinishedRecordings'
+export { UnfinishedRecordings } from '@huilu/app-shell/components/recording/UnfinishedRecordings'

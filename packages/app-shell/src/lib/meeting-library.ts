@@ -15,7 +15,7 @@ import {
 } from '@huilu/storage'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
-import { opfs } from '@/platform/storage'
+import { opfs, localResults } from '@/platform/storage'
 import {
   listRecordings,
   openRecordingTrack,
@@ -173,7 +173,7 @@ export async function loadResult(id: string): Promise<ResultDocument> {
   const item = library.items.find((r) => r.id === id)
   if (item?.folder?.issue === 'duplicate') throw new Error('duplicateMeeting')
   const job = await jobs.get(id)
-  if (item?.folder || job?.folderCommitted || job?.state === 'done') {
+  if (!localResults && (item?.folder || job?.folderCommitted || job?.state === 'done')) {
     const root = item?.root ?? (await currentRoot())
     if (!root) throw new Error('folderUnavailable')
     const folder = LocalFolderStorageAdapter.forHandle(root)
@@ -196,7 +196,7 @@ export async function loadResult(id: string): Promise<ResultDocument> {
     dir: id,
     source: 'local',
     local: item.local,
-    readOnly: true,
+    readOnly: !localResults,
   }
 }
 
@@ -223,6 +223,8 @@ export async function resultMedia(
 }
 
 export async function saveResultEdit(doc: ResultDocument, edit: MeetingEdit): Promise<Meeting> {
+  if (localResults && doc.source === 'local' && !doc.readOnly)
+    return editMeeting(opfs, doc.dir, doc.meeting.id, edit, assertEditable)
   const current = await handles.get()
   if (doc.readOnly || !doc.root || !current || !(await current.isSameEntry(doc.root)))
     throw new Error('folderChanged')
@@ -282,10 +284,12 @@ export async function saveLibraryEdit(item: LibraryItem, edit: MeetingEdit): Pro
     )
   }
   const job = await jobs.get(item.id)
-  if (job?.folderCommitted || job?.state === 'done') throw new Error('folderUnavailable')
+  if (!localResults && (job?.folderCommitted || job?.state === 'done'))
+    throw new Error('folderUnavailable')
   return editMeeting(opfs, item.id, item.id, edit, async (meeting) => {
     await assertEditable(meeting)
     const latest = await jobs.get(meeting.id)
-    if (latest?.folderCommitted || latest?.state === 'done') throw new Error('folderUnavailable')
+    if (!localResults && (latest?.folderCommitted || latest?.state === 'done'))
+      throw new Error('folderUnavailable')
   })
 }

@@ -10,6 +10,7 @@ export const PROVIDER_ERROR_CODES = [
   'quotaExceeded',
   'server',
   'network',
+  'cors',
   'timeout',
   'aborted',
   'badResponse',

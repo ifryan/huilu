@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/recording/Segmented'
+export { Segmented, Field } from '@huilu/app-shell/components/recording/Segmented'

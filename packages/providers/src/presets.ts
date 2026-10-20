@@ -1,5 +1,8 @@
+import type { BrowserCors } from './browser'
+
 /** 服务商预设：选中后自动填入 Base URL、模型等字段，用户仍可修改 */
 export interface ProviderPreset {
+  browserCors?: BrowserCors
   id: string
   /** 预设名称的 i18n key */
   nameKey: string

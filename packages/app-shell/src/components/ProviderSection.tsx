@@ -1,6 +1,12 @@
 import type { TranscriptionProvider } from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
-import { ProviderError, describeConfigFields, getPresets, type ConfigField } from '@huilu/providers'
+import {
+  ProviderError,
+  describeConfigFields,
+  getPresets,
+  browserCors,
+  type ConfigField,
+} from '@huilu/providers'
 import { Button, fieldClass } from '@huilu/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
@@ -38,10 +44,12 @@ export function ProviderSection({
   kind,
   description,
   onSaved,
+  browserMode = false,
 }: {
   kind: ProviderKind
   description?: string
   onSaved?: () => void
+  browserMode?: boolean
 }) {
   const { data: settings, dataUpdatedAt } = useQuery({
     queryKey: ['providerSettings', kind],
@@ -59,6 +67,7 @@ export function ProviderSection({
       initialSettings={settings}
       description={description}
       onSaved={onSaved}
+      browserMode={browserMode}
     />
   )
 }
@@ -68,11 +77,13 @@ function ProviderForm({
   initialSettings,
   description,
   onSaved,
+  browserMode = false,
 }: {
   kind: ProviderKind
   initialSettings: ProviderSettings
   description?: string
   onSaved?: () => void
+  browserMode?: boolean
 }) {
   const { t } = useTranslation()
   const dt = useDynamicT()
@@ -126,6 +137,10 @@ function ProviderForm({
     return result
   }
 
+  const cors = browserMode ? browserCors(provider, values) : undefined
+  const unavailable =
+    browserMode && (values.preset === 'glmCodingPlan' || values.baseUrl?.includes('/api/coding/'))
+
   const invalidMessage =
     invalid.length > 0 &&
     t('settings.invalid', {
@@ -136,19 +151,23 @@ function ProviderForm({
 
   const save = () => {
     const result = validate()
-    if (!result.ok) return
+    if (!result.ok || unavailable) return
     setSaveError(undefined)
     const url = connectionUrl(provider.id, result.config)
     // 自定义地址要先拿到域名权限：必须在点击后的第一个异步调用里申请（离屏文档之后无法再弹窗）。
     // 拒绝授权就不保存，避免显示「已配置」而实际请求必然失败
     const permitted = url ? requestHostPermission(url).catch(() => false) : Promise.resolve(true)
-    void permitted.then(async (ok) => {
+    const saving = permitted.then(async (ok) => {
       if (!ok) {
         setSaveError(t('settings.hostPermissionDenied', { origin: new URL(url!).origin }))
         return
       }
       await persist(result.config)
     })
+    if (browserMode)
+      void saving.catch((error: unknown) =>
+        setSaveError(error instanceof Error ? error.message : String(error)),
+      )
   }
 
   const persist = async (config: ProviderConfig) => {
@@ -167,7 +186,7 @@ function ProviderForm({
 
   const testConnection = () => {
     const result = validate()
-    if (!result.ok) return
+    if (!result.ok || unavailable) return
     const url = connectionUrl(provider.id, result.config)
     // 先申请域名权限（需要用户激活，必须是点击后的第一个异步调用）
     const permitted = url ? requestHostPermission(url).catch(() => false) : Promise.resolve(true)
@@ -247,10 +266,34 @@ function ProviderForm({
           </Field>
         )}
 
+        {browserMode && (
+          <p className="bg-warning-soft text-body2 rounded-control px-3 py-2" role="status">
+            {t(
+              cors === 'blocked'
+                ? 'web.corsBlocked'
+                : cors === 'ok'
+                  ? 'web.corsOk'
+                  : 'web.corsUnknown',
+            )}
+          </p>
+        )}
         {visibleFields(fields, values).map((field) => (
-          <Field key={field.key} label={dt(field.titleKey)} required={field.required}>
+          <Field
+            key={field.key}
+            label={
+              browserMode && field.key === 'baseUrl' ? t('web.proxyLabel') : dt(field.titleKey)
+            }
+            required={field.required}
+          >
             <FieldInput
-              field={field}
+              field={
+                browserMode && field.key === 'preset'
+                  ? {
+                      ...field,
+                      options: field.options?.filter((option) => option !== 'glmCodingPlan'),
+                    }
+                  : field
+              }
               value={values[field.key] ?? ''}
               invalid={invalid.includes(field.key)}
               onChange={(v) => setField(field, v)}
@@ -287,11 +330,13 @@ function ProviderForm({
         {saveError && <p className="text-danger text-sm">{saveError}</p>}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit">{t('settings.save')}</Button>
+          <Button type="submit" disabled={!!unavailable}>
+            {t('settings.save')}
+          </Button>
           <Button
             type="button"
             variant="outline"
-            disabled={test.state === 'testing'}
+            disabled={test.state === 'testing' || !!unavailable}
             onClick={testConnection}
           >
             {test.state === 'testing' ? t('settings.testing') : t('settings.test')}

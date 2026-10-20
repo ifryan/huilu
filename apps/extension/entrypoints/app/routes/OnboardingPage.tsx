@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/routes/OnboardingPage'
+export { OnboardingPage } from '@huilu/app-shell/routes/OnboardingPage'

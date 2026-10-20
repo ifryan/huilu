@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/ProviderSection'
+export { ProviderSection } from '@huilu/app-shell/components/ProviderSection'

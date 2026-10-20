@@ -2,6 +2,7 @@
 
 /* 让 Tailwind 扫描共享组件中的类名 */
 @source './';
+@source '../../app-shell/src';
 
 /*
  * 视觉基线参考 Board UI（boardui-library@1.0.0，styles/theme.css、typography.css）：

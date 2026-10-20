@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/routes/MicrophonePermissionPage'
+export { MicrophonePermissionPage } from '@huilu/app-shell/routes/MicrophonePermissionPage'

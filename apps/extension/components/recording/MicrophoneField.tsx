@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/recording/MicrophoneField'
+export { MicrophoneField } from '@huilu/app-shell/components/recording/MicrophoneField'

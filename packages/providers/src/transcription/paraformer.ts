@@ -5,6 +5,7 @@ import {
   type TranscriptionProvider,
 } from '@huilu/core'
 import { z } from 'zod'
+import type { BrowserCapability } from '../browser'
 import { ProviderError } from '../errors'
 import { audioFileName, bearer, fetchJson, fetchText, sleep } from '../http'
 
@@ -318,8 +319,9 @@ async function transcribe(
 }
 
 /** 阿里云百炼 Paraformer 录音文件识别（默认推荐，支持区分发言人） */
-export const paraformer: TranscriptionProvider<ParaformerConfig> = {
+export const paraformer: TranscriptionProvider<ParaformerConfig> & BrowserCapability = {
   id: 'dashscope-paraformer',
+  browserCors: 'blocked',
   nameKey: 'providers.paraformer.name',
   configSchema: ParaformerConfig,
   capabilities: {

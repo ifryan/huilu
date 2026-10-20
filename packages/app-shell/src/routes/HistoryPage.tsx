@@ -12,7 +12,7 @@ import { processingReadiness } from '@/lib/processing-view'
 import { useReadiness } from '@/lib/readiness'
 import { formatDuration } from '@/lib/recording'
 
-export function HistoryPage() {
+export function HistoryPage({ browserOnly = false }: { browserOnly?: boolean }) {
   const { t } = useTranslation()
   const { data, isLoading, error, refetch, isFetching } = useMeetingLibrary()
   const { data: jobs } = useProcessingJobs()
@@ -29,7 +29,9 @@ export function HistoryPage() {
     <section className="mx-auto flex max-w-5xl flex-col gap-5">
       <header>
         <h1 className="text-title2 font-semibold">{t('nav.history')}</h1>
-        <p className="text-muted-foreground text-body2 mt-1">{t('library.note')}</p>
+        <p className="text-muted-foreground text-body2 mt-1">
+          {t(browserOnly ? 'web.fallbackHistory' : 'library.note')}
+        </p>
       </header>
       <div ref={views} className="flex flex-wrap gap-2" aria-label={t('library.views')}>
         <Button

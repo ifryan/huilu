@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/MeetingExports'
+export { MeetingExports } from '@huilu/app-shell/components/MeetingExports'

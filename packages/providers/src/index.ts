@@ -26,3 +26,5 @@ export function registerBuiltinProviders(registries: typeof coreRegistries): voi
     if (!registries.llm.has(p.id)) registries.llm.register(p as LlmProvider)
   }
 }
+
+export * from './browser'

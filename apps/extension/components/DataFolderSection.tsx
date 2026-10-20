@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/DataFolderSection'
+export { DataFolderSection } from '@huilu/app-shell/components/DataFolderSection'

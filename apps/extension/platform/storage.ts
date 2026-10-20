@@ -14,3 +14,6 @@ export const opfs = new OpfsStorageAdapter({ base: RECORDINGS_DIR })
 for (const adapter of [dataFolder, opfs]) {
   if (!registries.storage.has(adapter.id)) registries.storage.register(adapter)
 }
+
+/** Extension results are committed to the chosen data folder. */
+export const localResults = false

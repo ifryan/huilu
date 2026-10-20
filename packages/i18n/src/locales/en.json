@@ -378,7 +378,8 @@
       "badResponse": "Unrecognized response: check that the Base URL points to the right API",
       "fileTooLarge": "The audio file exceeds the provider's single-file limit",
       "taskFailed": "The provider could not finish the job",
-      "notImplemented": "Not implemented yet"
+      "notImplemented": "Not implemented yet",
+      "cors": "Browser request blocked (possibly CORS, DNS or TLS). Use a CORS-enabled proxy Base URL or the extension; check your network."
     }
   },
   "recorderWindow": {
@@ -492,5 +493,34 @@
     "titleSaved": "Meeting title saved.",
     "archived": "Meeting archived. Restore it from Archived.",
     "restored": "Meeting restored."
+  },
+  "web": {
+    "record": "New recording",
+    "keepOpen": "Keep the processing page open during transcription and summary generation.",
+    "browserStorage": "Browser storage only (OPFS)",
+    "storageWarning": "This browser cannot select a local folder. Meetings stay in this site’s browser storage; clearing site data or private browsing may lose them. Export downloads regularly.",
+    "persist": "Request persistent storage",
+    "persistYes": "Persistent storage granted",
+    "persistNo": "Persistence was not granted. Export your meetings regularly.",
+    "corsUnknown": "Direct browser access is unverified. Test the connection first. If blocked, use the extension or your own CORS-enabled proxy Base URL.",
+    "corsBlocked": "This preset requires the extension or your own proxy. GLM Coding Plan header adaptation is extension-only.",
+    "corsOk": "Readable with an invalid key in a browser probe; full processing still requires a valid key.",
+    "pip": "Open recording window",
+    "pipUnsupported": "Recording window is unavailable. Use the controls on this page.",
+    "sourceAudio": "Record source audio",
+    "micDevice": "Microphone device",
+    "defaultDevice": "System default",
+    "devices": "Authorize and refresh devices",
+    "micGranted": "Microphone authorized",
+    "start": "Choose source and start",
+    "storageMissing": "OPFS or a secure context is unavailable. Use desktop Chrome on HTTPS / localhost.",
+    "runtimeError": "Processing queue unavailable. Preserve site data and reopen this page.",
+    "fallbackHistory": "Preview and export recordings from history. Back up before clearing site data.",
+    "proxyLabel": "Base URL / Proxy Base URL",
+    "micOnboarding": "Microphone (optional)",
+    "sourceHint": "Choose a tab, window or screen in the browser picker. Enable audio sharing when source audio is needed.",
+    "pipError": "Could not open recording window: ",
+    "browserOnlyDone": "Saved in browser storage. Edit and download from the result page.",
+    "captureUnsupported": "Screen capture is unavailable in this browser. Use desktop Chrome; existing meetings can still be viewed and exported."
   }
 }

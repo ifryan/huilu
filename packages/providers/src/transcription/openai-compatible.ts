@@ -147,15 +147,17 @@ export const openAiCompatibleTranscription: TranscriptionProvider<OpenAiCompatib
   presets: [
     {
       id: 'groq',
+      browserCors: 'ok',
       nameKey: 'providers.preset.groq',
       values: { baseUrl: 'https://api.groq.com/openai/v1', model: 'whisper-large-v3-turbo' },
     },
     {
       id: 'openai',
+      browserCors: 'blocked',
       nameKey: 'providers.preset.openai',
       values: { baseUrl: 'https://api.openai.com/v1', model: 'whisper-1' },
     },
-    { id: 'custom', nameKey: 'providers.preset.custom', values: {} },
+    { id: 'custom', browserCors: 'unknown', nameKey: 'providers.preset.custom', values: {} },
   ],
   testConnection: (config, ctx) => testOpenAiCompatible(config, ctx),
   transcribe,

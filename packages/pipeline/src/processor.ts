@@ -76,6 +76,8 @@ export interface ProcessingDeps {
   work: Files
   /** 用户的数据文件夹 */
   folder: Files & Pick<StorageAdapter, 'isReady' | 'isDirectoryEmpty'>
+  /** Optional final directory mapping; the web OPFS fallback keeps results alongside their recording. */
+  folderName?: (meeting: Meeting) => string
   services(): Promise<ResolvedServices>
   splitter?: AudioSplitter
   /** 本地解码检查；仅全程接近数字静音时返回 false，不判断是否为人声。 */
@@ -715,7 +717,7 @@ export class ProcessingQueue {
 
   /** Verify ownership on every write, including after the user changes folders. */
   async #folderDir(job: ProcessingJob, meeting: Meeting): Promise<string> {
-    const base = meetingFolderName(meeting)
+    const base = (this.deps.folderName ?? meetingFolderName)(meeting)
     const candidates = [
       ...(job.folderDir ? [job.folderDir] : []),
       ...Array.from({ length: 99 }, (_, i) => (i === 0 ? base : `${base} (${i + 1})`)),

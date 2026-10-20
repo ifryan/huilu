@@ -190,6 +190,27 @@ function setup(
 const DIR = '2026-09-28_1030_需求评审'
 
 describe('ProcessingQueue', () => {
+  it('supports final results in an origin-local directory selected by the host', async () => {
+    const t = setup()
+    t.work.files.set(`${MEETING_ID}/meeting.json`, new Blob([JSON.stringify(t.source.meeting())]))
+    const queue = new ProcessingQueue({
+      ...t.deps,
+      folder: t.work,
+      folderName: (meeting) => meeting.id,
+    })
+    await queue.start()
+    await queue.enqueue(MEETING_ID)
+    await t.settle()
+    expect(await t.job()).toMatchObject({
+      state: 'done',
+      folderDir: MEETING_ID,
+      folderCommitted: true,
+    })
+    expect(t.work.files.has(`${MEETING_ID}/meeting.json`)).toBe(true)
+    expect(t.work.files.has(`${MEETING_ID}/summary.md`)).toBe(true)
+    expect(t.folder.files.size).toBe(0)
+    queue.stop()
+  })
   it('does not enqueue archived OPFS data or mutate its failed job', async () => {
     const t = setup({ meeting: meeting({ archived: true, status: 'failed' }) })
     expect(await t.queue.enqueue(MEETING_ID)).toEqual({ queued: false, reason: 'archived' })

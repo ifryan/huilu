@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/recording/Switch'
+export { SwitchRow } from '@huilu/app-shell/components/recording/Switch'

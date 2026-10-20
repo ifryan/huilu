@@ -378,7 +378,8 @@
       "badResponse": "返回的内容无法识别：请检查 Base URL 是否指向正确的接口",
       "fileTooLarge": "音频文件超过服务商的单文件上限",
       "taskFailed": "服务商未能完成识别",
-      "notImplemented": "功能尚未实现"
+      "notImplemented": "功能尚未实现",
+      "cors": "浏览器无法访问服务（可能为 CORS，也可能是 DNS / TLS）。请使用允许跨域的代理 Base URL 或插件；离线时请先恢复网络。"
     }
   },
   "recorderWindow": {
@@ -492,5 +493,34 @@
     "titleSaved": "会议标题已保存。",
     "archived": "会议已归档，可在「已归档」中恢复。",
     "restored": "会议已恢复。"
+  },
+  "web": {
+    "record": "新建录制",
+    "keepOpen": "转写和纪要处理期间，请保持处理页面打开。",
+    "browserStorage": "仅浏览器内存储（OPFS）",
+    "storageWarning": "此浏览器不支持本地文件夹。会议仅保存在此网站的浏览器存储中；清除网站数据或使用隐私模式可能丢失。请及时导出下载。",
+    "persist": "请求持久存储",
+    "persistYes": "已获得持久存储",
+    "persistNo": "浏览器未授予持久存储，请及时导出",
+    "corsUnknown": "网页直连能力未确认。测试连接后再使用；无法直连时，需要插件或自建代理。可在 Base URL 填写允许此网页源的代理地址。",
+    "corsBlocked": "此预设在网页中不可用，需要插件或自建代理。GLM Coding Plan 的请求头适配仅在插件中可用。",
+    "corsOk": "该预设在无效 Key 的浏览器请求中可读；仍需有效 Key 验证完整流程。",
+    "pip": "打开录制小窗",
+    "pipUnsupported": "浏览器不支持录制小窗，请使用页面内控件。",
+    "sourceAudio": "录制来源声音",
+    "micDevice": "麦克风设备",
+    "defaultDevice": "系统默认设备",
+    "devices": "授权并刷新设备",
+    "micGranted": "麦克风已授权",
+    "start": "选择来源并开始录制",
+    "storageMissing": "当前环境不支持 OPFS 或安全上下文，请使用 HTTPS / localhost 下的桌面 Chrome。",
+    "runtimeError": "处理队列不可用，请保留页面数据并重新打开页面。",
+    "fallbackHistory": "录制后可在历史中预览与导出；清除网站数据前请备份。",
+    "proxyLabel": "Base URL / 代理 Base URL",
+    "micOnboarding": "麦克风（可选）",
+    "sourceHint": "在浏览器选择框中选择标签页、窗口或屏幕；需要来源声音时请勾选共享音频。",
+    "pipError": "无法打开录制小窗：",
+    "browserOnlyDone": "已保存在浏览器中，可在结果页编辑与下载。",
+    "captureUnsupported": "此浏览器不支持屏幕共享录制。请使用桌面 Chrome；已有会议仍可查看和导出。"
   }
 }

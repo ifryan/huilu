@@ -1,0 +1,41 @@
+import {
+  createHashHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { RecordPage } from '@/routes/RecordPage'
+import { HistoryPage } from '@/routes/HistoryPage'
+import { Layout } from '@/routes/Layout'
+import { MicrophonePermissionPage } from '@/routes/MicrophonePermissionPage'
+import { OnboardingPage } from '@/routes/OnboardingPage'
+import { ResultPage } from '@/routes/ResultPage'
+import { SettingsPage } from '@/routes/SettingsPage'
+
+// Hash routing keeps nested routes portable on ordinary static hosts.
+const rootRoute = createRootRoute({ component: Layout })
+
+const routeTree = rootRoute.addChildren([
+  createRoute({ getParentRoute: () => rootRoute, path: '/record', component: RecordPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/', component: HistoryPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/meeting/$meetingId',
+    component: ResultPage,
+  }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: '/onboarding', component: OnboardingPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/permissions/microphone',
+    component: MicrophonePermissionPage,
+  }),
+])
+
+export const router = createRouter({ routeTree, history: createHashHistory() })
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}

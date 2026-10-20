@@ -1,1 +1,1 @@
-export * from '@huilu/app-shell/components/ReadinessBanner'
+export { ReadinessBanner } from '@huilu/app-shell/components/ReadinessBanner'
