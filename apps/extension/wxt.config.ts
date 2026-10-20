@@ -42,6 +42,8 @@ export default defineConfig({
     ],
     // 自定义 Base URL：用户点击「测试连接」时再申请对应域名的权限
     optional_host_permissions: ['https://*/*', 'http://*/*'],
+    // 页面内录制的存储 iframe 要能被嵌进任意网页；它只接受后台校验过令牌的端口（lib/recorder-sink）
+    web_accessible_resources: [{ resources: ['recorder-sink.html'], matches: ['<all_urls>'] }],
     commands: {
       'toggle-recording': {
         suggested_key: { default: 'Alt+Shift+R' },

@@ -17,7 +17,7 @@ import {
   estimateBytesPerHour,
   videoBitrate,
 } from './quality'
-import type { RecordingDir, RecordingStore } from './store'
+import type { RecordingDirSink, RecordingSink } from './store'
 
 export interface RecordingOptions extends CaptureRequest {
   id: string
@@ -41,6 +41,8 @@ export interface SessionStatus {
   bytes: number
   /** 暂停、收尾和结束时归零 */
   audioLevel?: number
+  /** 录制中实际混音最近的峰值与累计个数，用来画波形；暂停、收尾和结束时为空 */
+  audioPeaks?: { peaks: number[]; total: number }
   warnings: RecorderWarning[]
   error?: string
 }
@@ -62,7 +64,7 @@ export class InsufficientStorageError extends Error {
 }
 
 export interface SessionDeps {
-  store: RecordingStore
+  store: RecordingSink
   media: MediaBackend
   now?: () => number
   /** 等待 MediaRecorder 输出最后一个分片的上限，防止异常的录制器让「结束」一直卡住 */
@@ -122,7 +124,7 @@ export class RecordingSession {
   readonly finished: Promise<FinishedRecording>
 
   #resolveFinished!: (r: FinishedRecording) => void
-  #dir?: RecordingDir
+  #dir?: RecordingDirSink
   #media?: CapturedMedia
   #writers: TrackWriter[] = []
   #warnings: RecorderWarning[] = []
@@ -446,6 +448,7 @@ export class RecordingSession {
       elapsedMs: this.#elapsedMs(),
       bytes: this.#bytes(),
       audioLevel: this.state === 'recording' ? (this.#media?.audioLevel?.() ?? 0) : 0,
+      audioPeaks: this.state === 'recording' ? this.#media?.audioPeaks?.() : undefined,
       warnings: [...this.#warnings],
       error: this.#error,
     }

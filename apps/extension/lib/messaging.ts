@@ -3,14 +3,20 @@ import type { Meeting, RecordingMode } from '@huilu/core'
 import type { EnqueueResult } from '@huilu/pipeline/jobs'
 import type {
   FinishedRecording,
-  RecorderStatus,
+  RecorderStatus as BaseRecorderStatus,
   RecordingOptions,
   UnfinishedRecording,
 } from '@huilu/recorder'
 import type { ProcessingSettings } from './processing-settings'
 import type { RecordingPrefs } from './settings'
 
-export type { RecorderStatus, UnfinishedRecording }
+export type { UnfinishedRecording }
+
+/**
+ * 录制状态。awaitingSource：页面内录制已就绪，正等用户在网页的录制面板上点「选择来源」
+ * （getDisplayMedia 要求网页内的点击），此时 state 为 starting、还没有 session
+ */
+export type RecorderStatus = BaseRecorderStatus & { awaitingSource?: boolean }
 
 export type LastRecording = NonNullable<RecorderStatus['lastResult']>
 
@@ -87,6 +93,23 @@ interface ProtocolMap {
   'window:status'(): RecorderStatus
   // 录制窗口 → 后台：页面已加载、消息处理已注册
   recorderWindowReady(): void
+
+  // 后台 → 网页（页面内录制，entrypoints/capture.content）：按 tabId 发送，选择框由后台在该网页上弹出
+  /** 嵌入存储 iframe 并等它就绪；网页里已有录制时返回 false */
+  'page:prepare'(sinkToken: string): boolean
+  /** 选择框被取消等：移除空闲的存储 iframe */
+  'page:release'(): void
+  /** 记下录制设置，在录制面板上等用户点「选择来源」；之后的结果由网页用 page* 消息报告 */
+  'page:arm'(options: WindowRecordingOptions): RecorderStatus
+  'page:pause'(): RecorderStatus
+  'page:resume'(): RecorderStatus
+  'page:stop'(): RecorderStatus
+  'page:status'(): RecorderStatus
+  // 网页 → 后台：页面内录制在用户选源后开始成功 / 失败（含取消、等待超时）
+  pageRecordingStarted(status: RecorderStatus): void
+  pageRecordingFailed(error: string): void
+  // 存储 iframe → 后台：核对 page:prepare 时下发的一次性令牌，防止网页自己嵌入它来写插件存储
+  verifyRecorderSink(token: string): boolean
 
   // 离屏文档 → 后台：录制结束（用户结束 / 来源结束 / 写入失败）
   recordingFinished(result: Omit<FinishedRecording, 'meeting'> & { saved: boolean }): void

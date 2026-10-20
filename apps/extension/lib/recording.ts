@@ -50,6 +50,14 @@ export function formatDuration(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
+/** 默认会议名：Meeting_YYYYMMDD_HHmmss，按本地时间 */
+export function defaultMeetingTitle(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const day = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`
+  const time = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+  return `Meeting_${day}_${time}`
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024 ** 2) return `${Math.max(0, Math.round(bytes / 1024))} KB`
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
@@ -91,6 +99,7 @@ export function startErrorText(t: T, error: unknown): string {
     })
   }
   if (text.includes('RecorderWindowClosed')) return t('recorder.error.windowClosed')
+  if (text.includes('RecorderPageClosed')) return t('recorder.error.pageClosed')
   if (
     text.includes('NotAllowedError') ||
     text.includes('cannot be captured') ||

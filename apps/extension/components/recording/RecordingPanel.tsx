@@ -1,6 +1,7 @@
 import { useTranslation } from '@huilu/i18n'
 import { Button, X, cn } from '@huilu/ui'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { pageCapture } from '@/lib/page-capture'
 import { formatDuration, useRecorderStatus } from '@/lib/recording'
 import { RecordingStatusCard } from './RecordingStatusCard'
 
@@ -121,7 +122,7 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
       >
         <span className="pl-1 font-semibold">{t('app.name')}</span>
         <span className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
-          {busy && (
+          {busy && !status.awaitingSource && (
             <Button size="sm" variant="ghost" onClick={() => setCollapsed(true)}>
               {t('panel.collapse')}
             </Button>
@@ -140,8 +141,35 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
           </Button>
         </span>
       </header>
-      <RecordingStatusCard status={status} embedded />
-      {busy && <p className="text-muted-foreground px-1 text-xs">{t('panel.hint')}</p>}
+      {status.awaitingSource ? (
+        <SourcePrompt />
+      ) : (
+        <>
+          <RecordingStatusCard status={status} embedded />
+          {busy && <p className="text-muted-foreground px-1 text-xs">{t('panel.hint')}</p>}
+        </>
+      )}
     </section>
+  )
+}
+
+/**
+ * 页面内录制已就绪：Chrome 要求共享选择框由网页内的点击打开（工具栏弹窗里的点击不算），
+ * 所以在这里让用户再点一下。窗口 / 整个屏幕的声音开关默认关闭，提醒用户打开
+ */
+function SourcePrompt() {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-col gap-3 px-1">
+      <p className="text-sm font-medium">{t('panel.chooseSourceTitle')}</p>
+      <p className="text-muted-foreground text-xs">{t('panel.chooseSourceHint')}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" onClick={() => pageCapture()?.cancel()}>
+          {t('panel.cancelSource')}
+        </Button>
+        {/* 必须在点击的同步调用栈里调用 getDisplayMedia */}
+        <Button onClick={() => pageCapture()?.chooseSource()}>{t('panel.chooseSource')}</Button>
+      </div>
+    </div>
   )
 }

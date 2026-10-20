@@ -1,6 +1,6 @@
 import { browser } from '#imports'
 import { useTranslation } from '@huilu/i18n'
-import { Button, CheckCircle2 } from '@huilu/ui'
+import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { RecordingSetup } from '@/components/recording/RecordingSetup'
 import {
@@ -101,7 +101,7 @@ function RecordingNotices({ status }: { status: RecorderStatus & { startError?: 
 }
 
 /**
- * 就绪状态：文件夹是否授权、API 是否配置，未就绪时一键跳转到插件网页处理。
+ * 就绪状态：文件夹未授权、API 未配置时提示，并一键跳转到插件网页处理；就绪时不显示。
  * 重新授权放在插件网页里完成：弹窗失去焦点会被关闭，不适合承载授权弹窗。
  * 未就绪不影响录制（录制只依赖 OPFS）。
  */
@@ -143,14 +143,8 @@ function ReadinessStatus() {
     }
   }
 
-  if (items.length === 0) {
-    return (
-      <div className="bg-success-soft text-success text-body2 rounded-control flex items-center gap-2 px-3 py-2">
-        <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
-        {t('readiness.ready')}
-      </div>
-    )
-  }
+  // 就绪时不占位，只在需要处理时提示
+  if (items.length === 0) return null
   return (
     <ul className="flex flex-col gap-2">
       {items.map((item) => (

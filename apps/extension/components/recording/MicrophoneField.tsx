@@ -1,29 +1,24 @@
 import { useTranslation } from '@huilu/i18n'
-import { Button, fieldClass } from '@huilu/ui'
+import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
 import { sendMessage } from '@/lib/messaging'
-import { useMicLevel } from '@/lib/mic-level'
+import { SwitchRow } from './Switch'
 
 type Permission = PermissionState | 'unknown'
 
 /**
- * 麦克风开关与设备选择。离屏文档不能弹授权框，未授权时引导到插件网页里授权一次（ADR 0004 第 2 节）；
- * 弹窗失去焦点就会关闭，也不适合在这里弹授权框。已授权时显示电平条，方便确认选对了设备。
+ * 麦克风开关，录制时使用系统默认麦克风。离屏文档不能弹授权框，未授权时引导到插件网页里授权一次
+ * （ADR 0004 第 2 节）；弹窗失去焦点就会关闭，也不适合在这里弹授权框。
  */
 export function MicrophoneField({
   enabled,
-  deviceId,
   onChange,
-  compact = false,
 }: {
-  compact?: boolean
   enabled: boolean
-  deviceId: string | undefined
-  onChange: (next: { enabled: boolean; deviceId: string | undefined }) => void
+  onChange: (enabled: boolean) => void
 }) {
   const { t } = useTranslation()
   const [permission, setPermission] = useState<Permission>('unknown')
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
 
   useEffect(() => {
     let status: PermissionStatus | undefined
@@ -39,76 +34,9 @@ export function MicrophoneField({
     return () => status?.removeEventListener('change', update)
   }, [])
 
-  useEffect(() => {
-    if (permission !== 'granted') return
-    // 设备名称只有授权后才能拿到；default / communications 是系统默认设备的别名
-    void navigator.mediaDevices
-      .enumerateDevices()
-      .then((all) =>
-        setDevices(
-          all.filter(
-            (d) =>
-              d.kind === 'audioinput' &&
-              d.deviceId !== 'default' &&
-              d.deviceId !== 'communications',
-          ),
-        ),
-      )
-  }, [permission])
-
-  const { meterRef, state: preview } = useMicLevel(enabled && permission === 'granted', deviceId)
-
-  const deviceSelect = (
-    <select
-      className={fieldClass}
-      aria-label={t('popup.micDevice')}
-      value={deviceId ?? ''}
-      onChange={(e) => onChange({ enabled, deviceId: e.target.value || undefined })}
-    >
-      <option value="">{t('popup.micDefault')}</option>
-      {devices.map((d) => (
-        <option key={d.deviceId} value={d.deviceId}>
-          {d.label || d.deviceId.slice(0, 8)}
-        </option>
-      ))}
-    </select>
-  )
-
   return (
     <section className="flex flex-col gap-1.5">
-      <label className="text-body flex items-center justify-between gap-2">
-        <span className="font-medium">{t('popup.microphone')}</span>
-        <input
-          type="checkbox"
-          className="accent-primary size-4"
-          checked={enabled}
-          onChange={(e) => onChange({ enabled: e.target.checked, deviceId })}
-        />
-      </label>
-      {enabled &&
-        permission === 'granted' &&
-        (compact ? (
-          <details className="text-caption text-muted-foreground">
-            <summary className="focus-visible:ring-primary cursor-pointer rounded-sm focus-visible:ring-2">
-              {t('popup.micDevice')}
-            </summary>
-            <div className="mt-1">{deviceSelect}</div>
-          </details>
-        ) : (
-          deviceSelect
-        ))}
-      {enabled && permission === 'granted' && preview !== 'failed' && (
-        <div
-          role="meter"
-          aria-label={t('popup.micLevel')}
-          className="bg-field h-1.5 overflow-hidden rounded-full"
-        >
-          <div ref={meterRef} className="bg-accent-500 h-full w-0 transition-[width] duration-75" />
-        </div>
-      )}
-      {enabled && permission === 'granted' && preview === 'failed' && (
-        <p className="text-muted-foreground text-caption">{t('popup.micPreviewFailed')}</p>
-      )}
+      <SwitchRow label={t('popup.microphone')} checked={enabled} onChange={onChange} />
       {enabled && permission !== 'granted' && (
         <div className="bg-warning-soft text-body2 rounded-control flex items-center justify-between gap-2 px-3 py-2">
           <span>

@@ -37,6 +37,11 @@ export interface CapturedMedia {
   videoSettings?: { width?: number; height?: number; fps?: number }
   /** 从实际混音读取 0…1 的 RMS 电平，不额外打开采集设备 */
   audioLevel?(): number
+  /**
+   * 实际混音最近约 3 秒的峰值（0…1，每 50ms 一个，最新的在最后），用来画波形；
+   * total 是开始以来取过的峰值总数，界面据此算出两次查询之间新增了哪几个
+   */
+  audioPeaks?(): { peaks: number[]; total: number }
   warnings: RecorderWarning[]
   /** 来源结束（标签页关闭、用户点了「停止共享」）时回调 */
   onEnded(callback: () => void): void

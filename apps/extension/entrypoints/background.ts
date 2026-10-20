@@ -53,10 +53,12 @@ function exclusive<T>(task: () => Promise<T>): Promise<T> {
 let startPending = false
 
 /**
- * 统一来源选择在可见的采集标签页进行，选源后切回原网页（见 entrypoints/recorder）。
+ * 统一来源选择优先在发起录制的网页里进行（kind = page，见 entrypoints/capture.content）；
+ * 网页不能注入时退回可见的采集标签页（kind 为空或 tab，见 entrypoints/recorder），选源后切回原网页。
  * Service Worker 随时可能被回收，所以记在 session 存储里；为空表示录制在离屏文档。
  */
 interface RecorderHost {
+  kind?: 'tab' | 'page'
   tabId: number
   title: string
   mode: RecordingMode
@@ -75,6 +77,12 @@ const retiredTab = storage.defineItem<number | null>('session:retiredRecorderTab
   fallback: null,
 })
 
+/** page:prepare 时下发给存储 iframe 的一次性令牌，iframe 用它向后台证明端口来自我们的内容脚本 */
+const sinkToken = storage.defineItem<{ tabId: number; token: string } | null>(
+  'session:recorderSinkToken',
+  { fallback: null },
+)
+
 /** 立即关闭已结束的采集标签页（如果还开着） */
 async function closeRetiredTab() {
   const tabId = await retiredTab.getValue()
@@ -91,7 +99,10 @@ let hostQueue: Promise<unknown> = Promise.resolve()
 function recorderTabGone(tabId: number): Promise<void> {
   const run = hostQueue.then(async () => {
     const host = await recorderHost.getValue()
-    if (host?.tabId !== tabId || !host.started) return
+    if (host?.tabId !== tabId) return
+    // 页面内录制还在等用户选源时网页就没了：没有录到任何东西，只清掉记录
+    if (host.kind === 'page' && !host.started) return recorderHost.setValue(null)
+    if (!host.started) return
     await recorderHost.setValue(null)
     await lastRecording.setValue({
       id: '',
@@ -100,7 +111,7 @@ function recorderTabGone(tabId: number): Promise<void> {
       endReason: 'error',
       durationMs: 0,
       bytes: 0,
-      error: 'RecorderWindowClosed',
+      error: host.kind === 'page' ? 'RecorderPageClosed' : 'RecorderWindowClosed',
       saved: false,
     })
     await updateBadge({ state: 'idle' })
@@ -126,17 +137,39 @@ async function activeRecorderHost(): Promise<RecorderHost | undefined> {
 }
 
 type Control = 'pause' | 'resume' | 'stop' | 'status'
+/**
+ * 网页里的内容脚本已不存在（刷新 / 跳转后旧页面连同录制一起没了）。
+ * 新页面里没有接收方时 Chrome 报 Receiving end does not exist；有其他内容脚本（如悬浮面板）
+ * 但没人处理 page:* 时，消息库报 No response
+ */
+function isConnectionError(error: unknown) {
+  return /Receiving end does not exist|Could not establish connection|No response/i.test(
+    String(error),
+  )
+}
+
 /** 把暂停 / 继续 / 结束 / 状态转给正在录制的地方；两边都没有时返回 undefined */
 async function control(action: Control): Promise<RecorderStatus | undefined> {
-  if (await activeRecorderHost()) return sendMessage(`window:${action}`)
+  const host = await activeRecorderHost()
+  if (host?.kind === 'page') {
+    try {
+      return await sendMessage(`page:${action}`, undefined, host.tabId)
+    } catch (error) {
+      if (!isConnectionError(error)) throw error
+      await recorderTabGone(host.tabId)
+      return undefined
+    }
+  }
+  if (host) return sendMessage(`window:${action}`)
   if (await hasOffscreenDocument()) return sendMessage(`offscreen:${action}`)
   return undefined
 }
 
 async function recorderStatus(): Promise<RecorderStatus & { startError?: string }> {
+  // 先查状态：发现录制宿主已经没了时，control 会先把这次中断记进 lastRecording
+  const status = await control('status')
   const last = (await lastRecording.getValue()) ?? undefined
   const startError = (await lastStartError.getValue()) ?? undefined
-  const status = await control('status')
   // 最近一次结果只以后台保存的为准（recordingFinished 时写入），这样「知道了」之后不会被
   // 离屏文档 / 录制窗口里残留的结果重新带回来
   if (!status) return { state: 'idle', lastResult: last, startError }
@@ -205,6 +238,62 @@ async function startInTab(options: WindowRecordingOptions, tabId: number): Promi
   }
 }
 
+function isSecurePage(url: string) {
+  const { protocol, hostname } = new URL(url)
+  return (
+    protocol === 'https:' ||
+    (protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(hostname))
+  )
+}
+
+/**
+ * 在发起录制的网页里录：注入内容脚本、嵌好存储 iframe，把录制设置交给网页（page:arm）。
+ * 之后由用户在网页的录制面板上点「选择来源」，结果通过 pageRecordingStarted / Failed 报回来。
+ * 网页不允许注入（chrome:// 等）或存储 iframe 加载不了时返回 undefined，由调用方退回采集标签页
+ */
+async function startInPage(
+  options: WindowRecordingOptions,
+  tabId: number,
+): Promise<RecorderStatus | undefined> {
+  // getDisplayMedia 只能在安全来源（HTTPS / localhost）的网页里用，否则退回采集标签页
+  const { url } = await browser.tabs.get(tabId)
+  if (!url || !isSecurePage(url)) return undefined
+  const token = crypto.randomUUID()
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId },
+      files: ['/content-scripts/capture.js'],
+    })
+    await sinkToken.setValue({ tabId, token })
+    if (!(await sendMessage('page:prepare', token, tabId))) {
+      throw new RecorderBusyError('A recording is already running in this page')
+    }
+  } catch (e) {
+    if (e instanceof RecorderBusyError) throw e
+    console.warn('[huilu] cannot record inside this page; using a capture tab', e)
+    await sendMessage('page:release', undefined, tabId).catch(() => {})
+    return undefined
+  } finally {
+    await sinkToken.setValue(null)
+  }
+
+  const host: RecorderHost = {
+    kind: 'page',
+    tabId,
+    title: options.title,
+    mode: options.mode,
+    started: false,
+  }
+  await recorderHost.setValue(host)
+  try {
+    return await sendMessage('page:arm', options, tabId)
+  } catch (error) {
+    await recorderHost.setValue(null)
+    await sendMessage('page:release', undefined, tabId).catch(() => {})
+    throw error
+  }
+}
+
 async function startRecording({
   tabId,
   title,
@@ -246,7 +335,9 @@ async function startRecording({
         }
       })
     } else {
-      status = await startInTab(options, tabId)
+      // 统一来源选择优先在当前网页里录；旧的「指定窗口 / 整个屏幕」设置仍走采集标签页
+      const inPage = options.chooseSource ? await startInPage(options, tabId) : undefined
+      status = inPage ?? (await startInTab(options, tabId))
     }
     await lastRecording.setValue(null)
     await lastStartError.setValue(null)
@@ -439,6 +530,28 @@ export default defineBackground(() => {
     })
   }
   onMessage('recorderWindowReady', () => resolveWindowReady?.())
+  onMessage('pageRecordingStarted', async ({ data: status, sender }) => {
+    const host = await recorderHost.getValue()
+    if (host?.kind !== 'page' || host.tabId !== sender.tab?.id) return
+    await recorderHost.setValue({ ...host, started: true })
+    await lastStartError.setValue(null)
+    await updateBadge(status)
+  })
+  onMessage('pageRecordingFailed', async ({ data: error, sender }) => {
+    const host = await recorderHost.getValue()
+    if (host?.kind !== 'page' || host.tabId !== sender.tab?.id || host.started) return
+    await recorderHost.setValue(null)
+    // 选择框失去焦点会关掉工具栏弹窗：原因留到用户下次打开工具栏时查看
+    await lastStartError.setValue(error)
+    await updateBadge({ state: 'idle' })
+  })
+  onMessage('verifyRecorderSink', async ({ data: token, sender }) => {
+    const expected = await sinkToken.getValue()
+    if (!expected || expected.tabId !== sender.tab?.id || expected.token !== token) return false
+    // 一次性：同一网页里后来嵌入的其他存储 iframe 不能再用它
+    await sinkToken.setValue(null)
+    return true
+  })
   // 录制窗口里的录制还没收尾：它在 OPFS 中看起来和「未完成的录制」一样，不能拿去恢复 / 丢弃
   onMessage('listUnfinishedRecordings', async () =>
     (await activeRecorderHost())
@@ -480,6 +593,12 @@ export default defineBackground(() => {
     // 有 meeting.json 的录制交给处理队列（离屏文档）；窗口录制结束时离屏文档可能还没打开
     if (data.saved && data.id) void processMeeting(data.id, true).catch(logProcessingError)
     const host = await recorderHost.getValue()
+    if (host?.kind === 'page' && sender.tab?.id === host.tabId) {
+      // 页面内录制：网页是用户自己的，不关闭；内容脚本自己移除存储 iframe
+      await recorderHost.setValue(null)
+      scheduleOffscreenCleanup()
+      return
+    }
     if (host && sender.tab?.id === host.tabId) {
       // 录制窗口的使命完成：先清记录再关窗口，onRemoved 就不会当成「中途被关闭」。
       // 稍后再关；这期间记为 retiredTab，新的窗口录制开始前会先把它关掉
@@ -500,9 +619,17 @@ export default defineBackground(() => {
   void resumeProcessing()
   dataFolderAuthorizedSetting.watch(() => void onFolderAuthorized().catch(logProcessingError))
 
-  // 录制中用户直接关掉了录制窗口：录制中断，数据留在 OPFS，可在「未完成的录制」里恢复
+  // 录制中用户直接关掉了录制窗口 / 录制的网页：录制中断，数据留在 OPFS，可在「未完成的录制」里恢复
   browser.tabs.onRemoved.addListener((tabId) => {
     void recorderTabGone(tabId)
+  })
+  // 页面内录制的网页刷新 / 跳转：旧页面连同录制一起没了。新页面加载完后查一次，
+  // 联系不上内容脚本就记为中断（control 里处理），不必等弹窗或面板来轮询
+  browser.tabs.onUpdated.addListener((tabId, change) => {
+    if (change.status !== 'complete') return
+    void recorderHost.getValue().then((host) => {
+      if (host?.kind === 'page' && host.started && host.tabId === tabId) void control('status')
+    })
   })
 
   // 快捷键 Alt+Shift+R：没在录就按上次的设置录当前标签页，在录就结束

@@ -33,6 +33,15 @@ const h = vi.hoisted(() => ({
   /** IndexedDB 中的处理任务（后台只读） */
   jobsReadFailures: 0,
   jobs: [] as { meetingId: string; state: string }[],
+  /** 页面内录制：网页能否注入、内容脚本是否还在（刷新后消失）、选择框结果 */
+  injectFails: false,
+  pageUrl: 'https://meet.example.com/abc',
+  pageScript: false,
+  pageState: 'idle' as RecorderStatus['state'],
+  /** 交给网页等待用户选源的录制设置（page:arm） */
+  pageStarts: [] as unknown[],
+  pageReleases: 0,
+  onPrepare: async (_token: unknown) => {},
   /** declarativeNetRequest 会话规则 */
   sessionRules: [] as { id: number; condition: { urlFilter?: string } }[],
 }))
@@ -64,6 +73,25 @@ vi.mock('@/lib/messaging', () => ({
         return { state: 'recording' }
       case 'window:status':
         return { state: h.windowState }
+      case 'page:prepare':
+      case 'page:release':
+      case 'page:arm':
+      case 'page:status':
+      case 'page:stop':
+        if (!h.pageScript)
+          throw new Error('Could not establish connection. Receiving end does not exist.')
+        if (type === 'page:prepare') {
+          await h.onPrepare(data)
+          return h.pageState === 'idle'
+        }
+        if (type === 'page:release') return void h.pageReleases++
+        if (type === 'page:arm') {
+          h.pageStarts.push(data)
+          h.pageState = 'starting'
+          return { state: 'starting', awaitingSource: true }
+        }
+        if (type === 'page:stop') h.pageState = 'idle'
+        return { state: h.pageState }
       default:
         throw new Error(`unexpected message ${type}`)
     }
@@ -170,6 +198,13 @@ beforeEach(() => {
     jobs: [],
     jobsReadFailures: 0,
     sessionRules: [],
+    injectFails: false,
+    pageUrl: 'https://meet.example.com/abc',
+    pageScript: false,
+    pageState: 'idle',
+    pageStarts: [],
+    pageReleases: 0,
+    onPrepare: async () => {},
   })
   h.recorderWindows.clear()
   // Chrome 的 windows.get 对不存在的窗口会报错（fakeBrowser 返回 undefined）
@@ -187,7 +222,7 @@ beforeEach(() => {
   })
   fakeBrowser.tabs.onRemoved.addListener((id) => void h.recorderWindows.delete(id))
   vi.spyOn(fakeBrowser.tabs, 'get').mockImplementation(async (id) => {
-    if (id === 1) return { id, windowId: 700 } as never
+    if (id === 1) return { id, windowId: 700, url: h.pageUrl } as never
     const tab = (await fakeBrowser.tabs.query({})).find((t) => t.id === id)
     if (!tab) throw new Error(`No tab with id: ${id}`)
     return tab
@@ -199,7 +234,13 @@ beforeEach(() => {
   })
   // fakeBrowser 没有实现的 API
   Object.assign(fakeBrowser, {
-    scripting: { executeScript: async () => [] },
+    scripting: {
+      executeScript: async () => {
+        if (h.injectFails) throw new Error('Cannot access a chrome:// URL')
+        h.pageScript = true
+        return []
+      },
+    },
     commands: { onCommand: { addListener: () => {} } },
     declarativeNetRequest: {
       getSessionRules: async () => h.sessionRules,
@@ -547,9 +588,12 @@ it('routes the unified picker through a visible host even when the previous pref
     title: 'Unified source',
     settings: snapshot,
   })
-  expect(result.state).toBe('recording')
+  // 网页里等用户点「选择来源」
+  expect(result).toMatchObject({ state: 'starting', awaitingSource: true })
   expect(h.captureRequests).toEqual([])
-  expect(h.windowStartReceivers).toEqual([1])
+  // 可见宿主优先是发起录制的网页本身，不再开采集标签页
+  expect(h.pageStarts).toHaveLength(1)
+  expect(h.windowStartReceivers).toEqual([])
 })
 
 it('keeps quick current-tab capture explicit even when the last legacy preference was screen', async () => {
@@ -579,5 +623,122 @@ describe('U-93 capture tab lifecycle', () => {
       state: 'idle',
       startError: expect.stringContaining('CaptureCancelledError'),
     })
+  })
+})
+
+describe('in-page recording', () => {
+  const choose = () =>
+    call<RecorderStatus>('startRecording', {
+      tabId: 1,
+      title: '评审',
+      settings: {
+        mode: 'audio',
+        prefs: { ...settings('tab').prefs, sourceSelection: 'choose', sourceAudio: true },
+      },
+    })
+
+  /** 网页报告：用户在录制面板上选好来源，录制已开始 */
+  const pageStarted = async () => {
+    h.pageState = 'recording'
+    await call('pageRecordingStarted', { state: 'recording' }, { tab: { id: 1 } })
+  }
+
+  it('arms the initiating page and waits for the user to choose in-page, without a capture tab', async () => {
+    const create = vi.spyOn(fakeBrowser.tabs, 'create')
+    expect(await choose()).toMatchObject({
+      state: 'starting',
+      awaitingSource: true,
+      panelShown: true,
+    })
+    expect(create).not.toHaveBeenCalled()
+    expect(h.pageStarts).toMatchObject([{ chooseSource: true, sourceAudio: true }])
+    // 等待选源时也算忙，不能再开始一次
+    await expect(choose()).rejects.toThrow('already in progress')
+
+    await pageStarted()
+    expect(await call('getRecorderStatus')).toMatchObject({ state: 'recording' })
+    expect(await fakeBrowser.action.getBadgeText({})).toBe('REC')
+  })
+
+  it('falls back to a capture tab on insecure http pages, which the picker rejects', async () => {
+    h.pageUrl = 'http://intranet.example.com/'
+    const create = vi.spyOn(fakeBrowser.tabs, 'create')
+    await choose()
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ windowId: 700 }))
+    expect(h.pageStarts).toEqual([])
+  })
+
+  it('falls back to a capture tab when the page cannot be injected', async () => {
+    h.injectFails = true
+    const create = vi.spyOn(fakeBrowser.tabs, 'create')
+    await choose()
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ windowId: 700 }))
+    expect(h.pageStarts).toEqual([])
+  })
+
+  it('keeps the reason when the user cancels or the picker fails in the page', async () => {
+    await choose()
+    h.pageState = 'idle'
+    await call('pageRecordingFailed', 'CaptureCancelledError: cancelled', { tab: { id: 1 } })
+    expect(await call('getRecorderStatus')).toMatchObject({
+      state: 'idle',
+      startError: expect.stringContaining('CaptureCancelledError'),
+    })
+    // 失败后可以重新开始
+    expect(await choose()).toMatchObject({ awaitingSource: true })
+  })
+
+  it('ignores page reports from other tabs', async () => {
+    await choose()
+    await call('pageRecordingFailed', 'CaptureCancelledError: cancelled', { tab: { id: 9 } })
+    expect(await call('getRecorderStatus')).toMatchObject({ state: 'starting' })
+  })
+
+  it('forgets an armed page that is closed before a source is chosen', async () => {
+    await choose()
+    await fakeBrowser.tabs.remove(1)
+    await settle()
+    h.pageScript = false
+    const status = await call<RecorderStatus>('getRecorderStatus')
+    expect(status).toMatchObject({ state: 'idle' })
+    expect(status.lastResult).toBeUndefined()
+  })
+
+  it('marks the recording interrupted once the page reloads and its script is gone', async () => {
+    await choose()
+    await pageStarted()
+    h.pageScript = false
+    const status = await call<RecorderStatus>('getRecorderStatus')
+    expect(status).toMatchObject({
+      state: 'idle',
+      lastResult: { error: 'RecorderPageClosed', saved: false },
+    })
+    expect(await fakeBrowser.action.getBadgeText({})).toBe('')
+  })
+
+  it('keeps the user page open when the in-page recording finishes', async () => {
+    const remove = vi.spyOn(fakeBrowser.tabs, 'remove')
+    await choose()
+    await pageStarted()
+    h.pageState = 'idle'
+    await call('recordingFinished', { id: 'r1', saved: false }, { tab: { id: 1 } })
+    await settle()
+    expect(remove).not.toHaveBeenCalled()
+    expect(await call('getRecorderStatus')).toMatchObject({ state: 'idle' })
+  })
+
+  it('accepts the storage frame token once, only from the recorded tab', async () => {
+    const verify = (token: unknown, tabId: number) =>
+      Promise.resolve(
+        h.handlers.get('verifyRecorderSink')!({ data: token, sender: { tab: { id: tabId } } }),
+      )
+    const results: unknown[] = []
+    // 存储 iframe 在 page:prepare 期间向后台校验令牌
+    h.onPrepare = async (token) => {
+      results.push(await verify('guess', 1), await verify(token, 2), await verify(token, 1))
+      results.push(await verify(token, 1))
+    }
+    await choose()
+    expect(results).toEqual([false, false, true, false])
   })
 })

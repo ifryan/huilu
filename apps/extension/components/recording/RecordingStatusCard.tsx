@@ -1,7 +1,7 @@
 import { useTranslation } from '@huilu/i18n'
 import { Button, cn } from '@huilu/ui'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { checkMessageError } from '@/lib/extension-context'
 import { sendMessage, type LastRecording, type RecorderStatus } from '@/lib/messaging'
 import { formatBytes, formatDuration, startErrorText, warningText } from '@/lib/recording'
@@ -106,25 +106,104 @@ export function RecordingStatusCard({
   )
 }
 
-/** 悬浮面板和再次打开的弹窗都显示同一条实际混音电平。 */
+/** 录制端每 50ms 取一个峰值（PEAK_INTERVAL_MS）；界面按同样的节奏匀速放出 */
+const PEAK_MS = 50
+/** 竖条宽 1.5px、间距 1.5px */
+const BAR_WIDTH = 1.5
+const BAR_PITCH = 3
+const WAVE_HEIGHT = 20
+/** 峰值低于它视为没有声音 */
+const SILENT_PEAK = 0.05
+/** 积压超过这么多个峰值（轮询卡顿后一次到了很多）就丢掉旧的，追上实时 */
+const MAX_BACKLOG = 12
+
+/**
+ * 悬浮面板和再次打开的弹窗都显示同一路实际混音的波形：真实峰值从右往左滚动。
+ * 状态每 200ms 轮询一次、一次带回约 4 个新峰值，这里按 50ms 一个匀速放出，并在两个之间平移，
+ * 看起来是连续滚动。高度固定，「未检测到声音」与标题同一行，声音有无变化时卡片不会跳动。
+ */
 function RecordingAudioLevel({ status }: { status: RecorderStatus }) {
   const { t } = useTranslation()
   const session = status.session
   const live = status.state === 'recording'
+  const latest = live ? session?.audioPeaks : undefined
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const wave = useRef({ shown: [] as number[], queue: [] as number[], seen: -1, emittedAt: 0 })
+
+  // 新到的峰值排进队列；total 用来去掉与上次重复的部分
+  useEffect(() => {
+    const w = wave.current
+    if (!latest) {
+      w.queue = []
+      return
+    }
+    const fresh =
+      w.seen < 0 ? latest.peaks.slice(-4) : latest.peaks.slice(-Math.max(0, latest.total - w.seen))
+    w.seen = latest.total
+    w.queue.push(...fresh)
+    if (w.queue.length > MAX_BACKLOG) w.queue.splice(0, w.queue.length - MAX_BACKLOG)
+  }, [latest])
+
+  useEffect(() => {
+    const el = canvas.current
+    if (!el) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    let frame = 0
+    const draw = (now: number) => {
+      frame = requestAnimationFrame(draw)
+      const w = wave.current
+      const ratio = window.devicePixelRatio || 1
+      const width = el.clientWidth
+      const bars = Math.ceil(width / BAR_PITCH) + 1
+      if (el.width !== Math.round(width * ratio)) {
+        el.width = Math.round(width * ratio)
+        el.height = Math.round(WAVE_HEIGHT * ratio)
+      }
+      // 每 50ms 放出一个；平时留一个垫底，轮询稍晚到时不会停顿。队列空了就停在原地，不凭空造波形
+      const ready = w.queue.length > 1 || now - w.emittedAt >= 2 * PEAK_MS
+      if (now - w.emittedAt >= PEAK_MS && w.queue.length > 0 && ready) {
+        w.shown.push(w.queue.shift()!)
+        if (w.shown.length > bars) w.shown.splice(0, w.shown.length - bars)
+        w.emittedAt = now
+      }
+      const offset =
+        !reduced && w.queue.length > 0 ? Math.min(1, (now - w.emittedAt) / PEAK_MS) * BAR_PITCH : 0
+      const ctx = el.getContext('2d')!
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+      ctx.clearRect(0, 0, width, WAVE_HEIGHT)
+      ctx.fillStyle = getComputedStyle(el).color
+      const mid = WAVE_HEIGHT / 2
+      for (let i = 0; i < bars; i++) {
+        // 最新的峰值贴着右边
+        const peak = w.shown[w.shown.length - bars + i] ?? 0
+        const height = Math.max(1.5, peak * WAVE_HEIGHT)
+        const x = width - (bars - i) * BAR_PITCH + (BAR_PITCH - BAR_WIDTH) - offset
+        ctx.beginPath()
+        ctx.roundRect(x, mid - height / 2, BAR_WIDTH, height, BAR_WIDTH / 2)
+        ctx.fill()
+      }
+    }
+    frame = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
   if (!session) return null
+  const silent = live && !(latest?.peaks.slice(-10).some((p) => p > SILENT_PEAK) ?? false)
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground text-xs">{t('sidepanel.audioLevel')}</span>
-      <meter
-        className="hl-meter w-full"
-        min={0}
-        max={1}
-        value={live ? (session.audioLevel ?? 0) : 0}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-muted-foreground">{t('sidepanel.audioLevel')}</span>
+        <span className="text-muted-foreground" aria-live="polite">
+          {silent ? t('sidepanel.audioSilent') : ''}
+        </span>
+      </div>
+      <canvas
+        ref={canvas}
+        role="img"
         aria-label={t('sidepanel.audioLevel')}
+        style={{ height: WAVE_HEIGHT }}
+        className={cn('w-full', live && !silent ? 'text-primary' : 'text-muted-foreground/40')}
       />
-      {live && !(session.audioLevel && session.audioLevel > 0) && (
-        <span className="text-muted-foreground text-xs">{t('sidepanel.audioSilent')}</span>
-      )}
     </div>
   )
 }
