@@ -55,7 +55,7 @@ interface ProtocolMap {
   openApp(route: string): void
   /** 在指定标签页显示页面内悬浮录制面板；页面不允许注入（如 chrome:// 页面）时返回 false */
   showRecordingPanel(tabId: number): boolean
-  /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」、悬浮面板 ✕） */
+  /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」） */
   dismissRecordingNotice(): void
   /** 历史记录中的「补转写」「重试」「生成纪要」：加入处理队列 */
   processMeeting(meetingId: string): EnqueueResult
@@ -79,7 +79,7 @@ interface ProtocolMap {
   /** 数据文件夹重新授权：补写等待写入的任务 */
   'offscreen:folderAuthorized'(): void
 
-  // 后台 → 录制窗口（窗口 / 屏幕录制）：选择框和录制都在这个可见页面里进行
+  // 后台 → 录制窗口（统一来源选择；兼容旧窗口 / 屏幕录制）：选择框和录制都在这个可见页面里进行
   'window:start'(options: WindowRecordingOptions): RecorderStatus
   'window:pause'(): RecorderStatus
   'window:resume'(): RecorderStatus
@@ -102,6 +102,8 @@ interface ProtocolMap {
 /** 录制窗口自己弹选择框取得 streamId，后台只传录制设置 */
 export type WindowRecordingOptions = Omit<RecordingOptions, 'id' | 'streamId' | 'sourceAudio'> & {
   sourceAudio: boolean
+  /** Unified native tab/window/screen selection, resolved in the visible host. */
+  chooseSource?: boolean
 }
 
 export const { sendMessage, onMessage } = defineExtensionMessaging<ProtocolMap>()

@@ -21,6 +21,8 @@ export const PIPELINE_ERROR_CODES = [
   'unknownProvider',
   'hostPermission',
   'noAudio',
+  'silentAudio',
+  'audioInspectionFailed',
   'meetingNotFound',
   'splitFailed',
   'writeFailed',
@@ -80,4 +82,7 @@ export const isActive = (job: Pick<ProcessingJob, 'state'>) =>
 
 export type EnqueueResult =
   | { queued: true; job: ProcessingJob }
-  | { queued: false; reason: 'noAudio' | 'notConfigured' | 'meetingNotFound' | 'notProcessing' }
+  | {
+      queued: false
+      reason: 'noAudio' | 'notConfigured' | 'meetingNotFound' | 'notProcessing' | 'archived'
+    }

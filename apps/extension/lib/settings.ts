@@ -24,6 +24,8 @@ export type MeetingLanguage = (typeof MEETING_LANGUAGES)[number]
 /** 弹窗中的录制设置（录制模式单独存放在 recordingModeSetting），下次打开时沿用 */
 export interface RecordingPrefs {
   videoSource: VideoSource
+  /** New UI uses one native picker; explicit quick capture keeps the current-tab path. */
+  sourceSelection?: 'choose' | 'current-tab'
   quality: VideoQuality
   /** 旧偏好缺少此字段时沿用开启来源音频的行为 */
   sourceAudio?: boolean
@@ -35,6 +37,7 @@ export interface RecordingPrefs {
 
 export const DEFAULT_RECORDING_PREFS: RecordingPrefs = {
   videoSource: 'tab',
+  sourceSelection: 'choose',
   sourceAudio: true,
   quality: DEFAULT_VIDEO_QUALITY,
   microphone: true,

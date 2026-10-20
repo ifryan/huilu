@@ -48,7 +48,15 @@
     "dismissNotice": "Dismiss",
     "sourceAudio": "Record source / system audio",
     "sourceAudioTabHint": "Captures sound from this tab only, separately from the microphone.",
-    "sourceAudioDesktopHint": "Availability depends on the selected window / screen, OS, and browser. Enable Share audio in the native picker when offered."
+    "sourceAudioDesktopHint": "Window capture may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track.",
+    "sourceAudioWindowHint": "Window audio depends on browser and system support. If the picker cannot share audio, select the meeting tab or a supported screen. Turn this off for microphone-only audio or silent video.",
+    "sourceAudioShort": "Source audio",
+    "moreSettings": "More settings",
+    "quickCurrentTab": "Quick capture current tab (skip source picker)",
+    "quickCurrentTabHint": "Records the tab where you opened HuiLu, using the audio switches above.",
+    "chooseSourceHint": "Next, choose a tab, window or screen. Enable audio in the sharing dialog to include source sound.",
+    "chooseAndStart": "Choose source & start",
+    "micDevice": "Microphone device"
   },
   "sidepanel": {
     "recording": "Recording",
@@ -130,7 +138,8 @@
       "noAudio": "No transcription audio was recorded, so this cannot be transcribed",
       "notConfigured": "No transcription service is set up",
       "meetingNotFound": "The meeting information for this recording is missing",
-      "notProcessing": "This recording does not need processing"
+      "notProcessing": "This recording does not need processing",
+      "archived": "Restore the archived meeting before processing."
     },
     "error": {
       "transcriptionNotConfigured": "No transcription service is set up",
@@ -141,7 +150,9 @@
       "splitFailed": "Could not split the audio",
       "sourceDataUnavailable": "Completed meeting data is unavailable. Authorize the original folder or check meeting.json and transcript.json",
       "writeFailed": "Could not write the files",
-      "unknown": "Unknown error"
+      "unknown": "Unknown error",
+      "silentAudio": "The recording is entirely silent. Transcription and AI notes were stopped; the original files are kept. Check source audio, Share audio, and your microphone before recording again.",
+      "audioInspectionFailed": "The recording could not be checked locally, so transcription was stopped. Original files are kept. Check playback and update your browser before retrying."
     }
   },
   "settings": {
@@ -273,7 +284,9 @@
       "permission": "Cannot capture this page: permission denied, or the page cannot be recorded (e.g. chrome:// pages)",
       "captureFailed": "Could not open the source picker: {{detail}}",
       "systemPermission": "The system does not allow Chrome to record the screen. Allow Google Chrome in System Settings → Privacy & Security → Screen & System Audio Recording, restart Chrome and try again",
-      "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\""
+      "windowClosed": "The recording tab was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\"",
+      "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Source audio first.",
+      "windowAudioUnavailable": "The selected window did not provide audio, so recording did not start. Select the meeting tab, or a supported screen with Share audio enabled. To keep recording this window, turn off Source audio and enable the microphone; for silent video, turn off the microphone too."
     }
   },
   "unfinished": {
@@ -365,9 +378,9 @@
     }
   },
   "recorderWindow": {
-    "choosing": "Choose the window or screen to record in the picker…",
-    "keepOpen": "This window captures the window / screen. Keep it minimized, but do not close it or the recording stops. It closes itself when the recording ends.",
-    "recording": "Recording. The timer and pause / stop controls are in the floating recording panel on the page."
+    "choosing": "Choose a tab, window or screen in the sharing dialog…",
+    "keepOpen": "This tab keeps the recording running in the background and closes when it ends. Keep it open. You can hide the page controls and reopen them from the extension icon.",
+    "recording": "Recording in the background. Control it here or from the extension icon."
   },
   "panel": {
     "title": "Recording panel",
@@ -451,6 +464,25 @@
     "accessNeeded": "Restore access to the original data folder",
     "ready": "Completed",
     "incomplete": "Processing is incomplete",
-    "count": "Meetings: {{count}}"
+    "count": "Meetings: {{count}}",
+    "views": "History views",
+    "activeView": "Meetings",
+    "archiveView": "Archived",
+    "archiveEmpty": "No archived meetings.",
+    "editTitle": "Edit title",
+    "archive": "Archive",
+    "restore": "Restore",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "archiveHint": "Hide this meeting from Meetings? You can restore it from Archived. Audio, video, transcript and notes will be kept.",
+    "restoreHint": "Restore this meeting to Meetings? Its files and processing status will be kept.",
+    "emptyTitle": "Enter a meeting title.",
+    "busy": "Finish recording, recovery or pending processing before editing or archiving.",
+    "editConflict": "The meeting or data folder changed. Cancel and refresh before trying again.",
+    "editFailed": "Could not confirm the save. Check folder permission and free space, then refresh to verify before retrying.",
+    "titleSaved": "Meeting title saved.",
+    "archived": "Meeting archived. Restore it from Archived.",
+    "restored": "Meeting restored."
   }
 }

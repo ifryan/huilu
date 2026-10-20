@@ -8,7 +8,7 @@
  */
 import { ProcessingQueue } from '@huilu/pipeline'
 import { IdbJobStore } from '@huilu/pipeline/jobs'
-import { createMediabunnySplitter } from '@huilu/pipeline/mediabunny'
+import { audioHasSignal, createMediabunnySplitter } from '@huilu/pipeline/mediabunny'
 import { RecorderController, RecordingStore, browserMediaBackend } from '@huilu/recorder'
 import { sendResultNotification } from '@/lib/result-notification'
 import { onMessage, sendMessage } from '@/lib/messaging'
@@ -40,6 +40,7 @@ const queue = new ProcessingQueue({
       sendMessage('processingHasHostPermission', url),
     ),
   splitter: createMediabunnySplitter(),
+  audioHasSignal,
   onChange: async (job) => {
     if (job.state === 'done')
       await sendResultNotification(() => sendMessage('processingCompleted', job.meetingId)).catch(

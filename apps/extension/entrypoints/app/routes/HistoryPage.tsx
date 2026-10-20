@@ -3,6 +3,7 @@ import { Button, RefreshCw, Search, cn, fieldClass } from '@huilu/ui'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { ProcessingStatus } from '@/components/ProcessingStatus'
+import { HistoryActions, type HistoryNotice } from '@/components/HistoryActions'
 import { StatusPill } from '@/components/Section'
 import { resultMedia, useMeetingLibrary, type LibraryItem } from '@/lib/meeting-library'
 import { openRecordingMedia } from '@/lib/library'
@@ -17,8 +18,12 @@ export function HistoryPage() {
   const { data: jobs } = useProcessingJobs()
   const readiness = processingReadiness(useReadiness().data)
   const [search, setSearch] = useState('')
-  const items = data?.items.filter((r) =>
-    r.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+  const [archived, setArchived] = useState(false)
+  const [notice, setNotice] = useState<HistoryNotice>()
+  const views = useRef<HTMLDivElement>(null)
+  const items = data?.items.filter(
+    (r) =>
+      r.archived === archived && r.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
   )
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-5">
@@ -26,6 +31,27 @@ export function HistoryPage() {
         <h1 className="text-title2 font-semibold">{t('nav.history')}</h1>
         <p className="text-muted-foreground text-body2 mt-1">{t('library.note')}</p>
       </header>
+      <div ref={views} className="flex flex-wrap gap-2" aria-label={t('library.views')}>
+        <Button
+          size="sm"
+          variant={archived ? 'outline' : 'default'}
+          aria-pressed={!archived}
+          onClick={() => setArchived(false)}
+        >
+          {t('library.activeView')}
+        </Button>
+        <Button
+          size="sm"
+          variant={archived ? 'default' : 'outline'}
+          aria-pressed={archived}
+          onClick={() => setArchived(true)}
+        >
+          {t('library.archiveView')}
+        </Button>
+      </div>
+      <p role="status" className="text-success text-body empty:hidden">
+        {notice && t(notice)}
+      </p>
       {(data?.folderUnavailable || data?.scanFailed) && (
         <p role="status" className="bg-warning-soft rounded-control text-body px-3 py-2">
           {t('library.folderUnavailable')}{' '}
@@ -70,7 +96,11 @@ export function HistoryPage() {
         {isLoading && <p className="text-muted-foreground text-body p-6">{t('result.loading')}</p>}
         {!isLoading && items?.length === 0 && (
           <div className="text-muted-foreground text-body p-10 text-center">
-            {search ? t('result.noMatches') : t('history.empty')}
+            {search
+              ? t('result.noMatches')
+              : archived
+                ? t('library.archiveEmpty')
+                : t('history.empty')}
           </div>
         )}
         <ul className="divide-border divide-y">
@@ -85,7 +115,7 @@ export function HistoryPage() {
             return (
               <li
                 key={item.key}
-                className="hover:bg-muted/60 flex items-start gap-4 px-4 py-3.5 transition-colors"
+                className="hover:bg-muted/60 flex flex-wrap items-start gap-4 px-4 py-3.5 transition-colors sm:flex-nowrap"
               >
                 <Thumbnail item={item} />
                 <div className="min-w-0 flex-1 space-y-1.5">
@@ -144,6 +174,7 @@ export function HistoryPage() {
                   )}
                   {local && (
                     <ProcessingStatus
+                      archived={item.archived}
                       recording={{
                         ...local,
                         title: item.title,
@@ -165,13 +196,27 @@ export function HistoryPage() {
                     <p className="text-muted-foreground text-body2">{t('history.state.partial')}</p>
                   )}
                 </div>
-                {playable && (
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to="/meeting/$meetingId" params={{ meetingId: item.id! }}>
-                      {t('library.open')}
-                    </Link>
-                  </Button>
-                )}
+                <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:max-w-56 sm:justify-end">
+                  {playable && (
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/meeting/$meetingId" params={{ meetingId: item.id! }}>
+                        {t('library.open')}
+                      </Link>
+                    </Button>
+                  )}
+                  <HistoryActions
+                    item={item}
+                    job={item.id ? jobs?.get(item.id) : undefined}
+                    jobsLoaded={!!jobs}
+                    onSaved={(message) => {
+                      setNotice(message)
+                      if (message !== 'library.titleSaved')
+                        views.current
+                          ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+                          ?.focus()
+                    }}
+                  />
+                </div>
               </li>
             )
           })}

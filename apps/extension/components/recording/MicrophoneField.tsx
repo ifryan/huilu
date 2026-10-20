@@ -14,7 +14,9 @@ export function MicrophoneField({
   enabled,
   deviceId,
   onChange,
+  compact = false,
 }: {
+  compact?: boolean
   enabled: boolean
   deviceId: string | undefined
   onChange: (next: { enabled: boolean; deviceId: string | undefined }) => void
@@ -56,6 +58,22 @@ export function MicrophoneField({
 
   const { meterRef, state: preview } = useMicLevel(enabled && permission === 'granted', deviceId)
 
+  const deviceSelect = (
+    <select
+      className={fieldClass}
+      aria-label={t('popup.micDevice')}
+      value={deviceId ?? ''}
+      onChange={(e) => onChange({ enabled, deviceId: e.target.value || undefined })}
+    >
+      <option value="">{t('popup.micDefault')}</option>
+      {devices.map((d) => (
+        <option key={d.deviceId} value={d.deviceId}>
+          {d.label || d.deviceId.slice(0, 8)}
+        </option>
+      ))}
+    </select>
+  )
+
   return (
     <section className="flex flex-col gap-1.5">
       <label className="text-body flex items-center justify-between gap-2">
@@ -67,20 +85,18 @@ export function MicrophoneField({
           onChange={(e) => onChange({ enabled: e.target.checked, deviceId })}
         />
       </label>
-      {enabled && permission === 'granted' && (
-        <select
-          className={fieldClass}
-          value={deviceId ?? ''}
-          onChange={(e) => onChange({ enabled, deviceId: e.target.value || undefined })}
-        >
-          <option value="">{t('popup.micDefault')}</option>
-          {devices.map((d) => (
-            <option key={d.deviceId} value={d.deviceId}>
-              {d.label || d.deviceId.slice(0, 8)}
-            </option>
-          ))}
-        </select>
-      )}
+      {enabled &&
+        permission === 'granted' &&
+        (compact ? (
+          <details className="text-caption text-muted-foreground">
+            <summary className="focus-visible:ring-primary cursor-pointer rounded-sm focus-visible:ring-2">
+              {t('popup.micDevice')}
+            </summary>
+            <div className="mt-1">{deviceSelect}</div>
+          </details>
+        ) : (
+          deviceSelect
+        ))}
       {enabled && permission === 'granted' && preview !== 'failed' && (
         <div
           role="meter"

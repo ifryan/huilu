@@ -26,10 +26,12 @@ export function ProcessingStatus({
   recording,
   job,
   readiness,
+  archived = false,
 }: {
   recording: LocalRecording
   job: ProcessingJob | undefined
   readiness: ProcessingReadiness | undefined
+  archived?: boolean
 }) {
   const { t } = useTranslation()
   const dt = useDynamicT()
@@ -102,15 +104,17 @@ export function ProcessingStatus({
             {v.canStart && v.transcriptOnly && (
               <p className="text-muted-foreground">{t('processing.transcriptOnly')}</p>
             )}
-            <div className="flex gap-2">
-              {v.canStart ? (
-                <Button size="sm" disabled={busy} onClick={process}>
-                  {t('processing.start')}
-                </Button>
-              ) : (
-                settingsLink
-              )}
-            </div>
+            {!archived && (
+              <div className="flex gap-2">
+                {v.canStart ? (
+                  <Button size="sm" disabled={busy} onClick={process}>
+                    {t('processing.start')}
+                  </Button>
+                ) : (
+                  settingsLink
+                )}
+              </div>
+            )}
           </>
         )
       case 'queued':
@@ -141,13 +145,15 @@ export function ProcessingStatus({
         return (
           <>
             <p>{t('processing.waitingFolder')}</p>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={authorize}>
-                {v.permission === 'prompt'
-                  ? t('processing.authorizeFolder')
-                  : t('processing.chooseFolder')}
-              </Button>
-            </div>
+            {!archived && (
+              <div className="flex gap-2">
+                <Button size="sm" onClick={authorize}>
+                  {v.permission === 'prompt'
+                    ? t('processing.authorizeFolder')
+                    : t('processing.chooseFolder')}
+                </Button>
+              </div>
+            )}
           </>
         )
       case 'failed':
@@ -159,15 +165,17 @@ export function ProcessingStatus({
                 reason: reason(v.error),
               })}
             </p>
-            <div className="flex gap-2">
-              {v.canRetry ? (
-                <Button size="sm" variant="outline" disabled={busy} onClick={process}>
-                  {t('processing.retry')}
-                </Button>
-              ) : (
-                settingsLink
-              )}
-            </div>
+            {!archived && (
+              <div className="flex gap-2">
+                {v.canRetry ? (
+                  <Button size="sm" variant="outline" disabled={busy} onClick={process}>
+                    {t('processing.retry')}
+                  </Button>
+                ) : (
+                  settingsLink
+                )}
+              </div>
+            )}
           </>
         )
       case 'done':
@@ -183,7 +191,7 @@ export function ProcessingStatus({
                 {t(`processing.summarySkipped.${v.summarySkipped}`)}
               </p>
             )}
-            {v.canSummarize && (
+            {!archived && v.canSummarize && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={busy} onClick={process}>
                   {t('processing.summarize')}

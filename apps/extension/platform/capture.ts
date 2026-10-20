@@ -1,4 +1,6 @@
 import { browser } from '#imports'
+import type { VideoSource } from '@huilu/core'
+import { SourceAudioUnavailableError, videoDimensions, type VideoQuality } from '@huilu/recorder'
 
 /** 用户在系统选择框里点了「取消」 */
 export class CaptureCancelledError extends Error {
@@ -35,12 +37,13 @@ export async function requestTabCapture(tabId: number, sourceAudio = true): Prom
  * - 得到的 streamId 只能在调用它的同一个页面里取流，所以录制也在这个页面里进行
  */
 export function chooseDesktopSource(
-  source: 'window' | 'screen',
+  source: 'window' | 'screen' | 'choose',
   sourceAudio = true,
 ): Promise<CaptureGrant> {
   return new Promise((resolve, reject) => {
+    const sources = source === 'choose' ? (['tab', 'window', 'screen'] as const) : [source]
     browser.desktopCapture.chooseDesktopMedia(
-      sourceAudio ? [source, 'audio'] : [source],
+      sourceAudio ? [...sources, 'audio'] : [...sources],
       (streamId, options) => {
         const lastError = browser.runtime.lastError?.message
         if (lastError) reject(new CaptureFailedError(lastError))
@@ -53,4 +56,47 @@ export function chooseDesktopSource(
       },
     )
   })
+}
+
+/** Never guess the selected surface from the requested preference or track label. */
+export function selectedSource(settings: MediaTrackSettings): VideoSource {
+  switch (settings.displaySurface) {
+    case 'browser':
+      return 'tab'
+    case 'window':
+      return 'window'
+    case 'monitor':
+      return 'screen'
+    default:
+      throw new CaptureFailedError('The browser did not identify the selected recording source')
+  }
+}
+
+/** Desktop tokens, including selected tabs, must be consumed as desktop in the visible host. */
+export async function openChosenSource(
+  grant: CaptureGrant,
+  requestedAudio: boolean,
+  quality: VideoQuality | null,
+): Promise<{ stream: MediaStream; source: VideoSource }> {
+  // Do not open any media devices when the native picker declined requested audio.
+  if (requestedAudio && !grant.sourceAudio) throw new SourceAudioUnavailableError()
+  const base = { chromeMediaSource: 'desktop', chromeMediaSourceId: grant.streamId }
+  const dimensions = quality ? videoDimensions(quality) : { width: 640, height: 360 }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      mandatory: {
+        ...base,
+        maxWidth: dimensions.width,
+        maxHeight: dimensions.height,
+        maxFrameRate: quality?.fps ?? 1,
+      },
+    },
+    audio: grant.sourceAudio ? { mandatory: { ...base } } : false,
+  } as MediaStreamConstraints)
+  try {
+    return { stream, source: selectedSource(stream.getVideoTracks()[0]?.getSettings() ?? {}) }
+  } catch (error) {
+    stream.getTracks().forEach((track) => track.stop())
+    throw error
+  }
 }

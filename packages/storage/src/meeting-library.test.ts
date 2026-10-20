@@ -186,3 +186,69 @@ it('isolates a meeting.json directory and disables ambiguous duplicate IDs', asy
   )
   expect(await (await store.readFile('wrong/meeting.json/nested.txt'))!.text()).toBe('retained')
 })
+
+describe('recoverable archive metadata', () => {
+  it('archives and restores from disk without changing media, text or other metadata', async () => {
+    const store = await fixture()
+    for (const file of ['audio.webm', 'video.mp4', 'transcript.json', 'summary.json'])
+      await store.writeFile(`a/${file}`, `unchanged:${file}`)
+    await editMeeting(store, 'a', 'a', { type: 'archive', previous: false, value: true })
+    expect((await scanMeetings(store))[0]?.meeting?.archived).toBe(true)
+    await editMeeting(store, 'a', 'a', {
+      type: 'title',
+      previous: 'Original',
+      value: '  Renamed  ',
+    })
+    await editMeeting(store, 'a', 'a', { type: 'archive', previous: true, value: false })
+    expect((await readMeetingDocument(store, 'a', 'a')).meeting).toMatchObject({
+      title: 'Renamed',
+      archived: false,
+      status: 'ready',
+      editRevision: 3,
+    })
+    expect(JSON.parse(await (await store.readFile('a/meeting.json'))!.text()).futureField).toBe(
+      'preserve',
+    )
+    for (const file of ['audio.webm', 'video.mp4', 'transcript.json', 'summary.json'])
+      expect(await (await store.readFile(`a/${file}`))!.text()).toBe(`unchanged:${file}`)
+  })
+  it('rejects competing archive requests and empty titles without overwriting', async () => {
+    const store = await fixture()
+    const results = await Promise.allSettled(
+      [1, 2].map(() =>
+        editMeeting(store, 'a', 'a', { type: 'archive', previous: false, value: true }),
+      ),
+    )
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1)
+    await expect(
+      editMeeting(store, 'a', 'a', { type: 'title', previous: 'Original', value: '   ' }),
+    ).rejects.toThrow('emptyTitle')
+    expect((await readMeetingDocument(store, 'a', 'a')).meeting.title).toBe('Original')
+  })
+  it('runs the busy guard under the writer lock and leaves metadata intact on rejection', async () => {
+    const store = await fixture()
+    let processing = false
+    const reservation = withMeetingLock('a', async () => {
+      processing = true
+    })
+    await expect(
+      editMeeting(store, 'a', 'a', { type: 'archive', previous: false, value: true }, async () => {
+        if (processing) throw new Error('meetingBusy')
+      }),
+    ).rejects.toThrow('meetingBusy')
+    await reservation
+    expect((await readMeetingDocument(store, 'a', 'a')).meeting.archived).toBeUndefined()
+  })
+  it('reports write errors without claiming success or mutating cached metadata', async () => {
+    const store = await fixture()
+    const before = await (await store.readFile('a/meeting.json'))!.text()
+    vi.spyOn(store, 'writeFile').mockRejectedValueOnce(
+      new DOMException('Disk full', 'QuotaExceededError'),
+    )
+    await expect(
+      editMeeting(store, 'a', 'a', { type: 'archive', previous: false, value: true }),
+    ).rejects.toThrow('Disk full')
+    expect(await (await store.readFile('a/meeting.json'))!.text()).toBe(before)
+  })
+})

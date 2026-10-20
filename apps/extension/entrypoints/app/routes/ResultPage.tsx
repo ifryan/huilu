@@ -72,7 +72,12 @@ export function ResultPage() {
       doc={query.data}
       processing={
         query.data.local ? (
-          <ProcessingStatus recording={query.data.local} job={job} readiness={readiness} />
+          <ProcessingStatus
+            recording={query.data.local}
+            job={job}
+            readiness={readiness}
+            archived={query.data.meeting.archived}
+          />
         ) : null
       }
     />
@@ -170,6 +175,9 @@ function ResultContent({ doc, processing }: { doc: ResultDocument; processing: R
           </Link>
         </Button>
         <span className="flex-1 md:hidden" />
+        {meeting.archived && (
+          <span className="text-muted-foreground text-body">{t('library.archiveView')}</span>
+        )}
         <div className="order-last min-w-48 basis-full md:order-none md:flex-1 md:basis-auto">
           <input
             key={meeting.title}

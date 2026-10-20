@@ -1,5 +1,7 @@
 import {
   NoAudioSourceError,
+  SourceAudioUnavailableError,
+  WindowAudioUnavailableError,
   type CaptureRequest,
   type CapturedMedia,
   type MediaBackend,
@@ -47,8 +49,24 @@ async function openMicrophone(deviceId: string | undefined) {
 
 /** 采集来源 + 麦克风，用 Web Audio 混成一条音轨 */
 async function capture(req: CaptureRequest): Promise<CapturedMedia> {
-  const warnings: RecorderWarning[] = []
+  const sourceAudioError = () =>
+    req.source === 'window' ? new WindowAudioUnavailableError() : new SourceAudioUnavailableError()
+  // 原生选择器已明确不授予音频时，不再打开画面、麦克风或 AudioContext。
+  // 用户主动关闭来源音频则继续按其选择录制麦克风 / 无声视频。
+  if (req.sourceAudioRequested && !req.sourceAudio) throw sourceAudioError()
   const source = await navigator.mediaDevices.getUserMedia(sourceConstraints(req))
+  return mixCapturedStream(req, source, req.source === 'tab')
+}
+
+/** Mix an already authorized source in its owning page; desktop tab capture keeps local playback. */
+export async function mixCapturedStream(
+  req: CaptureRequest,
+  source: MediaStream,
+  replaySourceAudio = false,
+): Promise<CapturedMedia> {
+  const sourceAudioError = () =>
+    req.source === 'window' ? new WindowAudioUnavailableError() : new SourceAudioUnavailableError()
+  const warnings: RecorderWarning[] = []
   let mic: MediaStream | undefined
   let ctx: AudioContext | undefined
   const stopAll = () => {
@@ -80,13 +98,13 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
       : []
     if (!req.sourceAudio) source.getAudioTracks().forEach((track) => track.stop())
     if ((req.sourceAudioRequested ?? req.sourceAudio) && sourceAudio.length === 0) {
-      warnings.push('source-audio-unavailable')
+      throw sourceAudioError()
     }
     if (sourceAudio.length > 0) {
       const node = ctx.createMediaStreamSource(new MediaStream(sourceAudio))
       node.connect(bus)
-      // tabCapture 会让标签页静音，需要把声音播回给用户；桌面采集不会静音，播回会产生回声
-      if (req.source === 'tab') node.connect(ctx.destination)
+      // tabCapture 快捷路径需要回放；统一桌面选择器采集的标签页保持本地播放，不额外回放
+      if (replaySourceAudio) node.connect(ctx.destination)
     }
 
     if (req.microphone.enabled) {

@@ -25,7 +25,10 @@ export default defineContentScript({
           const layer = document.createElement('div')
           container.append(layer)
           const removeLayer = installPanelLayer(host, layer)
-          const mounted = mountInto(layer, <RecordingPanel />)
+          const mounted = mountInto(
+            layer,
+            <RecordingPanel onInactive={() => ctx.notifyInvalidated()} />,
+          )
           void mounted.ready.catch(reportPanelError)
           return {
             unmount() {

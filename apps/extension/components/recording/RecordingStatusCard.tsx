@@ -7,7 +7,13 @@ import { sendMessage, type LastRecording, type RecorderStatus } from '@/lib/mess
 import { formatBytes, formatDuration, startErrorText, warningText } from '@/lib/recording'
 
 /** 录制中的状态卡：录音中 / 录屏中（红点）+ 计时 + 已录大小 + 暂停 / 继续 / 结束（二次确认） */
-export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
+export function RecordingStatusCard({
+  status,
+  embedded = false,
+}: {
+  status: RecorderStatus
+  embedded?: boolean
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
@@ -34,7 +40,7 @@ export function RecordingStatusCard({ status }: { status: RecorderStatus }) {
             : t('sidepanel.recordingAudio')
 
   return (
-    <section className="bg-muted flex flex-col gap-3 rounded-2xl p-4">
+    <section className={cn('flex flex-col gap-3', embedded ? 'px-1' : 'bg-muted rounded-2xl p-4')}>
       <div className="flex items-center gap-2 text-sm font-medium">
         <span
           className={cn(

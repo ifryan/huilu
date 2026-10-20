@@ -1,6 +1,6 @@
 // Node 中用可检查连接关系的 Web Audio / MediaStream 替身，不启动浏览器或设备。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { browserMediaBackend } from './browser-media'
+import { browserMediaBackend, mixCapturedStream } from './browser-media'
 import { RecordingSession, type RecordingOptions } from './session'
 import { RecordingStore } from './store'
 import { FakeMedia, MemoryFs } from './test-helpers'
@@ -114,17 +114,47 @@ describe('actual audio routing', () => {
     expect(captured.transcriptAudioTrack).toBeDefined()
     captured.stop()
   })
-  it('warns about missing source audio even when a working microphone permits recording', async () => {
-    source.tracks.splice(1)
-    const captured = await browserMediaBackend.capture({
-      ...request,
-      source: 'screen',
-      sourceAudio: false,
-    })
-    expect(captured.warnings).toEqual(['source-audio-unavailable'])
-    expect(captured.transcriptAudioTrack).toBeDefined()
-    captured.stop()
-  })
+  it.each([
+    ['tab', true],
+    ['window', true],
+    ['screen', true],
+  ] as const)(
+    'rejects missing requested %s audio (grant=%s) before opening the microphone',
+    async (sourceType, granted) => {
+      source.tracks.splice(1)
+      await expect(
+        browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: granted }),
+      ).rejects.toMatchObject({
+        name:
+          sourceType === 'window' ? 'WindowAudioUnavailableError' : 'SourceAudioUnavailableError',
+      })
+      expect(getUserMedia).toHaveBeenCalledOnce()
+      expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+      expect(Context.current.close).toHaveBeenCalledOnce()
+    },
+  )
+  it.each(['window', 'screen'] as const)(
+    'rejects a denied %s audio grant without opening any devices, then allows a retry',
+    async (sourceType) => {
+      await expect(
+        browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: false }),
+      ).rejects.toMatchObject({
+        name:
+          sourceType === 'window' ? 'WindowAudioUnavailableError' : 'SourceAudioUnavailableError',
+      })
+      expect(getUserMedia).not.toHaveBeenCalled()
+      const captured = await browserMediaBackend.capture({
+        ...request,
+        source: sourceType,
+        sourceAudio: false,
+        sourceAudioRequested: false,
+      })
+      expect(captured.transcriptAudioTrack).toBeDefined()
+      captured.stop()
+      expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+      expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+    },
+  )
   it('omits transcription for silent video and rejects audio-only recordings with no inputs', async () => {
     const captured = await browserMediaBackend.capture({
       ...request,
@@ -141,6 +171,7 @@ describe('actual audio routing', () => {
         ...request,
         mode: 'audio',
         sourceAudio: false,
+        sourceAudioRequested: false,
         microphone: { enabled: false },
       }),
     ).rejects.toThrow('No audio to record')
@@ -161,18 +192,15 @@ describe('actual audio routing', () => {
     expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
     expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
   })
-  it('reports an audio-only source that ended before microphone initialization completed', async () => {
+  it('rejects an audio-only source that already ended before microphone initialization', async () => {
     const ended = new Track('audio')
     ended.readyState = 'ended'
     source = new Stream([ended])
     getUserMedia.mockReset().mockResolvedValueOnce(source).mockResolvedValueOnce(mic)
-    const captured = await browserMediaBackend.capture({ ...request, mode: 'audio' })
-    expect(Context.current.sources.map((s) => s.stream)).toEqual([mic])
-    const onEnded = vi.fn()
-    captured.onEnded(onEnded)
-    await Promise.resolve()
-    expect(onEnded).toHaveBeenCalledOnce()
-    captured.stop()
+    await expect(browserMediaBackend.capture({ ...request, mode: 'audio' })).rejects.toMatchObject({
+      name: 'SourceAudioUnavailableError',
+    })
+    expect(getUserMedia).toHaveBeenCalledOnce()
   })
   it('does not classify intentionally stopped, excluded audio as an ended source', async () => {
     const captured = await browserMediaBackend.capture({
@@ -215,4 +243,25 @@ it('session levels follow recording / pause / resume / stop, with no persisted s
   expect(session.status().audioLevel).toBe(0)
   await stopping
   expect(session.status().audioLevel).toBe(0)
+})
+
+it('uses a pre-authorized desktop tab without recapturing or replaying source audio', async () => {
+  getUserMedia.mockReset().mockResolvedValueOnce(mic)
+  const captured = await mixCapturedStream(request, source as unknown as MediaStream)
+  expect(getUserMedia).toHaveBeenCalledOnce() // mic only; never consumes a desktop token as tabCapture
+  expect(Context.current.sources).toHaveLength(2)
+  expect(Context.current.sources[0]!.node.connections).not.toContain(Context.current.destination)
+  captured.stop()
+  expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+  expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+})
+
+it('keeps the no-source-audio protection when mixing an already authorized stream', async () => {
+  source.tracks.splice(1)
+  getUserMedia.mockReset()
+  await expect(mixCapturedStream(request, source as unknown as MediaStream)).rejects.toMatchObject({
+    name: 'SourceAudioUnavailableError',
+  })
+  expect(getUserMedia).not.toHaveBeenCalled()
+  expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
 })

@@ -14,6 +14,7 @@ export default tseslint.config(
       '**/.wxt/**',
       '**/node_modules/**',
       '**/*.gen.ts',
+      'output/playwright/**',
       // 一次性验证代码（纯 JS、不经打包），不纳入主工程规范检查
       'spikes/**',
     ],

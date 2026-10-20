@@ -48,7 +48,15 @@
     "dismissNotice": "知道了",
     "sourceAudio": "录制来源 / 系统音频",
     "sourceAudioTabHint": "仅包含当前标签页播放的声音，与麦克风分开控制。",
-    "sourceAudioDesktopHint": "可用性取决于所选窗口 / 屏幕、系统和浏览器；如原生选择框提供「分享音频」，仍需勾选。"
+    "sourceAudioDesktopHint": "窗口可能不支持音频。优先选择会议标签页；选择屏幕时需勾选「分享音频」。未取得所需音轨时不会开始录制。",
+    "sourceAudioWindowHint": "窗口声音取决于浏览器与系统支持。若选择器提示无法分享音频，请改选会议标签页或支持音频的屏幕。只录麦克风或无声视频时，请关闭此项。",
+    "sourceAudioShort": "来源声音",
+    "moreSettings": "更多设置",
+    "quickCurrentTab": "快捷录制当前标签页（跳过来源选择）",
+    "quickCurrentTabHint": "仅录制打开插件时的标签页，声音按上方开关录入。",
+    "chooseSourceHint": "下一步选择标签页、窗口或屏幕。需要来源声音时，请在分享弹窗中开启音频。",
+    "chooseAndStart": "选择来源并开始",
+    "micDevice": "麦克风设备"
   },
   "sidepanel": {
     "recording": "录制中",
@@ -130,7 +138,8 @@
       "noAudio": "没有录到转写音频，无法转写",
       "notConfigured": "尚未配置转写服务",
       "meetingNotFound": "找不到这场录制的会议信息",
-      "notProcessing": "这场录制不需要处理"
+      "notProcessing": "这场录制不需要处理",
+      "archived": "请先恢复已归档会议，再开始处理。"
     },
     "error": {
       "transcriptionNotConfigured": "尚未配置转写服务",
@@ -141,7 +150,9 @@
       "splitFailed": "音频切片失败",
       "sourceDataUnavailable": "已完成会议的数据不可用，请重新授权原文件夹或检查 meeting.json 与 transcript.json",
       "writeFailed": "写入失败",
-      "unknown": "未知错误"
+      "unknown": "未知错误",
+      "silentAudio": "录音全程静音，已停止转写和 AI 纪要，原文件仍保留。请检查来源音频、分享音频选项及麦克风后重新录制。",
+      "audioInspectionFailed": "无法在本地检查录音，已停止转写。原文件仍保留，请检查录音能否播放并更新浏览器后重试。"
     }
   },
   "settings": {
@@ -273,7 +284,9 @@
       "permission": "无法采集该页面：权限被拒绝，或该页面不允许录制（例如 chrome:// 页面）",
       "captureFailed": "无法打开录制来源选择框：{{detail}}",
       "systemPermission": "系统没有允许 Chrome 录制屏幕。请在「系统设置 → 隐私与安全性 → 屏幕与系统录音」中允许 Google Chrome，然后重启 Chrome 再试",
-      "windowClosed": "录制窗口被关闭，录制已中断。已录的内容可在「未完成的录制」中恢复"
+      "windowClosed": "采集标签页被关闭，录制已中断。已录的内容可在「未完成的录制」中恢复",
+      "sourceAudioUnavailable": "未能取得来源音频，录制未开始。请改选正在播放会议的标签页，或选择支持「分享音频」的屏幕并勾选该项。只录麦克风时，请先关闭「来源声音」。",
+      "windowAudioUnavailable": "所选窗口未提供音频，录制未开始。请改选会议标签页，或支持「分享音频」的屏幕并勾选该项。若仍需录此窗口，请关闭「来源声音」并开启麦克风；录无声视频时可同时关闭麦克风。"
     }
   },
   "unfinished": {
@@ -365,9 +378,9 @@
     }
   },
   "recorderWindow": {
-    "choosing": "请在弹出的选择框中选择要录制的窗口或屏幕…",
-    "keepOpen": "这个窗口负责采集窗口 / 屏幕画面：可以保持最小化，但请不要关闭，关闭会中断录制。录制结束后它会自动关闭。",
-    "recording": "正在录制。计时和暂停 / 结束都在网页上的悬浮录制面板中。"
+    "choosing": "请在分享弹窗中选择标签页、窗口或屏幕…",
+    "keepOpen": "此标签页在后台承载录制，结束后自动关闭，请保留。网页上的控制面板可以关闭，之后从插件图标重新打开。",
+    "recording": "正在后台录制。可在此处或从插件图标控制录制。"
   },
   "panel": {
     "title": "录制面板",
@@ -451,6 +464,25 @@
     "accessNeeded": "需要重新授权原数据文件夹",
     "ready": "已完成",
     "incomplete": "尚未完成处理",
-    "count": "共 {{count}} 场会议"
+    "count": "共 {{count}} 场会议",
+    "views": "历史记录视图",
+    "activeView": "会议记录",
+    "archiveView": "已归档",
+    "archiveEmpty": "暂无已归档的会议。",
+    "editTitle": "编辑标题",
+    "archive": "归档",
+    "restore": "恢复",
+    "save": "保存",
+    "cancel": "取消",
+    "saving": "保存中…",
+    "archiveHint": "将这场会议从会议记录中隐藏？可在「已归档」中恢复，音视频、逐字稿和纪要都会保留。",
+    "restoreHint": "将这场会议恢复到会议记录？文件和处理状态都会保留。",
+    "emptyTitle": "请输入会议标题。",
+    "busy": "请先结束录制、恢复未完成录制或等待处理任务结束，再编辑或归档。",
+    "editConflict": "会议或数据文件夹已更改，请取消并刷新列表后重试。",
+    "editFailed": "无法确认保存结果。请检查文件夹授权及剩余空间，刷新核对后再重试。",
+    "titleSaved": "会议标题已保存。",
+    "archived": "会议已归档，可在「已归档」中恢复。",
+    "restored": "会议已恢复。"
   }
 }

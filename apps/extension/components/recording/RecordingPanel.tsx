@@ -1,19 +1,17 @@
 import { useTranslation } from '@huilu/i18n'
 import { Button, X, cn } from '@huilu/ui'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import { reportPanelError } from '@/lib/extension-context'
-import { sendMessage } from '@/lib/messaging'
 import { formatDuration, useRecorderStatus } from '@/lib/recording'
-import { LastRecordingNotice, RecordingStatusCard, StartErrorNotice } from './RecordingStatusCard'
+import { RecordingStatusCard } from './RecordingStatusCard'
 
 /**
- * 页面内悬浮录制面板：录制中唯一的计时、暂停 / 继续、结束和错误提示入口。
+ * 页面内悬浮录制面板：录制中的计时、暂停 / 继续、结束入口。
  * 固定在网页右下角之上（可拖动、可收起成小计时条、可关闭），不占网页布局。
  * 注意：标签页「音频 + 视频」录制会录下网页画面，面板展开时也会出现在视频里，收起后只剩小计时条。
  */
-export function RecordingPanel() {
+export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
   const { t } = useTranslation()
-  // 关闭时记下当时的录制（或「空闲」）；换了一场录制就重新显示
+  // 关闭时立即隐藏，并由注入入口回收完整 UI 和监听器。
   const [hiddenFor, setHiddenFor] = useState<string>()
   const [collapsed, setCollapsed] = useState(false)
   const { data: status } = useRecorderStatus({ meterVisible: !collapsed, hiddenFor })
@@ -24,6 +22,10 @@ export function RecordingPanel() {
   const key = busy ? (status.session?.id ?? 'busy') : 'idle'
   const hidden = hiddenFor === key
   const hasStatus = status !== undefined
+
+  useEffect(() => {
+    if (status?.state === 'idle') onInactive?.()
+  }, [status?.state, onInactive])
 
   useEffect(() => {
     const clamp = () => {
@@ -43,12 +45,8 @@ export function RecordingPanel() {
     }
   }, [collapsed, hidden, hasStatus])
 
-  if (!status || hidden) return null
-  const startError = status.startError
-  // 未被关掉的最近一次结果：面板重新注入（快捷键结束、弹窗重新打开）后照样显示
-  const lastResult = status.lastResult
-  // 空闲、也没有需要告知的结果：什么都不显示
-  if (!busy && !startError && !lastResult) return null
+  // Errors and saved results belong in the toolbar popup, never persist over a webpage.
+  if (!status || hidden || !busy) return null
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return
@@ -135,29 +133,14 @@ export function RecordingPanel() {
             aria-label={t('panel.close')}
             onClick={() => {
               setHiddenFor(key)
-              // 空闲时关掉面板 = 看过了结果，弹窗里也不再提示
-              if (!busy) void sendMessage('dismissRecordingNotice').catch(reportPanelError)
+              onInactive?.()
             }}
           >
             <X aria-hidden="true" />
           </Button>
         </span>
       </header>
-      {busy ? (
-        <RecordingStatusCard status={status} />
-      ) : (
-        <>
-          {startError && <StartErrorNotice error={startError} />}
-          {lastResult && <LastRecordingNotice result={lastResult} />}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void sendMessage('openApp', '/').catch(reportPanelError)}
-          >
-            {t('sidepanel.openHistory')}
-          </Button>
-        </>
-      )}
+      <RecordingStatusCard status={status} embedded />
       {busy && <p className="text-muted-foreground px-1 text-xs">{t('panel.hint')}</p>}
     </section>
   )

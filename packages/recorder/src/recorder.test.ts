@@ -534,6 +534,9 @@ describe('listLocalRecordings', () => {
       create: true,
     })
 
+    const savedDir = await store.open('20260924-100000-a')
+    const savedMeeting = (await savedDir!.readMeeting())!
+    await savedDir!.writeMeeting({ ...savedMeeting, title: 'Edited from history', archived: true })
     const before = JSON.stringify([...fs.root.dirs.keys()])
     const list = await listLocalRecordings(store)
     expect(list.map((r) => [r.id, r.state])).toEqual([
@@ -543,7 +546,12 @@ describe('listLocalRecordings', () => {
       ['20260924-100000-a', 'saved'],
     ])
     const saved = list.at(-1)!
-    expect(saved).toMatchObject({ title: '需求评审', mode: 'audio', processing: 'processing' })
+    expect(saved).toMatchObject({
+      title: 'Edited from history',
+      archived: true,
+      mode: 'audio',
+      processing: 'processing',
+    })
     expect(saved.durationMs).toBe(30_000)
     expect(previewTrack(saved)).toBe('audio')
     expect(previewTrack(list[2]!)).toBe('audio')
