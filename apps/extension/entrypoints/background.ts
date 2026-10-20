@@ -22,6 +22,7 @@ import {
 import { hasHostPermission, openAppPage } from '@/platform'
 import { CaptureCancelledError, requestTabCapture } from '@/platform/capture'
 import { syncCodingPlanHeaders } from '@/platform/coding-plan-headers'
+import { initialRecorderBounds } from '@/lib/recorder-window-bounds'
 import {
   closeOffscreenDocument,
   ensureOffscreenDocument,
@@ -152,32 +153,44 @@ async function dismissNotice() {
 let resolveWindowReady: (() => void) | undefined
 
 /** 打开录制窗口并等它注册好消息处理 */
-async function openRecorderWindow(): Promise<number> {
+async function openRecorderWindow(tabId: number): Promise<number> {
+  // Use the initiating tab, not getLastFocused(): the extension UI can change focus.
+  const parent = await browser.tabs
+    .get(tabId)
+    .then((tab) => browser.windows.get(tab.windowId))
+    .catch(() => undefined)
+  let readyTimer: ReturnType<typeof setTimeout>
   const ready = new Promise<void>((resolve, reject) => {
     resolveWindowReady = resolve
-    setTimeout(() => reject(new Error('The recording window did not load')), 15_000)
+    readyTimer = setTimeout(() => reject(new Error('The recording window did not load')), 15_000)
   })
-  const win = await browser.windows.create({
-    url: browser.runtime.getURL('/recorder.html'),
-    type: 'popup',
-    width: 420,
-    height: 340,
-    focused: true,
-  })
-  const windowId = win?.id
-  if (windowId === undefined) throw new Error('Could not open the recording window')
+  let windowId: number | undefined
   try {
+    const win = await browser.windows.create({
+      url: browser.runtime.getURL('/recorder.html'),
+      type: 'popup',
+      ...initialRecorderBounds(parent),
+      focused: true,
+    })
+    windowId = win?.id
+    if (windowId === undefined) throw new Error('Could not open the recording window')
     await ready
+    return windowId
   } catch (e) {
-    await browser.windows.remove(windowId).catch(() => {})
+    if (windowId !== undefined) await browser.windows.remove(windowId).catch(() => {})
     throw e
+  } finally {
+    clearTimeout(readyTimer!)
+    resolveWindowReady = undefined
   }
-  return windowId
 }
 
-async function startInWindow(options: WindowRecordingOptions): Promise<RecorderStatus> {
+async function startInWindow(
+  options: WindowRecordingOptions,
+  tabId: number,
+): Promise<RecorderStatus> {
   await closeRetiredWindow()
-  const windowId = await openRecorderWindow()
+  const windowId = await openRecorderWindow(tabId)
   const host = { windowId, title: options.title, mode: options.mode, started: false }
   await windowHost.setValue(host)
   try {
@@ -241,7 +254,7 @@ async function startRecording({
         }
       })
     } else {
-      status = await startInWindow(options)
+      status = await startInWindow(options, tabId)
     }
     await lastRecording.setValue(null)
     await lastStartError.setValue(null)

@@ -198,6 +198,27 @@ beforeEach(() => {
 })
 
 describe('background recording lifecycle', () => {
+  it('places the host using the initiating tab window instead of the last focused window', async () => {
+    vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue({ windowId: 700 } as never)
+    vi.mocked(fakeBrowser.windows.get).mockImplementation(async (id) => {
+      if (id === 700) return { id, left: -1800, top: 100, width: 1400, height: 900 }
+      const win = (await fakeBrowser.windows.getAll()).find((w) => w.id === id)
+      if (!win) throw new Error(`No window with id: ${id}`)
+      return win
+    })
+    const create = vi.spyOn(fakeBrowser.windows, 'create')
+    await start('screen')
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'popup',
+        left: -1580,
+        top: 190,
+        width: 960,
+        height: 720,
+      }),
+    )
+  })
+
   it('wakes the queue recovery when startup job discovery fails', async () => {
     await settle()
     h.jobsReadFailures = 1
