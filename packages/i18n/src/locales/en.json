@@ -283,7 +283,7 @@
       "permission": "Cannot capture this page: permission denied, or the page cannot be recorded (e.g. chrome:// pages)",
       "captureFailed": "Could not open the source picker: {{detail}}",
       "systemPermission": "The system does not allow Chrome to record the screen. Allow Google Chrome in System Settings → Privacy & Security → Screen & System Audio Recording, restart Chrome and try again",
-      "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\"",
+      "windowClosed": "The recording tab was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\"",
       "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Source audio first.",
       "windowAudioUnavailable": "The selected window did not provide audio, so recording did not start. Select the meeting tab, or a supported screen with Share audio enabled. To keep recording this window, turn off Source audio and enable the microphone; for silent video, turn off the microphone too."
     }
@@ -378,8 +378,8 @@
   },
   "recorderWindow": {
     "choosing": "Choose a tab, window or screen in the sharing dialog…",
-    "keepOpen": "This window owns the selected recording source. Keep it minimized; closing it stops the recording. It closes itself when recording ends.",
-    "recording": "Recording. The timer and pause / stop controls are in the floating recording panel on the page."
+    "keepOpen": "This tab keeps the recording running in the background and closes when it ends. Keep it open. You can hide the page controls and reopen them from the extension icon.",
+    "recording": "Recording in the background. Control it here or from the extension icon."
   },
   "panel": {
     "title": "Recording panel",

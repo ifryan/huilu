@@ -55,7 +55,7 @@ interface ProtocolMap {
   openApp(route: string): void
   /** 在指定标签页显示页面内悬浮录制面板；页面不允许注入（如 chrome:// 页面）时返回 false */
   showRecordingPanel(tabId: number): boolean
-  /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」、悬浮面板 ✕） */
+  /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」） */
   dismissRecordingNotice(): void
   /** 历史记录中的「补转写」「重试」「生成纪要」：加入处理队列 */
   processMeeting(meetingId: string): EnqueueResult

@@ -5,7 +5,10 @@ import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RecordingSettingsSnapshot } from '@/lib/messaging'
 
-type Handler = (message: { data: unknown; sender: { tab?: { windowId?: number } } }) => unknown
+type Handler = (message: {
+  data: unknown
+  sender: { tab?: { windowId?: number; id?: number } }
+}) => unknown
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
@@ -129,8 +132,11 @@ const settings = (videoSource: 'tab' | 'screen'): RecordingSettingsSnapshot => (
   },
 })
 
-const call = <T>(type: string, data?: unknown, sender: { tab?: { windowId?: number } } = {}) =>
-  Promise.resolve(h.handlers.get(type)!({ data, sender })) as Promise<T>
+const call = <T>(
+  type: string,
+  data?: unknown,
+  sender: { tab?: { windowId?: number; id?: number } } = {},
+) => Promise.resolve(h.handlers.get(type)!({ data, sender })) as Promise<T>
 
 const start = (videoSource: 'tab' | 'screen') =>
   call<RecorderStatus>('startRecording', {
@@ -143,6 +149,7 @@ const start = (videoSource: 'tab' | 'screen') =>
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
 
 beforeEach(() => {
+  vi.restoreAllMocks()
   fakeBrowser.reset()
   h.handlers.clear()
   Object.assign(h, {
@@ -172,11 +179,24 @@ beforeEach(() => {
     return win
   })
   // 新开的录制窗口加载完成后报告就绪；关闭后它的消息处理随之消失
-  fakeBrowser.windows.onCreated.addListener((win) => {
-    h.recorderWindows.add(win.id!)
+  // Chrome loads recorder.html in a new tab; only that tab registers window:* handlers.
+  fakeBrowser.tabs.onCreated.addListener((tab) => {
+    if (!tab.url?.endsWith('/recorder.html')) return
+    h.recorderWindows.add(tab.id!)
     void call('recorderWindowReady')
   })
-  fakeBrowser.windows.onRemoved.addListener((id) => void h.recorderWindows.delete(id))
+  fakeBrowser.tabs.onRemoved.addListener((id) => void h.recorderWindows.delete(id))
+  vi.spyOn(fakeBrowser.tabs, 'get').mockImplementation(async (id) => {
+    if (id === 1) return { id, windowId: 700 } as never
+    const tab = (await fakeBrowser.tabs.query({})).find((t) => t.id === id)
+    if (!tab) throw new Error(`No tab with id: ${id}`)
+    return tab
+  })
+  // fake-browser 2.0.1 tabs.remove incorrectly looks up a window by tab ID.
+  vi.spyOn(fakeBrowser.tabs, 'remove').mockImplementation(async (ids) => {
+    for (const id of Array.isArray(ids) ? ids : [ids])
+      await fakeBrowser.tabs.onRemoved.trigger(id, { windowId: 700, isWindowClosing: false })
+  })
   // fakeBrowser 没有实现的 API
   Object.assign(fakeBrowser, {
     scripting: { executeScript: async () => [] },
@@ -198,25 +218,14 @@ beforeEach(() => {
 })
 
 describe('background recording lifecycle', () => {
-  it('places the host using the initiating tab window instead of the last focused window', async () => {
-    vi.spyOn(fakeBrowser.tabs, 'get').mockResolvedValue({ windowId: 700 } as never)
-    vi.mocked(fakeBrowser.windows.get).mockImplementation(async (id) => {
-      if (id === 700) return { id, left: -1800, top: 100, width: 1400, height: 900 }
-      const win = (await fakeBrowser.windows.getAll()).find((w) => w.id === id)
-      if (!win) throw new Error(`No window with id: ${id}`)
-      return win
-    })
-    const create = vi.spyOn(fakeBrowser.windows, 'create')
+  it('opens the capture tab in the initiating browser without creating or resizing windows', async () => {
+    const create = vi.spyOn(fakeBrowser.tabs, 'create')
+    const createWindow = vi.spyOn(fakeBrowser.windows, 'create')
+    const resize = vi.spyOn(fakeBrowser.windows, 'update')
     await start('screen')
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'popup',
-        left: -1580,
-        top: 190,
-        width: 960,
-        height: 720,
-      }),
-    )
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ windowId: 700, active: true }))
+    expect(createWindow).not.toHaveBeenCalled()
+    expect(resize).not.toHaveBeenCalled()
   })
 
   it('wakes the queue recovery when startup job discovery fails', async () => {
@@ -256,15 +265,15 @@ describe('background recording lifecycle', () => {
     expect(await fakeBrowser.action.getBadgeText({})).toBe('REC')
 
     // 用户关掉录制窗口：窗口先从列表里消失，状态轮询在 onRemoved 回调之前执行
-    vi.mocked(fakeBrowser.windows.get).mockImplementation(async (id: number) => {
-      const win = (await fakeBrowser.windows.getAll()).find((w) => w.id === id && id !== windowId)
-      if (!win) throw new Error(`No window with id: ${id}`)
-      return win
+    vi.spyOn(fakeBrowser.tabs, 'get').mockImplementation(async (id: number) => {
+      const tab = (await fakeBrowser.tabs.query({})).find((t) => t.id === id && id !== windowId)
+      if (!tab) throw new Error(`No tab with id: ${id}`)
+      return tab
     })
     const polled = await call<RecorderStatus>('getRecorderStatus')
     expect(polled.state).toBe('idle')
 
-    await fakeBrowser.windows.remove(windowId!)
+    await fakeBrowser.tabs.remove(windowId!)
     await settle()
     const status = await call<RecorderStatus>('getRecorderStatus')
     expect(status.lastResult).toMatchObject({ error: 'RecorderWindowClosed', saved: false })
@@ -287,7 +296,7 @@ describe('background recording lifecycle', () => {
         bytes: 10,
         saved: true,
       },
-      { tab: { windowId: first } },
+      { tab: { id: first } },
     )
     // 旧窗口还在延迟关闭的 1.5 秒内：马上开始下一场
     await start('screen')
@@ -341,7 +350,7 @@ describe('background processing lifecycle', () => {
     expect(h.offscreenOpen).toBe(false)
     const [windowId] = [...h.recorderWindows]
     h.processingBusy = true
-    await call('recordingFinished', finished('r2'), { tab: { windowId } })
+    await call('recordingFinished', finished('r2'), { tab: { id: windowId } })
     await settle()
     expect(h.offscreenOpen).toBe(true)
     expect(h.processRequests).toEqual([{ meetingId: 'r2', auto: true }])
@@ -549,4 +558,26 @@ it('keeps quick current-tab capture explicit even when the last legacy preferenc
   await call<RecorderStatus>('startRecording', { tabId: 1, title: 'Quick tab', settings: snapshot })
   expect(h.windowStartReceivers).toEqual([])
   expect(h.captureRequests).toMatchObject([{ source: 'tab' }])
+})
+
+describe('U-93 capture tab lifecycle', () => {
+  it('restores the source tab while retaining the live capture document', async () => {
+    const update = vi.spyOn(fakeBrowser.tabs, 'update').mockResolvedValue({} as never)
+    const remove = vi.spyOn(fakeBrowser.tabs, 'remove')
+    await start('screen')
+    expect(update).toHaveBeenCalledWith(1, { active: true })
+    expect(remove).not.toHaveBeenCalled()
+    expect(await call('getRecorderStatus')).toMatchObject({ state: 'recording' })
+  })
+
+  it('retains start failures in the toolbar without injecting an idle webpage panel', async () => {
+    h.offscreenStart = () => Promise.reject(new Error('CaptureCancelledError: cancelled'))
+    const inject = vi.spyOn(fakeBrowser.scripting, 'executeScript')
+    await expect(start('tab')).rejects.toThrow('cancelled')
+    expect(inject).not.toHaveBeenCalled()
+    expect(await call('getRecorderStatus')).toMatchObject({
+      state: 'idle',
+      startError: expect.stringContaining('CaptureCancelledError'),
+    })
+  })
 })

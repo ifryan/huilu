@@ -4,6 +4,8 @@ import { fitRecorderBounds } from '@/lib/recorder-window-bounds'
 /** Run in recorder.html, where Screen describes the display containing this popup. */
 export async function prepareRecorderWindow(): Promise<void> {
   const win = await browser.windows.getCurrent()
+  // A regular browser tab uses Chrome's native centering; never resize the user's browser.
+  if (win.type !== 'popup') return
   if (win.id === undefined) throw new Error('The recording window is no longer available')
   // Chromium exposes availLeft/availTop without requiring multi-screen enumeration permission.
   const display = window.screen as Screen & { availLeft: number; availTop: number }
