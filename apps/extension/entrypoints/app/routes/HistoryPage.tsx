@@ -20,6 +20,7 @@ export function HistoryPage() {
   const [search, setSearch] = useState('')
   const [archived, setArchived] = useState(false)
   const [notice, setNotice] = useState<HistoryNotice>()
+  const views = useRef<HTMLDivElement>(null)
   const items = data?.items.filter(
     (r) =>
       r.archived === archived && r.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
@@ -30,7 +31,7 @@ export function HistoryPage() {
         <h1 className="text-title2 font-semibold">{t('nav.history')}</h1>
         <p className="text-muted-foreground text-body2 mt-1">{t('library.note')}</p>
       </header>
-      <div className="flex flex-wrap gap-2" aria-label={t('library.views')}>
+      <div ref={views} className="flex flex-wrap gap-2" aria-label={t('library.views')}>
         <Button
           size="sm"
           variant={archived ? 'outline' : 'default'}
@@ -207,7 +208,13 @@ export function HistoryPage() {
                     item={item}
                     job={item.id ? jobs?.get(item.id) : undefined}
                     jobsLoaded={!!jobs}
-                    onSaved={setNotice}
+                    onSaved={(message) => {
+                      setNotice(message)
+                      if (message !== 'library.titleSaved')
+                        views.current
+                          ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+                          ?.focus()
+                    }}
                   />
                 </div>
               </li>

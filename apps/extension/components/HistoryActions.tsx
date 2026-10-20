@@ -92,6 +92,10 @@ function HistoryDialog({
   useEffect(() => {
     dialog.current?.showModal()
   }, [])
+  function close() {
+    dialog.current?.close()
+    onClose()
+  }
   async function save() {
     if (inFlight.current) return
     if (action === 'title' && !title.trim()) {
@@ -120,7 +124,7 @@ function HistoryDialog({
             ? 'library.restored'
             : 'library.archived',
       )
-      onClose()
+      close()
     } catch (e) {
       const message = e instanceof Error ? e.message : ''
       setError(
@@ -142,7 +146,7 @@ function HistoryDialog({
       aria-describedby={action === 'archive' ? 'history-action-hint' : undefined}
       onCancel={(e) => {
         e.preventDefault()
-        if (!inFlight.current) onClose()
+        if (!inFlight.current) close()
       }}
       className="border-border bg-surface text-foreground shadow-card m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border p-5 backdrop:bg-black/30"
     >
@@ -183,7 +187,7 @@ function HistoryDialog({
           </p>
         )}
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
+          <Button type="button" variant="outline" disabled={saving} onClick={close}>
             {t('library.cancel')}
           </Button>
           <Button type="submit" disabled={saving}>
