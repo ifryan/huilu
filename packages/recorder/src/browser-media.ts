@@ -1,6 +1,7 @@
 import {
   NoAudioSourceError,
   SourceAudioUnavailableError,
+  WindowAudioUnavailableError,
   type CaptureRequest,
   type CapturedMedia,
   type MediaBackend,
@@ -48,6 +49,11 @@ async function openMicrophone(deviceId: string | undefined) {
 
 /** 采集来源 + 麦克风，用 Web Audio 混成一条音轨 */
 async function capture(req: CaptureRequest): Promise<CapturedMedia> {
+  const sourceAudioError = () =>
+    req.source === 'window' ? new WindowAudioUnavailableError() : new SourceAudioUnavailableError()
+  // 原生选择器已明确不授予音频时，不再打开画面、麦克风或 AudioContext。
+  // 用户主动关闭来源音频则继续按其选择录制麦克风 / 无声视频。
+  if (req.sourceAudioRequested && !req.sourceAudio) throw sourceAudioError()
   const warnings: RecorderWarning[] = []
   const source = await navigator.mediaDevices.getUserMedia(sourceConstraints(req))
   let mic: MediaStream | undefined
@@ -81,7 +87,7 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
       : []
     if (!req.sourceAudio) source.getAudioTracks().forEach((track) => track.stop())
     if ((req.sourceAudioRequested ?? req.sourceAudio) && sourceAudio.length === 0) {
-      throw new SourceAudioUnavailableError()
+      throw sourceAudioError()
     }
     if (sourceAudio.length > 0) {
       const node = ctx.createMediaStreamSource(new MediaStream(sourceAudio))

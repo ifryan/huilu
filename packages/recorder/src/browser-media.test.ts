@@ -118,18 +118,41 @@ describe('actual audio routing', () => {
     ['tab', true],
     ['window', true],
     ['screen', true],
-    ['window', false],
-    ['screen', false],
   ] as const)(
     'rejects missing requested %s audio (grant=%s) before opening the microphone',
     async (sourceType, granted) => {
       source.tracks.splice(1)
       await expect(
         browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: granted }),
-      ).rejects.toMatchObject({ name: 'SourceAudioUnavailableError' })
+      ).rejects.toMatchObject({
+        name:
+          sourceType === 'window' ? 'WindowAudioUnavailableError' : 'SourceAudioUnavailableError',
+      })
       expect(getUserMedia).toHaveBeenCalledOnce()
       expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
       expect(Context.current.close).toHaveBeenCalledOnce()
+    },
+  )
+  it.each(['window', 'screen'] as const)(
+    'rejects a denied %s audio grant without opening any devices, then allows a retry',
+    async (sourceType) => {
+      await expect(
+        browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: false }),
+      ).rejects.toMatchObject({
+        name:
+          sourceType === 'window' ? 'WindowAudioUnavailableError' : 'SourceAudioUnavailableError',
+      })
+      expect(getUserMedia).not.toHaveBeenCalled()
+      const captured = await browserMediaBackend.capture({
+        ...request,
+        source: sourceType,
+        sourceAudio: false,
+        sourceAudioRequested: false,
+      })
+      expect(captured.transcriptAudioTrack).toBeDefined()
+      captured.stop()
+      expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+      expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
     },
   )
   it('omits transcription for silent video and rejects audio-only recordings with no inputs', async () => {

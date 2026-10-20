@@ -23,11 +23,14 @@ it.each(['window', 'screen'] as const)(
     })
   },
 )
-it('uses the actual browser audio grant when requested', async () => {
-  choose.mockImplementation((sources, callback) => {
-    expect(sources).toEqual(['screen', 'audio'])
-    callback('stream', { canRequestAudioTrack: false })
-  })
-  expect((await chooseDesktopSource('screen', true)).sourceAudio).toBe(false)
-  expect((await requestTabCapture(1, false)).sourceAudio).toBe(false)
-})
+it.each(['window', 'screen'] as const)(
+  'uses the actual %s audio grant when requested',
+  async (source) => {
+    choose.mockImplementation((sources, callback) => {
+      expect(sources).toEqual([source, 'audio'])
+      callback('stream', { canRequestAudioTrack: false })
+    })
+    expect((await chooseDesktopSource(source, true)).sourceAudio).toBe(false)
+    expect((await requestTabCapture(1, false)).sourceAudio).toBe(false)
+  },
+)

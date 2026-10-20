@@ -84,3 +84,8 @@ export class SourceAudioUnavailableError extends Error {
     super('The selected source did not provide the requested audio track')
   }
 }
+
+/** 窗口音频未获授权或未提供，跨扩展消息保留独立名称以显示针对性的替代方案。 */
+export class WindowAudioUnavailableError extends SourceAudioUnavailableError {
+  override name = 'WindowAudioUnavailableError'
+}

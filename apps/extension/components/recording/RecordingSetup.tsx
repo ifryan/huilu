@@ -167,7 +167,9 @@ export function RecordingSetup({
           {t(
             prefs.videoSource === 'tab'
               ? 'popup.sourceAudioTabHint'
-              : 'popup.sourceAudioDesktopHint',
+              : prefs.videoSource === 'window'
+                ? 'popup.sourceAudioWindowHint'
+                : 'popup.sourceAudioDesktopHint',
           )}
         </span>
       </label>

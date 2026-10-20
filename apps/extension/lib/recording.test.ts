@@ -8,6 +8,12 @@ it('maps missing source audio from cross-context errors to actionable guidance',
     'recorder.error.sourceAudioUnavailable',
   )
 })
+it('preserves window-specific guidance after error serialization', () => {
+  const t = ((key: string) => key) as Parameters<typeof startErrorText>[0]
+  expect(startErrorText(t, 'WindowAudioUnavailableError: unavailable')).toBe(
+    'recorder.error.windowAudioUnavailable',
+  )
+})
 it('samples fast only while the recording meter is visible', () => {
   expect(recorderPollInterval(status)).toBe(200)
   expect(recorderPollInterval(status, { meterVisible: false })).toBe(1000)

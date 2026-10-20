@@ -48,7 +48,8 @@
     "dismissNotice": "Dismiss",
     "sourceAudio": "Record source / system audio",
     "sourceAudioTabHint": "Captures sound from this tab only, separately from the microphone.",
-    "sourceAudioDesktopHint": "Window capture may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track."
+    "sourceAudioDesktopHint": "Window capture may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track.",
+    "sourceAudioWindowHint": "Window audio depends on browser and system support. If the picker cannot share audio, select the meeting tab or a supported screen. Turn this off for microphone-only audio or silent video."
   },
   "sidepanel": {
     "recording": "Recording",
@@ -276,7 +277,8 @@
       "captureFailed": "Could not open the source picker: {{detail}}",
       "systemPermission": "The system does not allow Chrome to record the screen. Allow Google Chrome in System Settings → Privacy & Security → Screen & System Audio Recording, restart Chrome and try again",
       "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\"",
-      "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Record source / system audio first."
+      "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Record source / system audio first.",
+      "windowAudioUnavailable": "The selected window did not provide audio, so recording did not start. Select the meeting tab, or a supported screen with Share audio enabled. To keep recording this window, turn off Record source / system audio and enable the microphone; for silent video, turn off the microphone too."
     }
   },
   "unfinished": {
