@@ -8,6 +8,19 @@ export class ChunkWriteError extends Error {
 
 export type DirectoryProvider = () => Promise<FileSystemDirectoryHandle>
 
+/** 录制会话写入一个录制目录所需的全部操作；页面内录制通过它把写入转给插件页面 */
+export interface RecordingDirSink {
+  writeChunk(track: TrackName, seq: number, data: Blob): Promise<void>
+  writeManifest(manifest: RecordingManifest): Promise<void>
+  writeMeeting(meeting: Meeting): Promise<void>
+}
+
+/** 录制会话对存储的全部要求：建一个录制目录，开始失败 / 没录到数据时删掉它 */
+export interface RecordingSink {
+  create(id: string): Promise<RecordingDirSink>
+  remove(id: string): Promise<void>
+}
+
 /** OPFS 中存放录制的目录；每个录制一个子目录，结束后含 meeting.json */
 export const RECORDINGS_DIR = 'recordings'
 const MANIFEST = 'manifest.json'
@@ -55,7 +68,7 @@ async function readText(dir: FileSystemDirectoryHandle, name: string): Promise<s
 }
 
 /** 单个录制在 OPFS 中的目录：recordings/<id>/{manifest.json, meeting.json, video/, audio/} */
-export class RecordingDir {
+export class RecordingDir implements RecordingDirSink {
   readonly #tracks = new Map<TrackName, FileSystemDirectoryHandle>()
 
   constructor(
@@ -139,7 +152,7 @@ export class RecordingDir {
 }
 
 /** OPFS 中所有录制的根目录。录制期间只写这里（不需要授权），结束后由处理管线写入用户文件夹。 */
-export class RecordingStore {
+export class RecordingStore implements RecordingSink {
   constructor(private readonly getRoot: DirectoryProvider) {}
 
   async #recordings() {

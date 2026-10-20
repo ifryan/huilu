@@ -1,6 +1,6 @@
 // Node 中用可检查连接关系的 Web Audio / MediaStream 替身，不启动浏览器或设备。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { browserMediaBackend, mixCapturedStream } from './browser-media'
+import { MIC_WAIT_MS, browserMediaBackend, mixCapturedStream } from './browser-media'
 import { RecordingSession, type RecordingOptions } from './session'
 import { RecordingStore } from './store'
 import { FakeMedia, MemoryFs } from './test-helpers'
@@ -264,4 +264,53 @@ it('keeps the no-source-audio protection when mixing an already authorized strea
   })
   expect(getUserMedia).not.toHaveBeenCalled()
   expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+})
+
+describe('microphone permission prompt', () => {
+  const pendingMic = () => {
+    let grant!: (stream: Stream) => void
+    getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce(source)
+      .mockReturnValueOnce(new Promise<Stream>((resolve) => (grant = resolve)))
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+    return (stream: Stream) => grant(stream)
+  }
+
+  it('starts without waiting for the user, then mixes the microphone once allowed', async () => {
+    vi.useFakeTimers()
+    try {
+      const grant = pendingMic()
+      const capturing = browserMediaBackend.capture(request)
+      await vi.advanceTimersByTimeAsync(MIC_WAIT_MS)
+      const captured = await capturing
+      expect(captured.warnings).not.toContain('mic-unavailable')
+      expect(captured.transcriptAudioTrack).toBeDefined()
+      expect(Context.current.sources.map((s) => s.stream)).not.toContain(mic)
+
+      grant(mic)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(Context.current.sources.map((s) => s.stream)).toContain(mic)
+      captured.stop()
+      expect(mic.tracks[0]!.stop).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('releases a microphone that is allowed only after the recording stopped', async () => {
+    vi.useFakeTimers()
+    try {
+      const grant = pendingMic()
+      const capturing = browserMediaBackend.capture(request)
+      await vi.advanceTimersByTimeAsync(MIC_WAIT_MS)
+      ;(await capturing).stop()
+      grant(mic)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mic.tracks[0]!.stop).toHaveBeenCalled()
+      expect(Context.current.sources.map((s) => s.stream)).not.toContain(mic)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

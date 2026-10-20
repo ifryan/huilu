@@ -8,7 +8,7 @@ import {
   type RecorderLike,
   type RecorderWarning,
 } from './media'
-import { levelFromSamples } from './audio-level'
+import { levelFromSamples, peakFromSamples } from './audio-level'
 import { videoDimensions } from './quality'
 
 /**
@@ -47,6 +47,16 @@ async function openMicrophone(deviceId: string | undefined) {
   })
 }
 
+/**
+ * 等麦克风的上限。页面内录制时麦克风按网站授权，首次会弹出授权提示：不能让录制一直卡在「正在开始」，
+ * 超时后先录来源声音，用户之后点了允许再把麦克风接进混音
+ */
+export const MIC_WAIT_MS = 1500
+
+/** 波形取样：每 50ms 记一次实际混音的峰值，保留最近 60 个（约 3 秒） */
+export const PEAK_INTERVAL_MS = 50
+export const PEAK_HISTORY = 60
+
 /** 采集来源 + 麦克风，用 Web Audio 混成一条音轨 */
 async function capture(req: CaptureRequest): Promise<CapturedMedia> {
   const sourceAudioError = () =>
@@ -69,7 +79,11 @@ export async function mixCapturedStream(
   const warnings: RecorderWarning[] = []
   let mic: MediaStream | undefined
   let ctx: AudioContext | undefined
+  let stopped = false
+  let peakTimer: ReturnType<typeof setInterval> | undefined
   const stopAll = () => {
+    stopped = true
+    clearInterval(peakTimer)
     source.getTracks().forEach((t) => t.stop())
     mic?.getTracks().forEach((t) => t.stop())
     void ctx?.close().catch((error: unknown) => console.warn('[huilu] audio cleanup failed', error))
@@ -107,16 +121,39 @@ export async function mixCapturedStream(
       if (replaySourceAudio) node.connect(ctx.destination)
     }
 
+    let micPending = false
     if (req.microphone.enabled) {
-      try {
-        mic = await openMicrophone(req.microphone.deviceId)
+      const opening = openMicrophone(req.microphone.deviceId)
+      const timeout = Symbol('timeout')
+      const first = await Promise.race([
+        opening.then(
+          (stream) => stream,
+          () => undefined,
+        ),
+        new Promise<typeof timeout>((resolve) => setTimeout(() => resolve(timeout), MIC_WAIT_MS)),
+      ])
+      if (first === timeout) {
+        // 还在等用户回应授权提示：之后允许了就接进同一路混音，拒绝了就只录来源声音
+        micPending = true
+        const context = ctx
+        void opening.then(
+          (stream) => {
+            if (stopped) return stream.getTracks().forEach((t) => t.stop())
+            mic = stream
+            context.createMediaStreamSource(stream).connect(bus)
+          },
+          () => {},
+        )
+      } else if (first) {
+        mic = first
         ctx.createMediaStreamSource(mic).connect(bus)
-      } catch {
+      } else {
         warnings.push('mic-unavailable')
       }
     }
 
-    const hasAudio = sourceAudio.length > 0 || mic !== undefined
+    // 麦克风还在等授权也算有声音：转写轨要从一开始就有，麦克风晚到的部分照样录进去
+    const hasAudio = sourceAudio.length > 0 || mic !== undefined || micPending
     if (!hasAudio) {
       if (req.mode === 'audio') throw new NoAudioSourceError()
       // 只保留视频：不生成转写音轨，否则会录出一整条静音，之后被当作可转写的内容上传（PR #6 审查 r4092377788）
@@ -138,6 +175,18 @@ export async function mixCapturedStream(
     analyser.fftSize = 2048
     bus.connect(analyser)
     const samples = new Float32Array(analyser.fftSize)
+    const peaks: number[] = []
+    let peakTotal = 0
+    if (hasAudio) {
+      const peakSamples = new Float32Array(analyser.fftSize)
+      peakTimer = setInterval(() => {
+        if (ctx?.state !== 'running') return
+        analyser.getFloatTimeDomainData(peakSamples)
+        peaks.push(peakFromSamples(peakSamples))
+        peakTotal++
+        if (peaks.length > PEAK_HISTORY) peaks.shift()
+      }, PEAK_INTERVAL_MS)
+    }
     if (ctx.state === 'suspended') await ctx.resume()
 
     const audioTrack = mix.stream.getAudioTracks()[0]
@@ -158,6 +207,7 @@ export async function mixCapturedStream(
         analyser.getFloatTimeDomainData(samples)
         return levelFromSamples(samples)
       },
+      audioPeaks: () => ({ peaks: [...peaks], total: peakTotal }),
       warnings,
       onEnded(callback) {
         // 标签页关闭 / 停止共享时来源轨道会 ended；麦克风拔出不算来源结束。

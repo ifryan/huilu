@@ -58,6 +58,62 @@ export function chooseDesktopSource(
   })
 }
 
+type IncludeExclude = 'include' | 'exclude'
+/** Chrome 支持的 getDisplayMedia 提示项，TypeScript 的 DOM 类型还没收录 */
+type DisplayOptions = DisplayMediaStreamOptions & {
+  systemAudio: IncludeExclude
+  windowAudio: 'system' | 'window' | 'exclude'
+  selfBrowserSurface: IncludeExclude
+  surfaceSwitching: IncludeExclude
+  monitorTypeSurfaces: IncludeExclude
+}
+
+/**
+ * 页面内录制的统一来源选择（entrypoints/capture.content）：用网页标准的 getDisplayMedia，
+ * 它能给窗口来源带上系统声音，插件的 chooseDesktopMedia 做不到。必须在网页内点击的同步调用栈里调用。
+ * 窗口 / 整个屏幕的声音开关由 Chrome 决定默认关闭，用户需要在选择框里打开
+ */
+export async function openDisplaySource(
+  sourceAudio: boolean,
+  quality: VideoQuality | null,
+): Promise<{ stream: MediaStream; source: VideoSource }> {
+  const dimensions = quality ? videoDimensions(quality) : { width: 640, height: 360 }
+  const displayOptions: DisplayOptions = {
+    video: {
+      width: { max: dimensions.width },
+      height: { max: dimensions.height },
+      frameRate: { max: quality?.fps ?? 1 },
+    },
+    audio: sourceAudio,
+    // 来源声音：标签页录标签页声音（audio），窗口和整个屏幕录系统声音
+    systemAudio: sourceAudio ? 'include' : 'exclude',
+    windowAudio: sourceAudio ? 'system' : 'exclude',
+    selfBrowserSurface: 'include',
+    surfaceSwitching: 'exclude',
+    monitorTypeSurfaces: 'include',
+  }
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia(displayOptions)
+  } catch (error) {
+    // 用户在选择框里点了取消；macOS 没给 Chrome 录屏权限时是 Permission denied by system，单独提示
+    if (
+      error instanceof DOMException &&
+      error.name === 'NotAllowedError' &&
+      !error.message.includes('by system')
+    ) {
+      throw new CaptureCancelledError()
+    }
+    throw error
+  }
+  try {
+    return { stream, source: selectedSource(stream.getVideoTracks()[0]?.getSettings() ?? {}) }
+  } catch (error) {
+    stream.getTracks().forEach((track) => track.stop())
+    throw error
+  }
+}
+
 /** Never guess the selected surface from the requested preference or track label. */
 export function selectedSource(settings: MediaTrackSettings): VideoSource {
   switch (settings.displaySurface) {

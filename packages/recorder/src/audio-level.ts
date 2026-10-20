@@ -14,6 +14,15 @@ export function levelFromSamples(samples: Float32Array): number {
   return Math.min(1, Math.max(0, (db - FLOOR_DB) / -FLOOR_DB))
 }
 
+/** 一帧采样（-1…1）的峰值，同样按 dBFS 映射到 0…1：画波形用峰值，竖条高度更贴近听到的起伏 */
+export function peakFromSamples(samples: Float32Array): number {
+  let peak = 0
+  for (const s of samples) peak = Math.max(peak, Math.abs(s))
+  if (peak <= 0) return 0
+  const db = 20 * Math.log10(peak)
+  return Math.min(1, Math.max(0, (db - FLOOR_DB) / -FLOOR_DB))
+}
+
 /** 上升立即跟随，下降按固定速度回落 */
 export function smoothLevel(previous: number, next: number): number {
   return next >= previous ? next : Math.max(next, previous - DECAY_PER_FRAME)

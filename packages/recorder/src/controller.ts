@@ -8,6 +8,7 @@ import {
   type SessionDeps,
   type SessionStatus,
 } from './session'
+import type { RecordingSink, RecordingStore } from './store'
 
 export class RecorderBusyError extends Error {
   override name = 'RecorderBusyError'
@@ -31,7 +32,8 @@ export interface UnfinishedRecording {
   bytes: number
 }
 
-export interface ControllerDeps extends SessionDeps {
+export interface ControllerDeps<S extends RecordingSink = RecordingStore> extends SessionDeps {
+  store: S
   /** 录制结束（用户结束、来源结束、写入失败）后回调，用于通知后台 */
   onFinished?: (result: FinishedRecording) => void
 }
@@ -45,12 +47,13 @@ export function createRecordingId(date = new Date()): string {
 
 /**
  * 离屏文档中唯一的录制入口：同一时间只允许一个录制（开始录制互斥），并负责恢复未完成的录制。
+ * 页面内录制只能写入（S 为 RecordingSink），列出 / 恢复 / 丢弃需要完整的 RecordingStore。
  */
-export class RecorderController {
+export class RecorderController<S extends RecordingSink = RecordingStore> {
   #session?: RecordingSession
   #lastResult?: RecorderStatus['lastResult']
 
-  constructor(private readonly deps: ControllerDeps) {}
+  constructor(private readonly deps: ControllerDeps<S>) {}
 
   /**
    * 在第一个 await 之前就占住 #session：连续点击、快捷键与弹窗同时触发时，第二个请求直接被拒绝。
@@ -119,7 +122,7 @@ export class RecorderController {
     return (this.deps.now ?? Date.now)()
   }
 
-  async listUnfinished(): Promise<UnfinishedRecording[]> {
+  async listUnfinished(this: RecorderController): Promise<UnfinishedRecording[]> {
     const out: UnfinishedRecording[] = []
     for (const id of await this.deps.store.list()) {
       if (id === this.#activeId) continue
@@ -141,7 +144,7 @@ export class RecorderController {
    * 恢复未完成的录制：以磁盘上实际存在的连续分片为准（manifest 可能比分片落后一个），
    * 生成 meeting.json（只剩视频时 status = failed，见 meetingFromManifest）。所有轨道都没有分片时返回 undefined。
    */
-  async recover(id: string): Promise<Meeting | undefined> {
+  async recover(this: RecorderController, id: string): Promise<Meeting | undefined> {
     if (id === this.#activeId) throw new RecorderBusyError('This recording is still in progress')
     const dir = await this.deps.store.open(id)
     const manifest = await dir?.readManifest()
@@ -177,7 +180,7 @@ export class RecorderController {
     return meeting
   }
 
-  async discard(id: string): Promise<void> {
+  async discard(this: RecorderController, id: string): Promise<void> {
     if (id === this.#activeId) throw new RecorderBusyError('This recording is still in progress')
     await this.deps.store.remove(id)
   }
