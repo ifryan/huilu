@@ -529,3 +529,24 @@ describe('U-41–U-44 regression', () => {
     await settle()
   })
 })
+
+it('routes the unified picker through a visible host even when the previous preference was tab', async () => {
+  const snapshot = settings('tab')
+  snapshot.prefs.sourceSelection = 'choose'
+  const result = await call<RecorderStatus>('startRecording', {
+    tabId: 1,
+    title: 'Unified source',
+    settings: snapshot,
+  })
+  expect(result.state).toBe('recording')
+  expect(h.captureRequests).toEqual([])
+  expect(h.windowStartReceivers).toEqual([1])
+})
+
+it('keeps quick current-tab capture explicit even when the last legacy preference was screen', async () => {
+  const snapshot = settings('screen')
+  snapshot.prefs.sourceSelection = 'current-tab'
+  await call<RecorderStatus>('startRecording', { tabId: 1, title: 'Quick tab', settings: snapshot })
+  expect(h.windowStartReceivers).toEqual([])
+  expect(h.captureRequests).toMatchObject([{ source: 'tab' }])
+})

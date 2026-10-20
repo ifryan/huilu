@@ -1,6 +1,6 @@
 // Node 中用可检查连接关系的 Web Audio / MediaStream 替身，不启动浏览器或设备。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { browserMediaBackend } from './browser-media'
+import { browserMediaBackend, mixCapturedStream } from './browser-media'
 import { RecordingSession, type RecordingOptions } from './session'
 import { RecordingStore } from './store'
 import { FakeMedia, MemoryFs } from './test-helpers'
@@ -243,4 +243,25 @@ it('session levels follow recording / pause / resume / stop, with no persisted s
   expect(session.status().audioLevel).toBe(0)
   await stopping
   expect(session.status().audioLevel).toBe(0)
+})
+
+it('uses a pre-authorized desktop tab without recapturing or replaying source audio', async () => {
+  getUserMedia.mockReset().mockResolvedValueOnce(mic)
+  const captured = await mixCapturedStream(request, source as unknown as MediaStream)
+  expect(getUserMedia).toHaveBeenCalledOnce() // mic only; never consumes a desktop token as tabCapture
+  expect(Context.current.sources).toHaveLength(2)
+  expect(Context.current.sources[0]!.node.connections).not.toContain(Context.current.destination)
+  captured.stop()
+  expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+  expect(mic.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+})
+
+it('keeps the no-source-audio protection when mixing an already authorized stream', async () => {
+  source.tracks.splice(1)
+  getUserMedia.mockReset()
+  await expect(mixCapturedStream(request, source as unknown as MediaStream)).rejects.toMatchObject({
+    name: 'SourceAudioUnavailableError',
+  })
+  expect(getUserMedia).not.toHaveBeenCalled()
+  expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
 })

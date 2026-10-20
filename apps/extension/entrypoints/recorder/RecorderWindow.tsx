@@ -2,7 +2,7 @@ import { useTranslation } from '@huilu/i18n'
 import { useRecorderStatus } from '@/lib/recording'
 
 /**
- * 录制窗口只承载窗口 / 屏幕采集，不重复显示进度：开始后由后台最小化，
+ * 录制窗口承载原生选择器选中的来源，不重复显示进度：开始后由后台最小化，
  * 计时与暂停 / 继续 / 结束都在侧边栏，结束后自动关闭。
  */
 export function RecorderWindow() {

@@ -226,14 +226,16 @@ async function startRecording({
     if ((await recorderStatus()).state !== 'idle') {
       throw new RecorderBusyError('A recording is already in progress')
     }
+    const savedPrefs = settings ? undefined : await recordingPrefsSetting.getValue()
     const { mode, prefs } = settings ?? {
       mode: await recordingModeSetting.getValue(),
-      prefs: await recordingPrefsSetting.getValue(),
+      prefs: { ...savedPrefs!, sourceSelection: savedPrefs!.sourceSelection ?? 'choose' },
     }
     const options: WindowRecordingOptions = {
       title,
       mode,
-      source: prefs.videoSource,
+      source: prefs.sourceSelection === 'current-tab' ? 'tab' : prefs.videoSource,
+      chooseSource: prefs.sourceSelection === 'choose',
       sourceAudio: prefs.sourceAudio !== false,
       sourceAudioRequested: prefs.sourceAudio !== false,
       quality: prefs.quality,
@@ -241,7 +243,7 @@ async function startRecording({
       language: prefs.language,
     }
     let status: RecorderStatus
-    if (prefs.videoSource === 'tab') {
+    if (!options.chooseSource && options.source === 'tab') {
       const grant = await requestTabCapture(tabId, options.sourceAudio)
       status = await exclusive(async () => {
         await ensureOffscreenDocument()

@@ -1,5 +1,5 @@
 import { browser } from '#imports'
-import type { RecordingMode, VideoSource } from '@huilu/core'
+import type { RecordingMode } from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
 import { estimateBytesPerHour, type VideoFps, type VideoResolution } from '@huilu/recorder'
 import { Button, fieldClass } from '@huilu/ui'
@@ -47,7 +47,7 @@ export function RecordingSetup({
     void Promise.all([recordingModeSetting.getValue(), recordingPrefsSetting.getValue()]).then(
       ([savedMode, savedPrefs]) => {
         setMode(savedMode)
-        setPrefs(savedPrefs)
+        setPrefs({ ...savedPrefs, sourceSelection: savedPrefs.sourceSelection ?? 'choose' })
         setLoaded(true)
       },
     )
@@ -100,7 +100,7 @@ export function RecordingSetup({
   const perHour = estimateBytesPerHour(mode === 'video' ? quality : null)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Field label={t('popup.mode')}>
         <Segmented<RecordingMode>
           value={mode}
@@ -112,47 +112,6 @@ export function RecordingSetup({
         />
       </Field>
 
-      <Field label={t('popup.source')}>
-        <Segmented<VideoSource>
-          value={prefs.videoSource}
-          onChange={(videoSource) => updatePrefs({ videoSource })}
-          options={[
-            { value: 'tab', label: t('popup.sourceTab') },
-            { value: 'window', label: t('popup.sourceWindow') },
-            { value: 'screen', label: t('popup.sourceScreen') },
-          ]}
-        />
-        {prefs.videoSource !== 'tab' && (
-          <span className="text-muted-foreground text-caption">{t('popup.sourceDesktopHint')}</span>
-        )}
-      </Field>
-
-      {mode === 'video' && (
-        <Field label={t('popup.quality')}>
-          <div className="grid grid-cols-2 gap-2">
-            <Segmented<VideoResolution>
-              value={quality.resolution}
-              onChange={(resolution) => updatePrefs({ quality: { ...quality, resolution } })}
-              options={[
-                { value: '720p', label: '720p' },
-                { value: '1080p', label: '1080p' },
-              ]}
-            />
-            <Segmented<VideoFps>
-              value={quality.fps}
-              onChange={(fps) => updatePrefs({ quality: { ...quality, fps } })}
-              options={[
-                { value: 15, label: '15fps' },
-                { value: 30, label: '30fps' },
-              ]}
-            />
-          </div>
-        </Field>
-      )}
-      <span className="text-muted-foreground text-caption -mt-2">
-        {t('popup.estimate', { size: formatBytes(perHour) })}
-      </span>
-
       <label className="text-body flex flex-col gap-1">
         <span className="flex items-center gap-2 font-medium">
           <input
@@ -161,20 +120,12 @@ export function RecordingSetup({
             className="size-4"
             onChange={(e) => updatePrefs({ sourceAudio: e.target.checked })}
           />
-          {t('popup.sourceAudio')}
-        </span>
-        <span className="text-muted-foreground text-caption">
-          {t(
-            prefs.videoSource === 'tab'
-              ? 'popup.sourceAudioTabHint'
-              : prefs.videoSource === 'window'
-                ? 'popup.sourceAudioWindowHint'
-                : 'popup.sourceAudioDesktopHint',
-          )}
+          {t('popup.sourceAudioShort')}
         </span>
       </label>
 
       <MicrophoneField
+        compact
         enabled={prefs.microphone}
         deviceId={prefs.microphoneDeviceId}
         onChange={({ enabled, deviceId }) =>
@@ -182,37 +133,102 @@ export function RecordingSetup({
         }
       />
 
-      <Field label={t('popup.language')}>
-        <select
-          className={fieldClass}
-          value={prefs.language}
-          onChange={(e) => updatePrefs({ language: e.target.value as MeetingLanguage })}
-        >
-          {MEETING_LANGUAGES.map((lang) => (
-            <option key={lang} value={lang}>
-              {t(LANGUAGE_KEYS[lang])}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <details className="group rounded-control border-border border px-3 py-2">
+        <summary className="text-body2 focus-visible:ring-primary cursor-pointer rounded-sm font-medium focus-visible:ring-2">
+          {t('popup.moreSettings')}
+          <span className="text-caption text-muted-foreground ml-2 font-normal">
+            {t(LANGUAGE_KEYS[prefs.language])}
+            {mode === 'video' ? ` · ${quality.resolution} / ${quality.fps}fps` : ''}
+          </span>
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
+          {mode === 'video' && (
+            <Field label={t('popup.quality')}>
+              <div className="grid grid-cols-2 gap-2">
+                <Segmented<VideoResolution>
+                  value={quality.resolution}
+                  onChange={(resolution) => updatePrefs({ quality: { ...quality, resolution } })}
+                  options={[
+                    { value: '720p', label: '720p' },
+                    { value: '1080p', label: '1080p' },
+                  ]}
+                />
+                <Segmented<VideoFps>
+                  value={quality.fps}
+                  onChange={(fps) => updatePrefs({ quality: { ...quality, fps } })}
+                  options={[
+                    { value: 15, label: '15fps' },
+                    { value: 30, label: '30fps' },
+                  ]}
+                />
+              </div>
+            </Field>
+          )}
+          <span className="text-muted-foreground text-caption -mt-2">
+            {t('popup.estimate', { size: formatBytes(perHour) })}
+          </span>
 
-      <Field label={t('popup.meetingTitle')}>
-        <input
-          className={fieldClass}
-          value={title}
-          placeholder={t('popup.meetingTitlePlaceholder')}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </Field>
+          <Field label={t('popup.language')}>
+            <select
+              className={fieldClass}
+              aria-label={t('popup.language')}
+              value={prefs.language}
+              onChange={(e) => updatePrefs({ language: e.target.value as MeetingLanguage })}
+            >
+              {MEETING_LANGUAGES.map((lang) => (
+                <option key={lang} value={lang}>
+                  {t(LANGUAGE_KEYS[lang])}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-      {error && <p className="text-danger text-body2">{error}</p>}
+          <Field label={t('popup.meetingTitle')}>
+            <input
+              className={fieldClass}
+              aria-label={t('popup.meetingTitle')}
+              value={title}
+              placeholder={t('popup.meetingTitlePlaceholder')}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </Field>
+
+          <label className="text-body2 flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="accent-primary mt-0.5 size-4 shrink-0"
+              checked={prefs.sourceSelection === 'current-tab'}
+              onChange={(event) =>
+                updatePrefs({ sourceSelection: event.target.checked ? 'current-tab' : 'choose' })
+              }
+            />
+            {t('popup.quickCurrentTab')}
+          </label>
+        </div>
+      </details>
+
+      <p className="text-muted-foreground text-caption">
+        {t(
+          prefs.sourceSelection === 'current-tab'
+            ? 'popup.quickCurrentTabHint'
+            : 'popup.chooseSourceHint',
+        )}
+      </p>
+
+      {error && (
+        <p role="alert" className="text-danger text-body2">
+          {error}
+        </p>
+      )}
       <Button
         size="lg"
         className="w-full"
         disabled={starting || !loaded || tab.id === undefined}
         onClick={start}
       >
-        {starting ? t('popup.starting') : t('popup.start')}
+        {starting
+          ? t('popup.starting')
+          : t(prefs.sourceSelection === 'current-tab' ? 'popup.start' : 'popup.chooseAndStart')}
       </Button>
       <span className="text-muted-foreground text-caption -mt-2 text-center">
         {t('popup.shortcut')}

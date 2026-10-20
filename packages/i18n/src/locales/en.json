@@ -49,7 +49,14 @@
     "sourceAudio": "Record source / system audio",
     "sourceAudioTabHint": "Captures sound from this tab only, separately from the microphone.",
     "sourceAudioDesktopHint": "Window capture may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track.",
-    "sourceAudioWindowHint": "Window audio depends on browser and system support. If the picker cannot share audio, select the meeting tab or a supported screen. Turn this off for microphone-only audio or silent video."
+    "sourceAudioWindowHint": "Window audio depends on browser and system support. If the picker cannot share audio, select the meeting tab or a supported screen. Turn this off for microphone-only audio or silent video.",
+    "sourceAudioShort": "Source audio",
+    "moreSettings": "More settings",
+    "quickCurrentTab": "Quick capture current tab (skip source picker)",
+    "quickCurrentTabHint": "Records the tab where you opened HuiLu, using the audio switches above.",
+    "chooseSourceHint": "Next, choose a tab, window or screen. Enable audio in the sharing dialog to include source sound.",
+    "chooseAndStart": "Choose source & start",
+    "micDevice": "Microphone device"
   },
   "sidepanel": {
     "recording": "Recording",
@@ -277,8 +284,8 @@
       "captureFailed": "Could not open the source picker: {{detail}}",
       "systemPermission": "The system does not allow Chrome to record the screen. Allow Google Chrome in System Settings → Privacy & Security → Screen & System Audio Recording, restart Chrome and try again",
       "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\"",
-      "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Record source / system audio first.",
-      "windowAudioUnavailable": "The selected window did not provide audio, so recording did not start. Select the meeting tab, or a supported screen with Share audio enabled. To keep recording this window, turn off Record source / system audio and enable the microphone; for silent video, turn off the microphone too."
+      "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Source audio first.",
+      "windowAudioUnavailable": "The selected window did not provide audio, so recording did not start. Select the meeting tab, or a supported screen with Share audio enabled. To keep recording this window, turn off Source audio and enable the microphone; for silent video, turn off the microphone too."
     }
   },
   "unfinished": {
@@ -370,8 +377,8 @@
     }
   },
   "recorderWindow": {
-    "choosing": "Choose the window or screen to record in the picker…",
-    "keepOpen": "This window captures the window / screen. Keep it minimized, but do not close it or the recording stops. It closes itself when the recording ends.",
+    "choosing": "Choose a tab, window or screen in the sharing dialog…",
+    "keepOpen": "This window owns the selected recording source. Keep it minimized; closing it stops the recording. It closes itself when recording ends.",
     "recording": "Recording. The timer and pause / stop controls are in the floating recording panel on the page."
   },
   "panel": {

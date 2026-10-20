@@ -1,18 +1,31 @@
 /**
- * 录制窗口：窗口 / 屏幕录制在这个可见窗口里进行（标签页录制仍在离屏文档）。
+ * 录制窗口：统一来源选择与录制都在此页面进行；显式当前标签页快捷录制仍在离屏文档。
  * desktopCapture 的选择框只能从可见页面弹出，得到的 streamId 也只能在同一个页面里取流，
  * 所以这里弹选择框、取流并运行一个 RecorderController；后台按消息转发暂停 / 继续 / 结束。
  */
-import { RecorderController, RecordingStore, browserMediaBackend } from '@huilu/recorder'
+import {
+  RecorderController,
+  RecordingStore,
+  browserMediaBackend,
+  mixCapturedStream,
+} from '@huilu/recorder'
 import { onMessage, sendMessage } from '@/lib/messaging'
 import { mount } from '@/lib/mount'
-import { chooseDesktopSource } from '@/platform/capture'
+import { chooseDesktopSource, openChosenSource } from '@/platform/capture'
 import { prepareRecorderWindow } from '@/platform/recorder-window'
 import { RecorderWindow } from './RecorderWindow'
 
+let chosenStream: MediaStream | undefined
+
 const controller = new RecorderController({
   store: new RecordingStore(() => navigator.storage.getDirectory()),
-  media: browserMediaBackend,
+  media: {
+    ...browserMediaBackend,
+    capture: (request) =>
+      chosenStream
+        ? mixCapturedStream(request, chosenStream)
+        : browserMediaBackend.capture(request),
+  },
   onFinished: ({ meeting, ...result }) => {
     void sendMessage('recordingFinished', { ...result, saved: meeting !== undefined }).catch(
       (e: unknown) => console.error('[huilu] failed to notify background', e),
@@ -21,11 +34,32 @@ const controller = new RecorderController({
 })
 
 onMessage('window:start', async ({ data }) => {
-  if (data.source === 'tab') throw new Error('Tab recording runs in the offscreen document')
+  if (!data.chooseSource && data.source === 'tab')
+    throw new Error('Tab recording runs in the offscreen document')
   // Resize before opening Chrome's native dialog; its layout cannot be styled by our CSS.
   await prepareRecorderWindow()
-  const grant = await chooseDesktopSource(data.source, data.sourceAudio)
-  return controller.start({ ...data, streamId: grant.streamId, sourceAudio: grant.sourceAudio })
+  const grant = await chooseDesktopSource(
+    data.chooseSource ? 'choose' : (data.source as 'window' | 'screen'),
+    data.sourceAudio,
+  )
+  try {
+    const selected = data.chooseSource
+      ? await openChosenSource(grant, data.sourceAudio, data.mode === 'video' ? data.quality : null)
+      : undefined
+    chosenStream = selected?.stream
+    return await controller.start({
+      ...data,
+      source: selected?.source ?? data.source,
+      streamId: grant.streamId,
+      sourceAudio: grant.sourceAudio,
+    })
+  } catch (error) {
+    // Also release a pre-opened source when codec/storage validation fails before capture().
+    chosenStream?.getTracks().forEach((track) => track.stop())
+    throw error
+  } finally {
+    chosenStream = undefined
+  }
 })
 onMessage('window:pause', () => controller.pause())
 onMessage('window:resume', () => controller.resume())
