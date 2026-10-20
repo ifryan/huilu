@@ -78,6 +78,8 @@ export interface ProcessingDeps {
   folder: Files & Pick<StorageAdapter, 'isReady' | 'isDirectoryEmpty'>
   services(): Promise<ResolvedServices>
   splitter?: AudioSplitter
+  /** 本地解码检查；仅全程接近数字静音时返回 false，不判断是否为人声。 */
+  audioHasSignal?(blob: Blob, signal: AbortSignal): Promise<boolean>
   now?: () => number
   /** 启动恢复（读取任务 / 检查文件夹权限）失败后多久自动重试，默认 5 秒 */
   startRetryMs?: number
@@ -555,6 +557,19 @@ export class ProcessingQueue {
     meeting: Meeting,
     signal: AbortSignal,
   ): Promise<Transcript> {
+    const audio = await this.deps.source.readAudio(meeting.id)
+    if (!audio) throw new PipelineError('noAudio')
+    if (this.deps.audioHasSignal) {
+      let hasSignal: boolean
+      try {
+        hasSignal = await this.deps.audioHasSignal(audio.blob, signal)
+      } catch {
+        signal.throwIfAborted()
+        throw new PipelineError('audioInspectionFailed')
+      }
+      signal.throwIfAborted()
+      if (!hasSignal) throw new PipelineError('silentAudio')
+    }
     const service = (await this.deps.services()).transcription
     if (!service.ok) {
       throw new PipelineError(
@@ -567,8 +582,6 @@ export class ProcessingQueue {
     }
     const { provider, config } = service
     job.transcriptionProviderId = provider.id
-    const audio = await this.deps.source.readAudio(meeting.id)
-    if (!audio) throw new PipelineError('noAudio')
     const input = {
       mimeType: audio.mimeType,
       durationMs: meeting.durationMs,

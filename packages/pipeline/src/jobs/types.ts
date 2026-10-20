@@ -21,6 +21,8 @@ export const PIPELINE_ERROR_CODES = [
   'unknownProvider',
   'hostPermission',
   'noAudio',
+  'silentAudio',
+  'audioInspectionFailed',
   'meetingNotFound',
   'splitFailed',
   'writeFailed',

@@ -114,17 +114,18 @@ describe('actual audio routing', () => {
     expect(captured.transcriptAudioTrack).toBeDefined()
     captured.stop()
   })
-  it('warns about missing source audio even when a working microphone permits recording', async () => {
-    source.tracks.splice(1)
-    const captured = await browserMediaBackend.capture({
-      ...request,
-      source: 'screen',
-      sourceAudio: false,
-    })
-    expect(captured.warnings).toEqual(['source-audio-unavailable'])
-    expect(captured.transcriptAudioTrack).toBeDefined()
-    captured.stop()
-  })
+  it.each(['tab', 'window', 'screen'] as const)(
+    'rejects missing requested %s audio before opening the microphone and cleans up',
+    async (sourceType) => {
+      source.tracks.splice(1)
+      await expect(
+        browserMediaBackend.capture({ ...request, source: sourceType, sourceAudio: false }),
+      ).rejects.toMatchObject({ name: 'SourceAudioUnavailableError' })
+      expect(getUserMedia).toHaveBeenCalledOnce()
+      expect(source.getTracks().every((t) => t.readyState === 'ended')).toBe(true)
+      expect(Context.current.close).toHaveBeenCalledOnce()
+    },
+  )
   it('omits transcription for silent video and rejects audio-only recordings with no inputs', async () => {
     const captured = await browserMediaBackend.capture({
       ...request,
@@ -141,6 +142,7 @@ describe('actual audio routing', () => {
         ...request,
         mode: 'audio',
         sourceAudio: false,
+        sourceAudioRequested: false,
         microphone: { enabled: false },
       }),
     ).rejects.toThrow('No audio to record')
@@ -166,13 +168,10 @@ describe('actual audio routing', () => {
     ended.readyState = 'ended'
     source = new Stream([ended])
     getUserMedia.mockReset().mockResolvedValueOnce(source).mockResolvedValueOnce(mic)
-    const captured = await browserMediaBackend.capture({ ...request, mode: 'audio' })
-    expect(Context.current.sources.map((s) => s.stream)).toEqual([mic])
-    const onEnded = vi.fn()
-    captured.onEnded(onEnded)
-    await Promise.resolve()
-    expect(onEnded).toHaveBeenCalledOnce()
-    captured.stop()
+    await expect(browserMediaBackend.capture({ ...request, mode: 'audio' })).rejects.toMatchObject({
+      name: 'SourceAudioUnavailableError',
+    })
+    expect(getUserMedia).toHaveBeenCalledOnce()
   })
   it('does not classify intentionally stopped, excluded audio as an ended source', async () => {
     const captured = await browserMediaBackend.capture({

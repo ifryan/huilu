@@ -13,6 +13,42 @@ import { planCuts, type AudioSplitter } from './split'
 const FRAME_S = 0.05
 const QUIET_WINDOW_S = 0.4
 
+/**
+ * 保守地拦截全程数字静音（峰值 ≤ -100 dBFS），不把低音量语音当静音。
+ * 流式解码所有声道；发现信号即返回，内存不随会议时长增长。
+ * 解码失败 / 无帧不是静音，交由管线显示检查失败，不能上传猜测。
+ */
+export async function audioHasSignal(blob: Blob, signal: AbortSignal): Promise<boolean> {
+  const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS })
+  try {
+    signal.throwIfAborted()
+    const track = await input.getPrimaryAudioTrack()
+    if (!track) throw new Error('No audio track')
+    const sink = new AudioSampleSink(track)
+    let frames = 0
+    for await (const sample of sink.samples()) {
+      try {
+        signal.throwIfAborted()
+        frames += sample.numberOfFrames
+        const values = new Float32Array(sample.numberOfFrames)
+        for (let channel = 0; channel < sample.numberOfChannels; channel++) {
+          sample.copyTo(values, { planeIndex: channel, format: 'f32-planar' })
+          for (const value of values) {
+            if (!Number.isFinite(value)) throw new Error('Invalid audio sample')
+            if (Math.abs(value) > 0.00001) return true
+          }
+        }
+      } finally {
+        sample.close()
+      }
+    }
+    if (frames === 0) throw new Error('No decoded audio frames')
+    return false
+  } finally {
+    input.dispose()
+  }
+}
+
 interface Probe {
   durationS: number
   bitrate: number

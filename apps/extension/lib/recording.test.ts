@@ -1,7 +1,13 @@
 import { expect, it } from 'vitest'
 import type { RecorderStatus } from '@huilu/recorder'
-import { recorderPollInterval } from './recording'
+import { recorderPollInterval, startErrorText } from './recording'
 const status = { state: 'recording', session: { id: 'current' } } as RecorderStatus
+it('maps missing source audio from cross-context errors to actionable guidance', () => {
+  const t = ((key: string) => key) as Parameters<typeof startErrorText>[0]
+  expect(startErrorText(t, new Error('SourceAudioUnavailableError: unavailable'))).toBe(
+    'recorder.error.sourceAudioUnavailable',
+  )
+})
 it('samples fast only while the recording meter is visible', () => {
   expect(recorderPollInterval(status)).toBe(200)
   expect(recorderPollInterval(status, { meterVisible: false })).toBe(1000)

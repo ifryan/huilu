@@ -48,7 +48,7 @@
     "dismissNotice": "知道了",
     "sourceAudio": "录制来源 / 系统音频",
     "sourceAudioTabHint": "仅包含当前标签页播放的声音，与麦克风分开控制。",
-    "sourceAudioDesktopHint": "可用性取决于所选窗口 / 屏幕、系统和浏览器；如原生选择框提供「分享音频」，仍需勾选。"
+    "sourceAudioDesktopHint": "窗口可能不支持音频。优先选择会议标签页；选择屏幕时需勾选「分享音频」。未取得所需音轨时不会开始录制。"
   },
   "sidepanel": {
     "recording": "录制中",
@@ -141,7 +141,9 @@
       "splitFailed": "音频切片失败",
       "sourceDataUnavailable": "已完成会议的数据不可用，请重新授权原文件夹或检查 meeting.json 与 transcript.json",
       "writeFailed": "写入失败",
-      "unknown": "未知错误"
+      "unknown": "未知错误",
+      "silentAudio": "录音全程静音，已停止转写和 AI 纪要，原文件仍保留。请检查来源音频、分享音频选项及麦克风后重新录制。",
+      "audioInspectionFailed": "无法在本地检查录音，已停止转写。原文件仍保留，请检查录音能否播放并更新浏览器后重试。"
     }
   },
   "settings": {
@@ -273,7 +275,8 @@
       "permission": "无法采集该页面：权限被拒绝，或该页面不允许录制（例如 chrome:// 页面）",
       "captureFailed": "无法打开录制来源选择框：{{detail}}",
       "systemPermission": "系统没有允许 Chrome 录制屏幕。请在「系统设置 → 隐私与安全性 → 屏幕与系统录音」中允许 Google Chrome，然后重启 Chrome 再试",
-      "windowClosed": "录制窗口被关闭，录制已中断。已录的内容可在「未完成的录制」中恢复"
+      "windowClosed": "录制窗口被关闭，录制已中断。已录的内容可在「未完成的录制」中恢复",
+      "sourceAudioUnavailable": "未能取得来源音频，录制未开始。请改选正在播放会议的标签页，或选择支持「分享音频」的屏幕并勾选该项。只录麦克风时，请先关闭「录制来源 / 系统音频」。"
     }
   },
   "unfinished": {

@@ -1,5 +1,6 @@
 import {
   NoAudioSourceError,
+  SourceAudioUnavailableError,
   type CaptureRequest,
   type CapturedMedia,
   type MediaBackend,
@@ -80,7 +81,7 @@ async function capture(req: CaptureRequest): Promise<CapturedMedia> {
       : []
     if (!req.sourceAudio) source.getAudioTracks().forEach((track) => track.stop())
     if ((req.sourceAudioRequested ?? req.sourceAudio) && sourceAudio.length === 0) {
-      warnings.push('source-audio-unavailable')
+      throw new SourceAudioUnavailableError()
     }
     if (sourceAudio.length > 0) {
       const node = ctx.createMediaStreamSource(new MediaStream(sourceAudio))

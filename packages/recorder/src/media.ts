@@ -76,3 +76,11 @@ export class NoAudioSourceError extends Error {
     super('No audio to record: the source has no audio and the microphone is off or unavailable')
   }
 }
+
+/** 用户要求来源音频时不能静默退化为仅麦克风录制。 */
+export class SourceAudioUnavailableError extends Error {
+  override name = 'SourceAudioUnavailableError'
+  constructor() {
+    super('The selected source did not provide the requested audio track')
+  }
+}

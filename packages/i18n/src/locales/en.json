@@ -48,7 +48,7 @@
     "dismissNotice": "Dismiss",
     "sourceAudio": "Record source / system audio",
     "sourceAudioTabHint": "Captures sound from this tab only, separately from the microphone.",
-    "sourceAudioDesktopHint": "Availability depends on the selected window / screen, OS, and browser. Enable Share audio in the native picker when offered."
+    "sourceAudioDesktopHint": "Windows may not support audio. Prefer the meeting tab, or enable Share audio for a supported screen. Recording will not start without the requested audio track."
   },
   "sidepanel": {
     "recording": "Recording",
@@ -141,7 +141,9 @@
       "splitFailed": "Could not split the audio",
       "sourceDataUnavailable": "Completed meeting data is unavailable. Authorize the original folder or check meeting.json and transcript.json",
       "writeFailed": "Could not write the files",
-      "unknown": "Unknown error"
+      "unknown": "Unknown error",
+      "silentAudio": "The recording is entirely silent. Transcription and AI notes were stopped; the original files are kept. Check source audio, Share audio, and your microphone before recording again.",
+      "audioInspectionFailed": "The recording could not be checked locally, so transcription was stopped. Original files are kept. Check playback and update your browser before retrying."
     }
   },
   "settings": {
@@ -273,7 +275,8 @@
       "permission": "Cannot capture this page: permission denied, or the page cannot be recorded (e.g. chrome:// pages)",
       "captureFailed": "Could not open the source picker: {{detail}}",
       "systemPermission": "The system does not allow Chrome to record the screen. Allow Google Chrome in System Settings → Privacy & Security → Screen & System Audio Recording, restart Chrome and try again",
-      "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\""
+      "windowClosed": "The recording window was closed, so the recording stopped. What was recorded can be recovered from \"Unfinished recordings\"",
+      "sourceAudioUnavailable": "Recording did not start because source audio was unavailable. Select the meeting tab, or a supported screen with Share audio enabled. To record only your microphone, turn off Record source / system audio first."
     }
   },
   "unfinished": {

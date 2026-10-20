@@ -15,6 +15,7 @@ import { MemoryJobStore } from './jobs'
 import {
   MAX_AUTO_ATTEMPTS,
   ProcessingQueue,
+  type ProcessingDeps,
   type MeetingSource,
   type ResolvedServices,
 } from './processor'
@@ -103,6 +104,7 @@ function setup(
     generate?: (request: { system: string; prompt: string }) => Promise<unknown>
     services?: Partial<ResolvedServices>
     splitter?: AudioSplitter
+    audioHasSignal?: ProcessingDeps['audioHasSignal']
   } = {},
 ) {
   let stored: Meeting | undefined = options.meeting ?? meeting()
@@ -152,6 +154,7 @@ function setup(
     folder,
     services: async () => services,
     splitter: options.splitter,
+    audioHasSignal: options.audioHasSignal,
     now: () => now,
     startRetryMs: undefined as number | undefined,
     storageRetryMs: 5 as number | undefined,
@@ -187,6 +190,39 @@ function setup(
 const DIR = '2026-09-28_1030_需求评审'
 
 describe('ProcessingQueue', () => {
+  it.each(['silence', 'decodeFailure', 'signal'] as const)(
+    'checks local audio before provider calls: %s',
+    async (scenario) => {
+      const inspect = vi.fn(async () => {
+        if (scenario === 'decodeFailure') throw new Error('bad audio')
+        return scenario === 'signal'
+      })
+      const t = setup({ audioHasSignal: inspect })
+      await t.queue.start()
+      await t.queue.enqueue(MEETING_ID)
+      await t.settle()
+      expect(inspect).toHaveBeenCalledOnce()
+      if (scenario === 'signal') {
+        expect((await t.job())?.state).toBe('done')
+        expect(t.transcription.transcribe).toHaveBeenCalledOnce()
+      } else {
+        expect(await t.job()).toMatchObject({
+          state: 'failed',
+          attempts: 1,
+          error: {
+            code: scenario === 'silence' ? 'silentAudio' : 'audioInspectionFailed',
+            retryable: false,
+          },
+        })
+        expect(t.transcription.transcribe).not.toHaveBeenCalled()
+        expect(t.llm.generateObject).not.toHaveBeenCalled()
+        expect(t.work.files.size).toBe(0)
+        expect(t.folder.files.size).toBe(0)
+        expect(await t.source.readAudio(MEETING_ID)).toBeDefined()
+      }
+      await t.queue.stop()
+    },
+  )
   it.each(['list', 'save', 'partialSave'])(
     'retries folder reconciliation after a %s failure without stranding jobs',
     async (failure) => {
