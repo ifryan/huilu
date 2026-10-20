@@ -177,8 +177,8 @@ try {
   }, prefs)
   const popup = await context.newPage()
   await popup.goto(`${base}/popup.html`)
-  await popup.getByText('窗口声音取决于浏览器与系统支持。', { exact: false }).waitFor()
-  await popup.locator('main').screenshot({ path: resolve(out, 'window-hint-zh.png') })
+  await popup.getByText('下一步选择标签页、窗口或屏幕。', { exact: false }).waitFor()
+  await popup.locator('main').screenshot({ path: resolve(out, 'unified-source-hint-zh.png') })
   // Keep a popup tab open for evidence; send the same request as its Start button.
   const rejected = await send('startRecording', {
     tabId,
