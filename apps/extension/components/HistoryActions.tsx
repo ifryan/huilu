@@ -6,6 +6,8 @@ import { libraryKey } from '@/lib/library'
 import { meetingLibraryKey, saveLibraryEdit, type LibraryItem } from '@/lib/meeting-library'
 import type { ProcessingJob } from '@/lib/processing-jobs'
 
+export type HistoryNotice = 'library.titleSaved' | 'library.archived' | 'library.restored'
+
 export function HistoryActions({
   item,
   job,
@@ -15,7 +17,7 @@ export function HistoryActions({
   item: LibraryItem
   job?: ProcessingJob
   jobsLoaded: boolean
-  onSaved: (message: string) => void
+  onSaved: (message: HistoryNotice) => void
 }) {
   const { t } = useTranslation()
   const [action, setAction] = useState<'title' | 'archive'>()
@@ -72,7 +74,7 @@ function HistoryDialog({
   item: LibraryItem
   action: 'title' | 'archive'
   onClose: () => void
-  onSaved: (message: string) => void
+  onSaved: (message: HistoryNotice) => void
 }) {
   const { t } = useTranslation()
   const client = useQueryClient()
@@ -113,10 +115,10 @@ function HistoryDialog({
       ])
       onSaved(
         action === 'title'
-          ? t('library.titleSaved')
+          ? 'library.titleSaved'
           : item.archived
-            ? t('library.restored')
-            : t('library.archived'),
+            ? 'library.restored'
+            : 'library.archived',
       )
       onClose()
     } catch (e) {

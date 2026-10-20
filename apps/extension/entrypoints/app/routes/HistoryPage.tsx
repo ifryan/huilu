@@ -3,7 +3,7 @@ import { Button, RefreshCw, Search, cn, fieldClass } from '@huilu/ui'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { ProcessingStatus } from '@/components/ProcessingStatus'
-import { HistoryActions } from '@/components/HistoryActions'
+import { HistoryActions, type HistoryNotice } from '@/components/HistoryActions'
 import { StatusPill } from '@/components/Section'
 import { resultMedia, useMeetingLibrary, type LibraryItem } from '@/lib/meeting-library'
 import { openRecordingMedia } from '@/lib/library'
@@ -19,7 +19,7 @@ export function HistoryPage() {
   const readiness = processingReadiness(useReadiness().data)
   const [search, setSearch] = useState('')
   const [archived, setArchived] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<HistoryNotice>()
   const items = data?.items.filter(
     (r) =>
       r.archived === archived && r.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
@@ -49,7 +49,7 @@ export function HistoryPage() {
         </Button>
       </div>
       <p role="status" className="text-success text-body empty:hidden">
-        {notice}
+        {notice && t(notice)}
       </p>
       {(data?.folderUnavailable || data?.scanFailed) && (
         <p role="status" className="bg-warning-soft rounded-control text-body px-3 py-2">
