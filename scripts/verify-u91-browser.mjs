@@ -68,7 +68,9 @@ try {
   context = await chromium.launchPersistentContext(resolve(out, 'profile'), {
     executablePath: process.env.CHROMIUM_PATH,
     headless: false,
-    viewport: { width: 1100, height: 950 },
+    // Use native screen/window metrics: viewport emulation invents a larger screen than
+    // headless Chrome actually has, causing windows.update bounds validation to fail.
+    viewport: null,
     args: [
       '--headless=new',
       '--no-sandbox',
