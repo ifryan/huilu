@@ -4,6 +4,7 @@ import { createShadowRootUi, defineContentScript } from '#imports'
 import { RecordingPanel } from '@/components/recording/RecordingPanel'
 import { onExtensionContextInvalidated, reportPanelError } from '@/lib/extension-context'
 import { mountInto } from '@/lib/mount'
+import { takePanelView } from '@/lib/page-capture'
 import { installPanelLayer } from '@/lib/panel-layer'
 
 export default defineContentScript({
@@ -11,6 +12,8 @@ export default defineContentScript({
   registration: 'runtime',
   cssInjectionMode: 'manual',
   async main(ctx) {
+    // 后台注入前写下的面板类型，必须在任何 await 之前取走
+    const setup = takePanelView() === 'setup'
     const removeErrorHandler = onExtensionContextInvalidated(() => ctx.notifyInvalidated())
     ctx.onInvalidated(removeErrorHandler)
     try {
@@ -27,7 +30,7 @@ export default defineContentScript({
           const removeLayer = installPanelLayer(host, layer)
           const mounted = mountInto(
             layer,
-            <RecordingPanel onInactive={() => ctx.notifyInvalidated()} />,
+            <RecordingPanel setup={setup} onInactive={() => ctx.notifyInvalidated()} />,
           )
           void mounted.ready.catch(reportPanelError)
           return {

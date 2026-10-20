@@ -1,9 +1,10 @@
 import type { FolderStatus } from '@huilu/storage'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
-import { hasHostPermission } from '@/platform'
 import { dataFolder } from '@/platform/storage'
-import { connectionUrl, isConfigured, type ProviderKind, type ProviderSettings } from './providers'
+import { inExtensionPage } from './extension-context'
+import { sendMessage } from './messaging'
+import { checkReadiness } from './readiness-check'
 import {
   dataFolderAuthorizedSetting,
   llmSetting,
@@ -11,38 +12,13 @@ import {
   transcriptionSetting,
 } from './settings'
 
-export interface Readiness {
-  folder: FolderStatus
-  transcription: boolean
-  llm: boolean
-  onboarded: boolean
-}
+export { isReady, type Readiness } from './readiness-check'
 
 export const readinessKey = ['readiness'] as const
 
-async function loadReadiness(): Promise<Readiness> {
-  const [folder, transcription, llm, onboarded] = await Promise.all([
-    dataFolder.status(),
-    transcriptionSetting.getValue(),
-    llmSetting.getValue(),
-    onboardedSetting.getValue(),
-  ])
-  return {
-    folder,
-    transcription: await isReady('transcription', transcription),
-    llm: await isReady('llm', llm),
-    onboarded,
-  }
-}
-
-/**
- * 配置齐全，并且插件能访问该服务地址。自定义 Base URL 的权限可能从未授予或已被撤销：
- * 离屏文档无法弹窗申请，此时请求必然失败，不能显示为就绪。
- */
-export async function isReady(kind: ProviderKind, settings: ProviderSettings): Promise<boolean> {
-  if (!isConfigured(kind, settings)) return false
-  const url = connectionUrl(settings.providerId, settings.configs[settings.providerId] ?? {})
-  return url ? hasHostPermission(url).catch(() => false) : true
+/** 网页面板（内容脚本）读不到插件的文件夹句柄和域名权限，交给后台查 */
+function loadReadiness() {
+  return inExtensionPage() ? checkReadiness(() => dataFolder.status()) : sendMessage('getReadiness')
 }
 
 /**

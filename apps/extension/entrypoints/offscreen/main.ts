@@ -86,3 +86,11 @@ onMessage('offscreen:folderAuthorized', async () => {
   await startQueue()
   await queue.onFolderAuthorized()
 })
+onMessage('offscreen:folderStatus', () => dataFolder.status())
+onMessage('offscreen:microphonePermission', async () => {
+  try {
+    return (await navigator.permissions.query({ name: 'microphone' as PermissionName })).state
+  } catch {
+    return 'unknown' as const
+  }
+})

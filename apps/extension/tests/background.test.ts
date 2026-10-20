@@ -44,6 +44,8 @@ const h = vi.hoisted(() => ({
   onPrepare: async (_token: unknown) => {},
   /** declarativeNetRequest 会话规则 */
   sessionRules: [] as { id: number; condition: { urlFilter?: string } }[],
+  /** 退路弹窗连上后台的端口监听 */
+  connectListener: undefined as ((port: unknown) => void) | undefined,
 }))
 
 vi.mock('@/lib/messaging', () => ({
@@ -242,6 +244,12 @@ beforeEach(() => {
       },
     },
     commands: { onCommand: { addListener: () => {} } },
+    runtime: {
+      ...fakeBrowser.runtime,
+      onConnect: {
+        addListener: (listener: (port: unknown) => void) => void (h.connectListener = listener),
+      },
+    },
     declarativeNetRequest: {
       getSessionRules: async () => h.sessionRules,
       updateSessionRules: async (u: {
@@ -254,6 +262,10 @@ beforeEach(() => {
         ]
       },
     },
+  })
+  Object.assign(fakeBrowser.action, {
+    setPopup: vi.fn(async () => {}),
+    openPopup: vi.fn(async () => {}),
   })
   background.main()
 })
@@ -740,5 +752,105 @@ describe('in-page recording', () => {
     }
     await choose()
     expect(results).toEqual([false, false, true, false])
+  })
+})
+
+describe('toolbar icon opens the in-page panel', () => {
+  const click = async (tab: { id?: number; url?: string } = { id: 1, url: h.pageUrl }) => {
+    await fakeBrowser.action.onClicked.trigger(tab as never)
+    await settle()
+  }
+  /** 每次注入：文件路径，或写入的面板类型 */
+  const injections = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls.map(([details]) => {
+      const { files, args } = details as { files?: string[]; args?: unknown[] }
+      return files?.[0] ?? `view:${String(args?.[1])}`
+    })
+
+  it('injects the capture script and a setup panel on secure pages, without a popup', async () => {
+    const inject = vi.spyOn(fakeBrowser.scripting, 'executeScript')
+    await click()
+    expect(injections(inject)).toEqual([
+      '/content-scripts/capture.js',
+      'view:setup',
+      '/content-scripts/overlay.js',
+    ])
+    expect(fakeBrowser.action.openPopup).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['chrome://newtab/', false],
+    ['http://intranet.example.com/', false],
+    ['https://chromewebstore.google.com/', true],
+  ])('falls back to the toolbar popup on %s', async (url, injectFails) => {
+    h.injectFails = injectFails
+    await click({ id: 1, url })
+    expect(fakeBrowser.action.setPopup).toHaveBeenCalledWith({
+      tabId: 1,
+      popup: 'fallback-popup.html',
+    })
+    expect(fakeBrowser.action.openPopup).toHaveBeenCalled()
+  })
+
+  it('restores click-to-panel once the fallback popup closes', async () => {
+    await click({ id: 1, url: 'chrome://newtab/' })
+    let disconnect: (() => void) | undefined
+    h.connectListener?.({
+      name: 'huilu-popup',
+      onDisconnect: { addListener: (fn: () => void) => void (disconnect = fn) },
+    })
+    disconnect?.()
+    await settle()
+    expect(fakeBrowser.action.setPopup).toHaveBeenLastCalledWith({ tabId: 1, popup: '' })
+  })
+
+  it('shows the recording panel when clicked during a recording', async () => {
+    await start('tab')
+    h.offscreenState = 'recording'
+    const inject = vi.spyOn(fakeBrowser.scripting, 'executeScript')
+    await click()
+    expect(injections(inject)).toEqual(['view:recording', '/content-scripts/overlay.js'])
+  })
+
+  it('records the sending page from the panel and keeps that panel instead of re-injecting', async () => {
+    const snapshot = settings('tab')
+    snapshot.prefs.sourceSelection = 'current-tab'
+    const inject = vi.spyOn(fakeBrowser.scripting, 'executeScript')
+    const result = await call<{ panelShown: boolean }>(
+      'startRecording',
+      { title: 'From panel', settings: snapshot },
+      { tab: { id: 1 } },
+    )
+    expect(result.panelShown).toBe(true)
+    expect(h.captureRequests).toMatchObject([{ source: 'tab' }])
+    expect(inject).not.toHaveBeenCalled()
+  })
+
+  it('arms the page for a picker the panel already opened, never a capture tab', async () => {
+    const snapshot = settings('tab')
+    snapshot.prefs.sourceSelection = 'choose'
+    const create = vi.spyOn(fakeBrowser.tabs, 'create')
+    await call(
+      'startRecording',
+      { title: 'Picker', settings: snapshot, pagePicker: true },
+      {
+        tab: { id: 1 },
+      },
+    )
+    expect(h.pageStarts).toHaveLength(1)
+
+    h.pageState = 'idle'
+    await call('pageRecordingFailed', 'CaptureCancelledError: cancelled', { tab: { id: 1 } })
+    h.pageUrl = 'http://intranet.example.com/'
+    await expect(
+      call(
+        'startRecording',
+        { title: 'Picker', settings: snapshot, pagePicker: true },
+        {
+          tab: { id: 1 },
+        },
+      ),
+    ).rejects.toThrow('Cannot record inside this page')
+    expect(create).not.toHaveBeenCalled()
   })
 })

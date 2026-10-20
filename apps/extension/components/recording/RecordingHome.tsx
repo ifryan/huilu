@@ -1,78 +1,38 @@
-import { browser } from '#imports'
 import { useTranslation } from '@huilu/i18n'
 import { Button } from '@huilu/ui'
-import { useEffect, useState } from 'react'
-import { RecordingSetup } from '@/components/recording/RecordingSetup'
-import {
-  LastRecordingNotice,
-  RecordingBrief,
-  RecordingStatusCard,
-  StartErrorNotice,
-} from '@/components/recording/RecordingStatusCard'
 import { useQueryClient } from '@tanstack/react-query'
-import type { RecorderStatus } from '@/lib/messaging'
-import { UnfinishedRecordings } from '@/components/recording/UnfinishedRecordings'
-import { sendMessage } from '@/lib/messaging'
+import { sendMessage, type RecorderStatus, type StartRecordingRequest } from '@/lib/messaging'
 import { useReadiness } from '@/lib/readiness'
-import { useRecorderStatus } from '@/lib/recording'
+import { RecordingSetup } from './RecordingSetup'
+import { LastRecordingNotice, StartErrorNotice } from './RecordingStatusCard'
+import { UnfinishedRecordings } from './UnfinishedRecordings'
 
-export function Popup() {
-  const { t } = useTranslation()
-  const { data: status } = useRecorderStatus()
-  const busy = status !== undefined && status.state !== 'idle'
-
-  const [tabId, setTabId] = useState<number>()
-  useEffect(() => {
-    void browser.tabs
-      .query({ active: true, currentWindow: true })
-      .then(([active]) => setTabId(active?.id))
-  }, [])
-  // 当前页面不允许显示悬浮面板（如 chrome:// 页面）时，退回在弹窗里控制
-  const [panelUnavailable, setPanelUnavailable] = useState(false)
-  const showPanel = async () => {
-    if (tabId === undefined) return setPanelUnavailable(true)
-    const shown = await sendMessage('showRecordingPanel', tabId)
-    if (shown) window.close()
-    else setPanelUnavailable(true)
-  }
-
+/**
+ * 没在录制时的主界面：最近一次结果 / 开始失败、就绪提示、未完成的录制、录制设置与开始按钮。
+ * 点插件图标时显示在网页面板里；网页不能注入时显示在工具栏弹窗里
+ */
+export function RecordingHome({
+  status,
+  onStart,
+  disabled,
+}: {
+  status: (RecorderStatus & { startError?: string }) | undefined
+  onStart: (request: Omit<StartRecordingRequest, 'tabId'>) => Promise<unknown>
+  disabled?: boolean
+}) {
   return (
-    <main className="flex w-80 flex-col gap-4 p-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-headline font-semibold">{t('app.name')}</h1>
-        <Button variant="outline" size="sm" onClick={() => void sendMessage('openApp', '/')}>
-          {t('popup.openApp')}
-        </Button>
-      </header>
-
-      {status && busy ? (
-        panelUnavailable ? (
-          <>
-            <p className="text-muted-foreground text-body2">{t('popup.panelUnavailable')}</p>
-            <RecordingStatusCard status={status} />
-          </>
-        ) : (
-          <>
-            {/* 录制中只给简短状态：计时、暂停 / 继续、结束统一在页面内悬浮面板，关掉后从这里找回 */}
-            <RecordingBrief status={status} />
-            <Button onClick={() => void showPanel()}>{t('popup.showPanel')}</Button>
-          </>
-        )
-      ) : (
-        <>
-          {status && <RecordingNotices status={status} />}
-          <ReadinessStatus />
-          <UnfinishedRecordings />
-          <RecordingSetup onStarted={(shown) => setPanelUnavailable(!shown)} />
-        </>
-      )}
-    </main>
+    <>
+      {status && <RecordingNotices status={status} />}
+      <ReadinessStatus />
+      <UnfinishedRecordings />
+      <RecordingSetup onStart={onStart} disabled={disabled} />
+    </>
   )
 }
 
 /**
- * 最近一次录制的结果 / 开始失败原因：悬浮面板显示不了（如 chrome:// 页面）或已关掉时，
- * 重新打开弹窗仍能看到；点「知道了」后清除，开始新的录制也会清除，不会一直挂着旧结果。
+ * 最近一次录制的结果 / 开始失败原因：录制面板关掉后，再点插件图标仍能看到；
+ * 点「知道了」后清除，开始新的录制也会清除，不会一直挂着旧结果。
  */
 function RecordingNotices({ status }: { status: RecorderStatus & { startError?: string } }) {
   const { t } = useTranslation()
@@ -102,7 +62,7 @@ function RecordingNotices({ status }: { status: RecorderStatus & { startError?: 
 
 /**
  * 就绪状态：文件夹未授权、API 未配置时提示，并一键跳转到插件网页处理；就绪时不显示。
- * 重新授权放在插件网页里完成：弹窗失去焦点会被关闭，不适合承载授权弹窗。
+ * 重新授权放在插件网页里完成：网页面板没有插件的文件夹句柄，弹窗失去焦点会被关闭，都不适合承载授权弹窗。
  * 未就绪不影响录制（录制只依赖 OPFS）。
  */
 function ReadinessStatus() {

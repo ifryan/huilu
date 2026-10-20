@@ -17,13 +17,15 @@ export default defineConfig({
     default_locale: 'zh_CN',
     key: MANIFEST_KEY,
     minimum_chrome_version: '122',
+    // 不设 default_popup：点图标触发 action.onClicked，由后台在当前网页上打开会录面板
+    action: { default_title: '__MSG_extName__' },
     permissions: [
       'storage',
       'unlimitedStorage',
       'offscreen',
       'tabCapture',
       'desktopCapture',
-      // 页面内悬浮录制面板：只在用户点击弹窗 / 按快捷键的当前标签页注入，不申请「所有网站」权限
+      // 页面内会录面板：只在用户点击插件图标 / 按快捷键的当前标签页注入，不申请「所有网站」权限
       'activeTab',
       'scripting',
       // 实验：GLM Coding Plan 请求头适配。WithHostAccess 版本只作用于已获授权的域名，安装时不额外提示

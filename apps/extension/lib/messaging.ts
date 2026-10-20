@@ -7,7 +7,9 @@ import type {
   RecordingOptions,
   UnfinishedRecording,
 } from '@huilu/recorder'
+import type { FolderStatus } from '@huilu/storage'
 import type { ProcessingSettings } from './processing-settings'
+import type { Readiness } from './readiness-check'
 import type { RecordingPrefs } from './settings'
 
 export type { UnfinishedRecording }
@@ -27,13 +29,19 @@ export interface RecordingSettingsSnapshot {
 }
 
 /**
- * 弹窗 / 快捷键请求开始录制。弹窗带上界面当前显示的设置快照（不依赖尚未完成的 storage 读写）；
+ * 网页面板 / 弹窗 / 快捷键请求开始录制。界面带上当前显示的设置快照（不依赖尚未完成的 storage 读写）；
  * 快捷键没有界面，settings 为空，由后台读取已保存的设置。
  */
 export interface StartRecordingRequest {
-  tabId: number
+  /** 要录的标签页；网页面板发来的请求不带，后台用发送方所在的标签页 */
+  tabId?: number
   title: string
   settings?: RecordingSettingsSnapshot
+  /**
+   * 网页面板已在点击里直接弹出共享选择框（getDisplayMedia）：后台只在该网页里准备录制，
+   * 不退回采集标签页，也不再让用户点一次「选择来源」
+   */
+  pagePicker?: boolean
 }
 
 /**
@@ -59,9 +67,11 @@ interface ProtocolMap {
   recoverRecording(id: string): { saved: boolean }
   discardRecording(id: string): void
   openApp(route: string): void
-  /** 在指定标签页显示页面内悬浮录制面板；页面不允许注入（如 chrome:// 页面）时返回 false */
-  showRecordingPanel(tabId: number): boolean
-  /** 用户关掉了最近一次的结果 / 开始失败提示（弹窗「知道了」） */
+  /** 网页面板里的就绪状态：内容脚本读不到插件的文件夹句柄和域名权限，由后台 / 离屏文档查询 */
+  getReadiness(): Readiness
+  /** 插件自己的麦克风授权状态（网页面板里 navigator.permissions 查到的是网页的） */
+  getMicrophonePermission(): PermissionState | 'unknown'
+  /** 用户关掉了最近一次的结果 / 开始失败提示（「知道了」） */
   dismissRecordingNotice(): void
   /** 历史记录中的「补转写」「重试」「生成纪要」：加入处理队列 */
   processMeeting(meetingId: string): EnqueueResult
@@ -84,6 +94,9 @@ interface ProtocolMap {
   'offscreen:processingBusy'(): boolean
   /** 数据文件夹重新授权：补写等待写入的任务 */
   'offscreen:folderAuthorized'(): void
+  /** 数据文件夹授权状态、插件的麦克风授权状态（只有插件页面能查） */
+  'offscreen:folderStatus'(): FolderStatus
+  'offscreen:microphonePermission'(): PermissionState | 'unknown'
 
   // 后台 → 录制窗口（统一来源选择；兼容旧窗口 / 屏幕录制）：选择框和录制都在这个可见页面里进行
   'window:start'(options: WindowRecordingOptions): RecorderStatus
