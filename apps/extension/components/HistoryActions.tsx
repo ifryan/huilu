@@ -117,6 +117,7 @@ function HistoryDialog({
         client.invalidateQueries({ queryKey: libraryKey }),
         client.invalidateQueries({ queryKey: ['meeting', item.id] }),
       ])
+      close()
       onSaved(
         action === 'title'
           ? 'library.titleSaved'
@@ -124,7 +125,6 @@ function HistoryDialog({
             ? 'library.restored'
             : 'library.archived',
       )
-      close()
     } catch (e) {
       const message = e instanceof Error ? e.message : ''
       setError(
