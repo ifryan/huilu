@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { RecorderStatus } from '@huilu/recorder'
-import { recorderPollInterval, startErrorText } from './recording'
+import { defaultMeetingTitle, recorderPollInterval, startErrorText } from './recording'
 const status = { state: 'recording', session: { id: 'current' } } as RecorderStatus
 it('maps missing source audio from cross-context errors to actionable guidance', () => {
   const t = ((key: string) => key) as Parameters<typeof startErrorText>[0]
@@ -27,3 +27,7 @@ it.each(['idle', 'paused', 'starting', 'stopping'] as const)(
     expect(recorderPollInterval({ ...status, state })).toBe(1000)
   },
 )
+
+it('default meeting title uses local time as Meeting_YYYYMMDD_HHmmss', () => {
+  expect(defaultMeetingTitle(new Date(2026, 9, 5, 9, 7, 3))).toBe('Meeting_20261005_090703')
+})

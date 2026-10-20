@@ -11,6 +11,7 @@
   "popup": {
     "title": "实时记录",
     "mode": "录制模式",
+    "recordVideo": "同时录制画面",
     "modeAudio": "仅音频",
     "modeVideo": "音频 + 视频",
     "start": "开始记录",
@@ -52,10 +53,12 @@
     "sourceAudioWindowHint": "窗口声音取决于浏览器与系统支持。若选择器提示无法分享音频，请改选会议标签页或支持音频的屏幕。只录麦克风或无声视频时，请关闭此项。",
     "sourceAudioShort": "来源声音",
     "moreSettings": "更多设置",
+    "advanced": "高级选项",
     "quickCurrentTab": "快捷录制当前标签页（跳过来源选择）",
     "quickCurrentTabHint": "仅录制打开插件时的标签页，声音按上方开关录入。",
     "chooseSourceHint": "下一步选择标签页、窗口或屏幕。需要来源声音时，请在分享弹窗中开启音频。",
     "chooseAndStart": "选择来源并开始",
+    "recordCurrentTab": "录制当前标签页",
     "micDevice": "麦克风设备"
   },
   "sidepanel": {
@@ -285,6 +288,7 @@
       "captureFailed": "无法打开录制来源选择框：{{detail}}",
       "systemPermission": "系统没有允许 Chrome 录制屏幕。请在「系统设置 → 隐私与安全性 → 屏幕与系统录音」中允许 Google Chrome，然后重启 Chrome 再试",
       "windowClosed": "采集标签页被关闭，录制已中断。已录的内容可在「未完成的录制」中恢复",
+      "pageClosed": "录制的网页被关闭、刷新或跳转，录制已中断。已录的内容可在「未完成的录制」中恢复",
       "sourceAudioUnavailable": "未能取得来源音频，录制未开始。请改选正在播放会议的标签页，或选择支持「分享音频」的屏幕并勾选该项。只录麦克风时，请先关闭「来源声音」。",
       "windowAudioUnavailable": "所选窗口未提供音频，录制未开始。请改选会议标签页，或支持「分享音频」的屏幕并勾选该项。若仍需录此窗口，请关闭「来源声音」并开启麦克风；录无声视频时可同时关闭麦克风。"
     }
@@ -384,6 +388,10 @@
   },
   "panel": {
     "title": "录制面板",
+    "chooseSourceTitle": "选择要录制的内容",
+    "chooseSourceHint": "选标签页时录标签页的声音；选窗口或整个屏幕时，请打开选择框底部的系统音频开关，否则录制不会开始。",
+    "chooseSource": "选择来源",
+    "cancelSource": "取消",
     "collapse": "收起",
     "expand": "展开录制面板",
     "close": "关闭面板",
