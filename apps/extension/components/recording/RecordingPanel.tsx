@@ -1,16 +1,25 @@
 import { useTranslation } from '@huilu/i18n'
 import { Button, X, cn } from '@huilu/ui'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { sendMessage, type StartRecordingRequest } from '@/lib/messaging'
 import { pageCapture } from '@/lib/page-capture'
 import { formatDuration, useRecorderStatus } from '@/lib/recording'
+import { RecordingHome } from './RecordingHome'
 import { RecordingStatusCard } from './RecordingStatusCard'
 
 /**
- * 页面内悬浮录制面板：录制中的计时、暂停 / 继续、结束入口。
- * 固定在网页右下角之上（可拖动、可收起成小计时条、可关闭），不占网页布局。
+ * 页面内会录面板，固定在网页右下角之上（可拖动、可关闭），不占网页布局。
+ * - 点插件图标打开时（setup）：没在录制时显示录制设置和开始按钮，录完回到这里显示结果
+ * - 录制中：计时、暂停 / 继续、结束入口，可收起成小计时条；快捷键开始的录制结束后面板收起
  * 注意：标签页「音频 + 视频」录制会录下网页画面，面板展开时也会出现在视频里，收起后只剩小计时条。
  */
-export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
+export function RecordingPanel({
+  onInactive,
+  setup = false,
+}: {
+  onInactive?: () => void
+  setup?: boolean
+}) {
   const { t } = useTranslation()
   // 关闭时立即隐藏，并由注入入口回收完整 UI 和监听器。
   const [hiddenFor, setHiddenFor] = useState<string>()
@@ -25,8 +34,8 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
   const hasStatus = status !== undefined
 
   useEffect(() => {
-    if (status?.state === 'idle') onInactive?.()
-  }, [status?.state, onInactive])
+    if (status?.state === 'idle' && !setup) onInactive?.()
+  }, [status?.state, onInactive, setup])
 
   useEffect(() => {
     const clamp = () => {
@@ -44,10 +53,10 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
       observer.disconnect()
       window.removeEventListener('resize', clamp)
     }
-  }, [collapsed, hidden, hasStatus])
+  }, [collapsed, hidden, hasStatus, busy])
 
-  // Errors and saved results belong in the toolbar popup, never persist over a webpage.
-  if (!status || hidden || !busy) return null
+  // 录制面板不在网页上留下结果 / 错误；设置面板是用户点图标打开的，就地显示
+  if (!status || hidden || (!busy && !setup)) return null
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return
@@ -108,7 +117,10 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
         panel.current = node
       }}
       style={style}
-      className="huilu-panel bg-surface text-foreground shadow-float fixed flex w-72 flex-col gap-3 rounded-3xl p-3 text-sm"
+      className={cn(
+        'huilu-panel bg-surface text-foreground shadow-float fixed flex flex-col gap-3 rounded-3xl p-3 text-sm',
+        busy ? 'w-72' : 'w-80',
+      )}
       role="dialog"
       aria-label={t('panel.title')}
     >
@@ -122,6 +134,11 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
       >
         <span className="pl-1 font-semibold">{t('app.name')}</span>
         <span className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
+          {!busy && (
+            <Button size="sm" variant="ghost" onClick={() => void sendMessage('openApp', '/')}>
+              {t('popup.openApp')}
+            </Button>
+          )}
           {busy && !status.awaitingSource && (
             <Button size="sm" variant="ghost" onClick={() => setCollapsed(true)}>
               {t('panel.collapse')}
@@ -141,7 +158,11 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
           </Button>
         </span>
       </header>
-      {status.awaitingSource ? (
+      {!busy ? (
+        <div className="flex flex-col gap-4 px-1 pb-1">
+          <RecordingHome status={status} onStart={startFromPanel} />
+        </div>
+      ) : status.awaitingSource ? (
         <SourcePrompt />
       ) : (
         <>
@@ -154,7 +175,21 @@ export function RecordingPanel({ onInactive }: { onInactive?: () => void }) {
 }
 
 /**
- * 页面内录制已就绪：Chrome 要求共享选择框由网页内的点击打开（工具栏弹窗里的点击不算），
+ * 面板上的开始按钮。「选择来源并开始」在这次点击里直接弹出共享选择框（Chrome 要求网页内的点击），
+ * 网页不能用 getDisplayMedia（非 HTTPS）时交给后台，由它退回采集标签页
+ */
+function startFromPanel(request: Omit<StartRecordingRequest, 'tabId'>) {
+  const capture = pageCapture()
+  const canPick =
+    window.isSecureContext && typeof navigator.mediaDevices?.getDisplayMedia === 'function'
+  if (request.settings?.prefs.sourceSelection === 'choose' && capture && canPick) {
+    return capture.startWithPicker(request)
+  }
+  return sendMessage('startRecording', request)
+}
+
+/**
+ * 页面内录制已就绪（快捷键开始的统一来源选择）：Chrome 要求共享选择框由网页内的点击打开，
  * 所以在这里让用户再点一下。窗口 / 整个屏幕的声音开关默认关闭，提醒用户打开
  */
 function SourcePrompt() {

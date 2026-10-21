@@ -1,6 +1,7 @@
 import { useTranslation } from '@huilu/i18n'
 import { Button } from '@huilu/ui'
 import { useEffect, useState } from 'react'
+import { inExtensionPage } from '@/lib/extension-context'
 import { sendMessage } from '@/lib/messaging'
 import { SwitchRow } from './Switch'
 
@@ -9,6 +10,7 @@ type Permission = PermissionState | 'unknown'
 /**
  * 麦克风开关，录制时使用系统默认麦克风。离屏文档不能弹授权框，未授权时引导到插件网页里授权一次
  * （ADR 0004 第 2 节）；弹窗失去焦点就会关闭，也不适合在这里弹授权框。
+ * 网页面板里查到的是网页的授权，所以改问后台插件自己的授权状态。
  */
 export function MicrophoneField({
   enabled,
@@ -21,6 +23,15 @@ export function MicrophoneField({
   const [permission, setPermission] = useState<Permission>('unknown')
 
   useEffect(() => {
+    if (!inExtensionPage()) {
+      let active = true
+      void sendMessage('getMicrophonePermission')
+        .then((state) => active && setPermission(state))
+        .catch(() => active && setPermission('unknown'))
+      return () => {
+        active = false
+      }
+    }
     let status: PermissionStatus | undefined
     const update = () => setPermission(status?.state ?? 'unknown')
     navigator.permissions

@@ -1,11 +1,10 @@
-import { browser } from '#imports'
 import type { RecordingMode } from '@huilu/core'
 import { useTranslation } from '@huilu/i18n'
 import type { VideoFps, VideoResolution } from '@huilu/recorder'
 import { Button, fieldClass } from '@huilu/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { sendMessage } from '@/lib/messaging'
+import type { StartRecordingRequest } from '@/lib/messaging'
 import { defaultMeetingTitle, startErrorText } from '@/lib/recording'
 import {
   DEFAULT_RECORDING_PREFS,
@@ -17,18 +16,22 @@ import { MicrophoneField } from './MicrophoneField'
 import { Field, Segmented } from './Segmented'
 import { SwitchRow } from './Switch'
 
-/** 弹窗：录制设置 + 开始记录。设置保存在 chrome.storage，快捷键开始录制时沿用同一套设置。 */
+/**
+ * 网页面板 / 弹窗：录制设置 + 开始记录。设置保存在 chrome.storage，快捷键开始录制时沿用同一套设置。
+ * 怎么开始由宿主决定：网页面板可以在点击里直接弹出共享选择框，弹窗交给后台
+ */
 export function RecordingSetup({
-  onStarted,
+  onStart,
+  disabled = false,
 }: {
-  /** 开始成功；panelShown 为 false 表示当前页面不能显示悬浮面板 */
-  onStarted?: (panelShown: boolean) => void
+  /** 在点击的同步调用栈里调用；完成表示录制已开始（或已交给选择框），失败的原因由后台记下 */
+  onStart: (request: Omit<StartRecordingRequest, 'tabId'>) => Promise<unknown>
+  disabled?: boolean
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<RecordingMode>('audio')
   const [prefs, setPrefs] = useState<RecordingPrefs>(DEFAULT_RECORDING_PREFS)
-  const [tab, setTab] = useState<{ id?: number }>({})
   // 打开弹窗时按当前时间生成默认会议名，可以直接改
   const [title, setTitle] = useState(() => defaultMeetingTitle(new Date()))
   // 正在用哪种方式开始：只在被点的按钮上显示「正在开始…」
@@ -45,9 +48,6 @@ export function RecordingSetup({
         setLoaded(true)
       },
     )
-    void browser.tabs.query({ active: true, currentWindow: true }).then(([active]) => {
-      setTab({ id: active?.id })
-    })
   }, [])
 
   const selectMode = (next: RecordingMode) => {
@@ -62,15 +62,14 @@ export function RecordingSetup({
 
   /** 两个开始按钮：选择来源（标签页 / 窗口 / 屏幕），或直接录当前标签页。记下这次的方式，快捷键沿用 */
   const start = (sourceSelection: NonNullable<RecordingPrefs['sourceSelection']>) => {
-    if (tab.id === undefined || !loaded) return
+    if (disabled || !loaded) return
     if (prefs.sourceSelection !== sourceSelection) updatePrefs({ sourceSelection })
     setStarting(sourceSelection)
     setError(undefined)
-    // 在点击的同步调用栈里发出：选择窗口 / 屏幕时弹窗会失去焦点被关闭。
+    // 在点击的同步调用栈里发出：网页面板要直接弹出共享选择框，弹窗选择窗口 / 屏幕时会失去焦点被关闭。
     // 带上界面当前的设置：刚改完设置立刻点开始时，storage 写入可能还没完成。
-    // 来源声音始终录制，麦克风始终用系统默认设备：弹窗不再提供这两项，旧设置里的值不再生效
-    const started = sendMessage('startRecording', {
-      tabId: tab.id,
+    // 来源声音始终录制，麦克风始终用系统默认设备：界面不提供这两项，旧设置里的值不再生效
+    const started = onStart({
       title: title.trim() || defaultMeetingTitle(new Date()),
       settings: {
         mode,
@@ -78,15 +77,9 @@ export function RecordingSetup({
       },
     })
     started
-      .then(async ({ panelShown }) => {
-        await queryClient.invalidateQueries({ queryKey: ['recorderStatus'] })
-        onStarted?.(panelShown)
-        // 录制已开始：进度与控制都在页面内悬浮面板，弹窗不再重复显示；
-        // 面板显示不了（如 chrome:// 页面）就保留弹窗，在这里控制
-        if (panelShown) window.close()
-      })
+      .then(() => queryClient.invalidateQueries({ queryKey: ['recorderStatus'] }))
       .catch(async (e: unknown) => {
-        // 其他失败原因由后台记下，弹窗顶部的「最近一次」提示统一显示；「已有录制」不记，就地提示
+        // 其他失败原因由后台记下，顶部的「最近一次」提示统一显示；「已有录制」不记，就地提示
         await queryClient.invalidateQueries({ queryKey: ['recorderStatus'] })
         if (String(e instanceof Error ? e.name + e.message : e).includes('RecorderBusyError')) {
           setError(t('sidepanel.startFailed', { error: startErrorText(t, e) }))
@@ -163,7 +156,7 @@ export function RecordingSetup({
           size="lg"
           variant="outline"
           className="px-2"
-          disabled={starting !== undefined || !loaded || tab.id === undefined}
+          disabled={starting !== undefined || !loaded || disabled}
           onClick={() => start('current-tab')}
         >
           {starting === 'current-tab' ? t('popup.starting') : t('popup.recordCurrentTab')}
@@ -171,7 +164,7 @@ export function RecordingSetup({
         <Button
           size="lg"
           className="px-2"
-          disabled={starting !== undefined || !loaded || tab.id === undefined}
+          disabled={starting !== undefined || !loaded || disabled}
           onClick={() => start('choose')}
         >
           {starting === 'choose' ? t('popup.starting') : t('popup.chooseAndStart')}

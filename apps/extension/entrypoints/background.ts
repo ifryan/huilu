@@ -11,6 +11,8 @@ import {
   type StartRecordingRequest,
   type WindowRecordingOptions,
 } from '@/lib/messaging'
+import { PANEL_VIEW_KEY, POPUP_PORT, type PanelView } from '@/lib/page-capture'
+import { checkReadiness } from '@/lib/readiness-check'
 import {
   dataFolderAuthorizedSetting,
   llmSetting,
@@ -294,11 +296,16 @@ async function startInPage(
   }
 }
 
-async function startRecording({
-  tabId,
-  title,
-  settings,
-}: StartRecordingRequest): Promise<RecorderStatus & { panelShown: boolean }> {
+/**
+ * fromTab：请求来自哪个网页的面板。面板已经在那个网页上，开始后不再重新注入（会丢掉面板状态）；
+ * 请求没带 tabId 时就录这个网页
+ */
+async function startRecording(
+  { tabId: requestedTab, title, settings, pagePicker }: StartRecordingRequest,
+  fromTab?: number,
+): Promise<RecorderStatus & { panelShown: boolean }> {
+  const tabId = requestedTab ?? fromTab
+  if (tabId === undefined) throw new Error('No tab to record')
   if (startPending) throw new RecorderBusyError('A recording is already starting')
   startPending = true
   try {
@@ -334,6 +341,11 @@ async function startRecording({
           throw e
         }
       })
+    } else if (pagePicker) {
+      // 网页面板已经弹出了选择框：只能在这个网页里录，不能再开采集标签页
+      const inPage = await startInPage(options, tabId)
+      if (!inPage) throw new Error('Cannot record inside this page')
+      status = inPage
     } else {
       // 统一来源选择优先在当前网页里录；旧的「指定窗口 / 整个屏幕」设置仍走采集标签页
       const inPage = options.chooseSource ? await startInPage(options, tabId) : undefined
@@ -342,10 +354,11 @@ async function startRecording({
     await lastRecording.setValue(null)
     await lastStartError.setValue(null)
     await updateBadge(status)
-    // 录制中的计时与控制都在页面内悬浮面板里
-    return { ...status, panelShown: await showPanel(tabId) }
+    // 录制中的计时与控制都在页面内悬浮面板里；从网页面板开始的，面板已经在那里
+    const panelShown = fromTab === tabId || (await showPanel(tabId))
+    return { ...status, panelShown }
   } catch (e) {
-    // 选择器使工具栏弹窗失焦关闭；错误保留到用户下次打开工具栏查看。
+    // 选择器使工具栏弹窗失焦关闭、网页面板可能已被关掉；错误保留到用户下次点图标时查看。
     if (!(e instanceof RecorderBusyError)) {
       await lastStartError.setValue(e instanceof Error ? `${e.name}: ${e.message}` : String(e))
     }
@@ -356,11 +369,25 @@ async function startRecording({
 }
 
 /**
- * 在标签页里显示悬浮录制面板（entrypoints/overlay.content）。靠 activeTab：
- * 用户刚在这个标签页上点了弹窗 / 按了快捷键才有权限注入；chrome:// 等页面不允许注入。
+ * 在标签页里显示页面内面板（entrypoints/overlay.content）。靠 activeTab：
+ * 用户刚在这个标签页上点了插件图标 / 按了快捷键才有权限注入；chrome:// 等页面不允许注入。
+ * setup 为点图标打开的设置面板：先注入录制内容脚本，面板上「选择来源并开始」的点击才能直接弹出选择框
  */
-async function showPanel(tabId: number): Promise<boolean> {
+async function showPanel(tabId: number, view: PanelView = 'recording'): Promise<boolean> {
   try {
+    if (view === 'setup') {
+      await browser.scripting.executeScript({
+        target: { tabId },
+        files: ['/content-scripts/capture.js'],
+      })
+    }
+    await browser.scripting.executeScript({
+      target: { tabId },
+      func: (key: string, value: PanelView) => {
+        ;(globalThis as Record<string, unknown>)[key] = value
+      },
+      args: [PANEL_VIEW_KEY, view],
+    })
     await browser.scripting.executeScript({
       target: { tabId },
       files: ['/content-scripts/overlay.js'],
@@ -370,6 +397,49 @@ async function showPanel(tabId: number): Promise<boolean> {
     console.warn('[huilu] cannot show the recording panel in this tab', e)
     return false
   }
+}
+
+/**
+ * 点插件图标：在当前网页上打开会录面板（没在录时是设置面板，录制中是录制面板）。
+ * 网页放不进面板（chrome://、应用商店、新标签页）或不能弹共享选择框（非 HTTPS）时，退回工具栏弹窗
+ */
+async function onActionClicked(tab: Browser.tabs.Tab) {
+  if (tab.id === undefined) return
+  const busy = (await recorderStatus()).state !== 'idle'
+  const secure = tab.url !== undefined && isSecurePage(tab.url)
+  const shown = busy ? await showPanel(tab.id) : secure && (await showPanel(tab.id, 'setup'))
+  if (!shown) await openFallbackPopup(tab.id)
+}
+
+/**
+ * 退路弹窗：manifest 不设默认弹窗（否则点图标不会触发 onClicked），这里只给这个标签页临时设上再打开。
+ * 弹窗关闭（端口断开）后清掉，下次点图标仍先尝试网页面板
+ */
+async function openFallbackPopup(tabId: number) {
+  await browser.action.setPopup({ tabId, popup: 'fallback-popup.html' })
+  await popupTab.setValue(tabId)
+  try {
+    await browser.action.openPopup()
+  } catch (e) {
+    // openPopup 失败（Chrome 127 之前不对普通插件开放、窗口不在前台等）：
+    // 保留这个标签页的弹窗设置，用户再点一次图标就会打开
+    console.warn('[huilu] cannot open the fallback popup', e)
+  }
+}
+
+/** 临时设了退路弹窗的标签页；Service Worker 可能在弹窗打开前被回收，记在 session 存储里 */
+const popupTab = storage.defineItem<number | null>('session:fallbackPopupTab', { fallback: null })
+
+function onPopupConnected(port: Browser.runtime.Port) {
+  if (port.name !== POPUP_PORT) return
+  const tabId = popupTab.getValue()
+  port.onDisconnect.addListener(() => {
+    void tabId.then(async (id) => {
+      if (id === null) return
+      await browser.action.setPopup({ tabId: id, popup: '' }).catch(() => {})
+      if ((await popupTab.getValue()) === id) await popupTab.setValue(null)
+    })
+  })
 }
 
 async function updateBadge(status: RecorderStatus) {
@@ -516,7 +586,7 @@ export default defineBackground(() => {
   })
 
   onMessage('getRecorderStatus', () => recorderStatus())
-  onMessage('startRecording', ({ data }) => startRecording(data))
+  onMessage('startRecording', ({ data, sender }) => startRecording(data, sender.tab?.id))
   for (const [message, action] of [
     ['pauseRecording', 'pause'],
     ['resumeRecording', 'resume'],
@@ -541,7 +611,7 @@ export default defineBackground(() => {
     const host = await recorderHost.getValue()
     if (host?.kind !== 'page' || host.tabId !== sender.tab?.id || host.started) return
     await recorderHost.setValue(null)
-    // 选择框失去焦点会关掉工具栏弹窗：原因留到用户下次打开工具栏时查看
+    // 网页面板会就地显示；面板被关掉或在弹窗里开始的，原因留到下次点图标时查看
     await lastStartError.setValue(error)
     await updateBadge({ state: 'idle' })
   })
@@ -570,8 +640,13 @@ export default defineBackground(() => {
     withOffscreen(() => sendMessage('offscreen:discard', id)),
   )
   onMessage('openApp', ({ data }) => openAppPage(data))
-  onMessage('showRecordingPanel', ({ data: tabId }) => showPanel(tabId))
   onMessage('dismissRecordingNotice', () => dismissNotice())
+  onMessage('getReadiness', () =>
+    checkReadiness(() => withOffscreen(() => sendMessage('offscreen:folderStatus'))),
+  )
+  onMessage('getMicrophonePermission', () =>
+    withOffscreen(() => sendMessage('offscreen:microphonePermission')),
+  )
   onMessage('processMeeting', ({ data: id }) => processMeeting(id))
 
   // 离屏文档里的处理队列需要的平台能力。每一步开始前都会来取设置：
@@ -631,6 +706,12 @@ export default defineBackground(() => {
       if (host?.kind === 'page' && host.started && host.tabId === tabId) void control('status')
     })
   })
+
+  // 点插件图标：在当前网页上打开会录面板，不能注入的页面退回工具栏弹窗
+  browser.action.onClicked.addListener((tab) => {
+    onActionClicked(tab).catch((e: unknown) => console.error('[huilu] open panel failed', e))
+  })
+  browser.runtime.onConnect.addListener(onPopupConnected)
 
   // 快捷键 Alt+Shift+R：没在录就按上次的设置录当前标签页，在录就结束
   browser.commands.onCommand.addListener((command, tab) => {

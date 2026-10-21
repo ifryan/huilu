@@ -10,7 +10,7 @@
 import { browser, defineContentScript } from '#imports'
 import { RecorderController, browserMediaBackend, mixCapturedStream } from '@huilu/recorder'
 import { onMessage, sendMessage, type WindowRecordingOptions } from '@/lib/messaging'
-import { registerPageCapture } from '@/lib/page-capture'
+import { registerPageCapture, type PageCaptureControls } from '@/lib/page-capture'
 import { RemoteRecordingSink, SINK_HELLO } from '@/lib/recorder-sink'
 import { CaptureCancelledError, openDisplaySource } from '@/platform/capture'
 
@@ -109,57 +109,102 @@ export default defineContentScript({
       return { state: 'starting' as const, awaitingSource: true }
     })
 
-    /** 由录制面板的点击同步调用：getDisplayMedia 必须是这个调用栈里的第一个 await */
-    const chooseSource = () => {
+    /**
+     * 选择框结果出来后开始录制。用的是后台 page:arm 交来的设置和 page:prepare 嵌好的存储 iframe；
+     * 等待期间被取消 / 超时（armed 已清空）时放掉取到的流
+     */
+    const record = async (opening: ReturnType<typeof openDisplaySource>) => {
       const options = armed
       const remote = sink
-      if (!options || !remote || picking) return
+      if (!options || !remote || picking) {
+        void opening.then(({ stream }) => stream.getTracks().forEach((track) => track.stop()))
+        throw new CaptureCancelledError()
+      }
       armed = undefined
       clearTimeout(armTimer)
       picking = true
       const requested = options.sourceAudioRequested ?? options.sourceAudio
+      const selected = await opening
+      const sourceAudio = selected.stream.getAudioTracks().some((t) => t.readyState === 'live')
+      const recorder = new RecorderController({
+        store: remote,
+        media: {
+          ...browserMediaBackend,
+          capture: (request) => mixCapturedStream(request, selected.stream),
+          availableBytes: () => remote.availableBytes(),
+        },
+        onFinished: ({ meeting, ...result }) => {
+          void sendMessage('recordingFinished', { ...result, saved: meeting !== undefined })
+            .catch((e: unknown) => console.error('[huilu] failed to notify background', e))
+            .finally(() => {
+              if (controller === recorder) release()
+            })
+        },
+      })
+      controller = recorder
+      try {
+        // 实际是否有来源声音以取到的音轨为准；要了却没有（选择框里没打开声音开关）时 mixCapturedStream 拒绝开始
+        const status = await recorder.start({
+          ...options,
+          source: selected.source,
+          streamId: 'display-media',
+          sourceAudio,
+          sourceAudioRequested: requested,
+        })
+        picking = false
+        await sendMessage('pageRecordingStarted', status)
+      } catch (error) {
+        selected.stream.getTracks().forEach((track) => track.stop())
+        throw error
+      }
+    }
+
+    /** 由录制面板的点击同步调用：getDisplayMedia 必须是这个调用栈里的第一个 await */
+    const chooseSource = () => {
+      const options = armed
+      if (!options || !sink || picking) return
       const opening = openDisplaySource(
-        requested,
+        options.sourceAudioRequested ?? options.sourceAudio,
         options.mode === 'video' ? options.quality : null,
       )
-      void (async () => {
-        const selected = await opening
-        const sourceAudio = selected.stream.getAudioTracks().some((t) => t.readyState === 'live')
-        const recorder = new RecorderController({
-          store: remote,
-          media: {
-            ...browserMediaBackend,
-            capture: (request) => mixCapturedStream(request, selected.stream),
-            availableBytes: () => remote.availableBytes(),
-          },
-          onFinished: ({ meeting, ...result }) => {
-            void sendMessage('recordingFinished', { ...result, saved: meeting !== undefined })
-              .catch((e: unknown) => console.error('[huilu] failed to notify background', e))
-              .finally(() => {
-                if (controller === recorder) release()
-              })
-          },
-        })
-        controller = recorder
-        try {
-          // 实际是否有来源声音以取到的音轨为准；要了却没有（选择框里没打开声音开关）时 mixCapturedStream 拒绝开始
-          const status = await recorder.start({
-            ...options,
-            source: selected.source,
-            streamId: 'display-media',
-            sourceAudio,
-            sourceAudioRequested: requested,
-          })
-          picking = false
-          await sendMessage('pageRecordingStarted', status)
-        } catch (error) {
-          selected.stream.getTracks().forEach((track) => track.stop())
-          throw error
-        }
-      })().catch(fail)
+      void record(opening).catch(fail)
     }
+
+    /** 点「选择来源并开始」后、后台准备好之前：选择框已经开着，状态里不再提示点「选择来源」 */
+    let pickerOpen = false
+
+    /**
+     * 网页面板上的「选择来源并开始」：先在点击里弹出选择框，再请后台嵌好存储 iframe、交来录制设置。
+     * 两边都好了才开始录制，用户选得再快也不会早于后台准备
+     */
+    const startWithPicker: PageCaptureControls['startWithPicker'] = (request) => {
+      const prefs = request.settings?.prefs
+      const opening = openDisplaySource(
+        prefs?.sourceAudio !== false,
+        request.settings?.mode === 'video' && prefs ? prefs.quality : null,
+      )
+      // 先接住：后台准备失败时选择框的结果没人等，不能变成未处理的拒绝
+      opening.catch(() => {})
+      pickerOpen = true
+      return (async () => {
+        try {
+          await sendMessage('startRecording', { ...request, pagePicker: true })
+        } catch (error) {
+          void opening.then(({ stream }) => stream.getTracks().forEach((track) => track.stop()))
+          throw error
+        } finally {
+          pickerOpen = false
+        }
+        await record(opening).catch((error: unknown) => {
+          fail(error)
+          throw error
+        })
+      })()
+    }
+
     registerPageCapture({
       chooseSource,
+      startWithPicker,
       cancel: () => {
         if (armed) fail(new CaptureCancelledError())
       },
@@ -176,6 +221,7 @@ export default defineContentScript({
       return controller ? controller.stop() : idle()
     })
     onMessage('page:status', () => {
+      if (armed && pickerOpen) return { state: 'starting' as const }
       if (armed) return { state: 'starting' as const, awaitingSource: true }
       if (picking && !controller) return { state: 'starting' as const }
       return controller?.status() ?? idle()
